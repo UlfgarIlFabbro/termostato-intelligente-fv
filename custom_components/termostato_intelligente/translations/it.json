@@ -1,0 +1,111 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Termostato Intelligente - Entità principali",
+        "description": "Scegli il climatizzatore da gestire e i sensori base.",
+        "data": {
+          "name": "Nome del termostato",
+          "climate_entity": "Climatizzatore da pilotare",
+          "temp_sensor": "Sensore di temperatura della stanza",
+          "window_sensor": "Sensore finestra/apertura",
+          "presence_sensor": "Sensore di presenza (opzionale)"
+        }
+      },
+      "energia": {
+        "title": "Fotovoltaico e batteria",
+        "description": "Tutti i campi sono opzionali: se li lasci vuoti, l'accensione automatica da surplus FV viene disattivata.",
+        "data": {
+          "fv_sensor": "Sensore produzione FV (W)",
+          "consumption_sensor": "Sensore consumo rete (W)",
+          "battery_sensor": "Sensore SOC batteria (%)",
+          "fv_margin_w": "Margine surplus FV richiesto",
+          "soc_min": "SOC minimo batteria per accendere",
+          "fv_start_time": "Inizio fascia attiva",
+          "fv_end_time": "Fine fascia attiva"
+        },
+        "data_description": {
+          "fv_start_time": "Fuori da questa fascia oraria il termostato non accende né regola nulla.",
+          "fv_end_time": "Fuori da questa fascia oraria il termostato non accende né regola nulla."
+        }
+      },
+      "soglie": {
+        "title": "Soglie termiche e tempistiche",
+        "data": {
+          "target_temp_default": "Temperatura target iniziale",
+          "hot_offset": "Scostamento 'caldo forte'",
+          "range_offset": "Scostamento 'sopra target'",
+          "turn_on_offset": "Scostamento minimo per accendere da FV",
+          "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
+          "presence_boost_enabled": "Attiva il boost da presenza",
+          "presence_boost_minutes": "Minuti di presenza continua prima del boost",
+          "presence_boost_offset": "Scostamento minimo per il boost presenza",
+          "window_delay_minutes": "Minuti di attesa con finestra aperta prima di spegnere",
+          "update_interval_minutes": "Ogni quanto ricontrollare (minuti)"
+        }
+      },
+      "notifiche": {
+        "title": "Avvisi vocali e Telegram",
+        "description": "Scegli i dispositivi Google su cui annunciare l'avviso finestra e dove inviare la notifica Telegram. I messaggi accettano template (es. {{ delay }}, {{ name }}, {{ target }}).",
+        "data": {
+          "tts_media_players": "Dispositivi Google per l'annuncio vocale",
+          "tts_engine_entity": "Motore TTS (opzionale, auto se vuoto)",
+          "tts_message_open": "Messaggio vocale finestra aperta",
+          "notify_targets": "Entità notify/Telegram a cui inviare l'avviso",
+          "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
+          "notify_message": "Messaggio di notifica 'clima spento'"
+        },
+        "data_description": {
+          "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
+          "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
+          "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Questo climatizzatore è già gestito da un'altra istanza del Termostato Intelligente."
+    }
+  },
+  "options": {
+    "step": {
+      "energia": {
+        "title": "Fotovoltaico e batteria",
+        "data": {
+          "fv_sensor": "Sensore produzione FV (W)",
+          "consumption_sensor": "Sensore consumo rete (W)",
+          "battery_sensor": "Sensore SOC batteria (%)",
+          "fv_margin_w": "Margine surplus FV richiesto",
+          "soc_min": "SOC minimo batteria per accendere",
+          "fv_start_time": "Inizio fascia attiva",
+          "fv_end_time": "Fine fascia attiva"
+        }
+      },
+      "soglie": {
+        "title": "Soglie termiche e tempistiche",
+        "data": {
+          "target_temp_default": "Temperatura target iniziale",
+          "hot_offset": "Scostamento 'caldo forte'",
+          "range_offset": "Scostamento 'sopra target'",
+          "turn_on_offset": "Scostamento minimo per accendere da FV",
+          "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
+          "presence_boost_enabled": "Attiva il boost da presenza",
+          "presence_boost_minutes": "Minuti di presenza continua prima del boost",
+          "presence_boost_offset": "Scostamento minimo per il boost presenza",
+          "window_delay_minutes": "Minuti di attesa con finestra aperta prima di spegnere",
+          "update_interval_minutes": "Ogni quanto ricontrollare (minuti)"
+        }
+      },
+      "notifiche": {
+        "title": "Avvisi vocali e Telegram",
+        "data": {
+          "tts_media_players": "Dispositivi Google per l'annuncio vocale",
+          "tts_engine_entity": "Motore TTS (opzionale, auto se vuoto)",
+          "tts_message_open": "Messaggio vocale finestra aperta",
+          "notify_targets": "Entità notify/Telegram a cui inviare l'avviso",
+          "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
+          "notify_message": "Messaggio di notifica 'clima spento'"
+        }
+      }
+    }
+  }
+}
