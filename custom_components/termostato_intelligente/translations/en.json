@@ -1,0 +1,111 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Thermostat - Core entities",
+        "description": "Choose the air conditioner to manage and the base sensors.",
+        "data": {
+          "name": "Thermostat name",
+          "climate_entity": "Air conditioner to control",
+          "temp_sensor": "Room temperature sensor",
+          "window_sensor": "Window/opening sensor",
+          "presence_sensor": "Presence sensor (optional)"
+        }
+      },
+      "energia": {
+        "title": "Solar and battery",
+        "description": "All fields are optional: leave them empty to disable automatic surplus-solar turn-on.",
+        "data": {
+          "fv_sensor": "Solar production sensor (W)",
+          "consumption_sensor": "Grid consumption sensor (W)",
+          "battery_sensor": "Battery SOC sensor (%)",
+          "fv_margin_w": "Required solar surplus margin",
+          "soc_min": "Minimum battery SOC to turn on",
+          "fv_start_time": "Active window start",
+          "fv_end_time": "Active window end"
+        },
+        "data_description": {
+          "fv_start_time": "Outside this time window the thermostat won't turn on or adjust anything.",
+          "fv_end_time": "Outside this time window the thermostat won't turn on or adjust anything."
+        }
+      },
+      "soglie": {
+        "title": "Thermal thresholds and timing",
+        "data": {
+          "target_temp_default": "Initial target temperature",
+          "hot_offset": "'Strong heat' offset",
+          "range_offset": "'Above target' offset",
+          "turn_on_offset": "Minimum offset to turn on from solar",
+          "temp_delta": "Regulation offset (±) applied to the AC",
+          "presence_boost_enabled": "Enable presence boost",
+          "presence_boost_minutes": "Continuous presence minutes before boost",
+          "presence_boost_offset": "Minimum offset for presence boost",
+          "window_delay_minutes": "Minutes to wait with window open before turning off",
+          "update_interval_minutes": "Check interval (minutes)"
+        }
+      },
+      "notifiche": {
+        "title": "Voice and Telegram alerts",
+        "description": "Choose the Google devices to announce the window alert on and where to send the Telegram notification. Messages support templates (e.g. {{ delay }}, {{ name }}, {{ target }}).",
+        "data": {
+          "tts_media_players": "Google devices for the voice announcement",
+          "tts_engine_entity": "TTS engine (optional, auto if empty)",
+          "tts_message_open": "Window open voice message",
+          "notify_targets": "Notify/Telegram entities to send the alert to",
+          "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
+          "notify_message": "'AC turned off' notification message"
+        },
+        "data_description": {
+          "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
+          "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
+          "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This air conditioner is already managed by another Smart Thermostat instance."
+    }
+  },
+  "options": {
+    "step": {
+      "energia": {
+        "title": "Solar and battery",
+        "data": {
+          "fv_sensor": "Solar production sensor (W)",
+          "consumption_sensor": "Grid consumption sensor (W)",
+          "battery_sensor": "Battery SOC sensor (%)",
+          "fv_margin_w": "Required solar surplus margin",
+          "soc_min": "Minimum battery SOC to turn on",
+          "fv_start_time": "Active window start",
+          "fv_end_time": "Active window end"
+        }
+      },
+      "soglie": {
+        "title": "Thermal thresholds and timing",
+        "data": {
+          "target_temp_default": "Initial target temperature",
+          "hot_offset": "'Strong heat' offset",
+          "range_offset": "'Above target' offset",
+          "turn_on_offset": "Minimum offset to turn on from solar",
+          "temp_delta": "Regulation offset (±) applied to the AC",
+          "presence_boost_enabled": "Enable presence boost",
+          "presence_boost_minutes": "Continuous presence minutes before boost",
+          "presence_boost_offset": "Minimum offset for presence boost",
+          "window_delay_minutes": "Minutes to wait with window open before turning off",
+          "update_interval_minutes": "Check interval (minutes)"
+        }
+      },
+      "notifiche": {
+        "title": "Voice and Telegram alerts",
+        "data": {
+          "tts_media_players": "Google devices for the voice announcement",
+          "tts_engine_entity": "TTS engine (optional, auto if empty)",
+          "tts_message_open": "Window open voice message",
+          "notify_targets": "Notify/Telegram entities to send the alert to",
+          "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
+          "notify_message": "'AC turned off' notification message"
+        }
+      }
+    }
+  }
+}
