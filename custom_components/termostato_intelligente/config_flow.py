@@ -1,4 +1,102 @@
-Selector(
+"""Config flow per Termostato Intelligente FV."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import voluptuous as vol
+
+from homeassistant import config_entries
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+
+from .const import (
+    CONF_BATTERY_SENSOR,
+    CONF_CLIMATE_ENTITY,
+    CONF_CONSUMPTION_SENSOR,
+    CONF_FV_END_TIME,
+    CONF_FV_MARGIN_W,
+    CONF_FV_SENSOR,
+    CONF_FV_START_TIME,
+    CONF_HOT_OFFSET,
+    CONF_NAME,
+    CONF_NOTIFY_CHAT_IDS,
+    CONF_NOTIFY_MESSAGE,
+    CONF_NOTIFY_TARGETS,
+    CONF_PRESENCE_BOOST_ENABLED,
+    CONF_PRESENCE_BOOST_MIN,
+    CONF_PRESENCE_BOOST_OFFSET,
+    CONF_PRESENCE_SENSOR,
+    CONF_RANGE_OFFSET,
+    CONF_SOC_MIN,
+    CONF_TARGET_TEMP_DEFAULT,
+    CONF_TEMP_DELTA,
+    CONF_TEMP_SENSOR,
+    CONF_TTS_ENGINE,
+    CONF_TTS_MESSAGE_OPEN,
+    CONF_TTS_PLAYERS,
+    CONF_TURN_ON_OFFSET,
+    CONF_UPDATE_INTERVAL_MIN,
+    CONF_WINDOW_DELAY_MIN,
+    CONF_WINDOW_SENSOR,
+    DEFAULT_FV_END_TIME,
+    DEFAULT_FV_MARGIN_W,
+    DEFAULT_FV_START_TIME,
+    DEFAULT_HOT_OFFSET,
+    DEFAULT_NAME,
+    DEFAULT_NOTIFY_MESSAGE,
+    DEFAULT_PRESENCE_BOOST_ENABLED,
+    DEFAULT_PRESENCE_BOOST_MIN,
+    DEFAULT_PRESENCE_BOOST_OFFSET,
+    DEFAULT_RANGE_OFFSET,
+    DEFAULT_SOC_MIN,
+    DEFAULT_TARGET_TEMP,
+    DEFAULT_TEMP_DELTA,
+    DEFAULT_TTS_MESSAGE_OPEN,
+    DEFAULT_TURN_ON_OFFSET,
+    DEFAULT_UPDATE_INTERVAL_MIN,
+    DEFAULT_WINDOW_DELAY_MIN,
+    DOMAIN,
+)
+
+
+def _f(schema_cls, key: str, defaults: dict, fallback: Any = None):
+    """Costruisce vol.Required/vol.Optional usando un default 'intelligente'.
+
+    Se il valore esiste già nei defaults lo riusa (utile per precompilare i
+    form nell'options flow), altrimenti usa il fallback statico se fornito.
+    """
+    if key in defaults and defaults[key] not in (None, "", []):
+        return schema_cls(key, default=defaults[key])
+    if fallback is not None:
+        return schema_cls(key, default=fallback)
+    return schema_cls(key)
+
+
+def _schema_user(defaults: dict) -> vol.Schema:
+    return vol.Schema(
+        {
+            _f(vol.Required, CONF_NAME, defaults, DEFAULT_NAME): selector.TextSelector(),
+            _f(vol.Required, CONF_CLIMATE_ENTITY, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="climate")
+            ),
+            _f(vol.Required, CONF_TEMP_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            _f(vol.Required, CONF_WINDOW_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            _f(vol.Optional, CONF_PRESENCE_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+        }
+    )
+
+
+def _schema_energia(defaults: dict) -> vol.Schema:
+    return vol.Schema(
+        {
+            _f(vol.Optional, CONF_FV_SENSOR, defaults): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
             ),
             _f(vol.Optional, CONF_CONSUMPTION_SENSOR, defaults): selector.EntitySelector(
