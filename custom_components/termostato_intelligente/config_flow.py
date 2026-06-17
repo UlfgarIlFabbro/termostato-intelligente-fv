@@ -300,7 +300,6 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     """Permette di rivedere/modificare tutto dopo la configurazione iniziale."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
         merged = dict(config_entry.data)
         merged.update(config_entry.options)
         self._data: dict[str, Any] = merged
