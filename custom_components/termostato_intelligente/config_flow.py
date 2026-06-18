@@ -12,8 +12,11 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BATTERY_SENSOR,
+    CONF_BELOW_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_CONSUMPTION_SENSOR,
+    CONF_EXTREME_DELTA,
+    CONF_EXTREME_OFFSET,
     CONF_FV_END_TIME,
     CONF_FV_MARGIN_W,
     CONF_FV_SENSOR,
@@ -40,8 +43,11 @@ from .const import (
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
     DEFAULT_FV_END_TIME,
+    DEFAULT_EXTREME_DELTA,
+    DEFAULT_EXTREME_OFFSET,
     DEFAULT_FV_MARGIN_W,
     DEFAULT_FV_START_TIME,
+    DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
     DEFAULT_NAME,
     DEFAULT_NOTIFY_MESSAGE,
@@ -138,6 +144,13 @@ def _schema_soglie(defaults: dict) -> vol.Schema:
                 )
             ),
             _f(
+                vol.Optional, CONF_EXTREME_OFFSET, defaults, DEFAULT_EXTREME_OFFSET
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=8, step=0.1, unit_of_measurement="°C", mode="box"
+                )
+            ),
+            _f(
                 vol.Optional, CONF_HOT_OFFSET, defaults, DEFAULT_HOT_OFFSET
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -152,6 +165,13 @@ def _schema_soglie(defaults: dict) -> vol.Schema:
                 )
             ),
             _f(
+                vol.Optional, CONF_BELOW_OFFSET, defaults, DEFAULT_BELOW_OFFSET
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=3, step=0.05, unit_of_measurement="°C", mode="box"
+                )
+            ),
+            _f(
                 vol.Optional, CONF_TURN_ON_OFFSET, defaults, DEFAULT_TURN_ON_OFFSET
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -163,6 +183,13 @@ def _schema_soglie(defaults: dict) -> vol.Schema:
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0.5, max=5, step=0.5, unit_of_measurement="°C", mode="box"
+                )
+            ),
+            _f(
+                vol.Optional, CONF_EXTREME_DELTA, defaults, DEFAULT_EXTREME_DELTA
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.5, max=8, step=0.5, unit_of_measurement="°C", mode="box"
                 )
             ),
             _f(
