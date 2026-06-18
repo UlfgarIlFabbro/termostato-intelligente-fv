@@ -33,15 +33,24 @@
         "title": "Thermal thresholds and timing",
         "data": {
           "target_temp_default": "Initial target temperature",
+          "extreme_offset": "'Extreme heat' threshold",
           "hot_offset": "'Strong heat' offset",
-          "range_offset": "'Above target' offset",
+          "range_offset": "'Warm' band start threshold",
+          "below_offset": "Margin below target (low fan)",
           "turn_on_offset": "Minimum offset to turn on from solar",
           "temp_delta": "Regulation offset (±) applied to the AC",
+          "extreme_delta": "Extreme offset (target minus this value)",
           "presence_boost_enabled": "Enable presence boost",
           "presence_boost_minutes": "Continuous presence minutes before boost",
           "presence_boost_offset": "Minimum offset for presence boost",
           "window_delay_minutes": "Minutes to wait with window open before turning off",
           "update_interval_minutes": "Check interval (minutes)"
+        },
+        "data_description": {
+          "extreme_offset": "Above this threshold the AC goes all out: target minus the extreme offset, high fan.",
+          "hot_offset": "From here (and up to the 'extreme heat' threshold) the AC runs at target-delta with medium fan.",
+          "range_offset": "Above this threshold (and up to 'strong heat') the AC runs at target-delta with low fan.",
+          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling."
         }
       },
       "notifiche": {
@@ -84,15 +93,24 @@
         "title": "Thermal thresholds and timing",
         "data": {
           "target_temp_default": "Initial target temperature",
+          "extreme_offset": "'Extreme heat' threshold",
           "hot_offset": "'Strong heat' offset",
-          "range_offset": "'Above target' offset",
+          "range_offset": "'Warm' band start threshold",
+          "below_offset": "Margin below target (low fan)",
           "turn_on_offset": "Minimum offset to turn on from solar",
           "temp_delta": "Regulation offset (±) applied to the AC",
+          "extreme_delta": "Extreme offset (target minus this value)",
           "presence_boost_enabled": "Enable presence boost",
           "presence_boost_minutes": "Continuous presence minutes before boost",
           "presence_boost_offset": "Minimum offset for presence boost",
           "window_delay_minutes": "Minutes to wait with window open before turning off",
           "update_interval_minutes": "Check interval (minutes)"
+        },
+        "data_description": {
+          "extreme_offset": "Above this threshold the AC goes all out: target minus the extreme offset, high fan.",
+          "hot_offset": "From here (and up to the 'extreme heat' threshold) the AC runs at target-delta with medium fan.",
+          "range_offset": "Above this threshold (and up to 'strong heat') the AC runs at target-delta with low fan.",
+          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling."
         }
       },
       "notifiche": {
