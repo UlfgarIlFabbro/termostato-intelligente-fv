@@ -20,10 +20,13 @@ CONF_FV_END_TIME = "fv_end_time"
 
 # --- Soglie termiche / timing ---
 CONF_TARGET_TEMP_DEFAULT = "target_temp_default"
+CONF_EXTREME_OFFSET = "extreme_offset"
 CONF_HOT_OFFSET = "hot_offset"
 CONF_RANGE_OFFSET = "range_offset"
+CONF_BELOW_OFFSET = "below_offset"
 CONF_TURN_ON_OFFSET = "turn_on_offset"
 CONF_TEMP_DELTA = "temp_delta"
+CONF_EXTREME_DELTA = "extreme_delta"
 CONF_PRESENCE_BOOST_ENABLED = "presence_boost_enabled"
 CONF_PRESENCE_BOOST_MIN = "presence_boost_minutes"
 CONF_PRESENCE_BOOST_OFFSET = "presence_boost_offset"
@@ -43,10 +46,13 @@ CONF_NOTIFY_MESSAGE = "notify_message"
 # --- Default ---
 DEFAULT_NAME = "Termostato Intelligente"
 DEFAULT_TARGET_TEMP = 25.0
+DEFAULT_EXTREME_OFFSET = 2.0
 DEFAULT_HOT_OFFSET = 1.5
-DEFAULT_RANGE_OFFSET = 0.5
+DEFAULT_RANGE_OFFSET = 0.2
+DEFAULT_BELOW_OFFSET = 0.1
 DEFAULT_TURN_ON_OFFSET = 0.8
 DEFAULT_TEMP_DELTA = 1.0
+DEFAULT_EXTREME_DELTA = 2.0
 DEFAULT_PRESENCE_BOOST_ENABLED = True
 DEFAULT_FV_MARGIN_W = 1200
 DEFAULT_SOC_MIN = 70
@@ -62,5 +68,5 @@ DEFAULT_TTS_MESSAGE_OPEN = (
 )
 DEFAULT_NOTIFY_MESSAGE = "{{ name }}: finestra aperta, clima spento"
 
-# Limite volontario: il climatizzatore va pilotato solo su questi due fan_mode
-FAN_MODES_ALLOWED = ["low", "medium"]
+# Limite volontario: il climatizzatore va pilotato solo su questi fan_mode
+FAN_MODES_ALLOWED = ["low", "medium", "high"]
