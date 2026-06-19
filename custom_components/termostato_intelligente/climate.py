@@ -31,6 +31,10 @@ from .const import (
     CONF_CONSUMPTION_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
+    DOMAIN,
+    SWITCH_KEY_FV,
+    SWITCH_KEY_MASTER,
+    SWITCH_KEY_QUICK,
     CONF_FV_END_TIME,
     CONF_FV_MARGIN_W,
     CONF_FV_SENSOR,
@@ -98,8 +102,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     Logica riprodotta dalle automazioni originali:
     - blocco totale se la finestra è aperta
     - accensione solo con surplus FV (fascia oraria configurabile)
-    - regolazione temperatura/fan a 3 livelli (caldo forte / sopra target / in range)
-    - fan limitato a low/medium
+    - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte / caldo / vicino target / sotto target)
+    - fan limitato a low/medium/high
     - boost presenza dopo N minuti continuativi
     - snapshot/restore + avviso TTS + notifica alla finestra
     """
@@ -173,6 +177,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if self._presence_since
             else None,
             "climatizzatore_reale": self._climate_entity,
+            "termostato_abilitato": self._switch_state(SWITCH_KEY_MASTER, True),
+            "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
+            "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
         }
 
     # ------------------------------------------------------------------
@@ -285,7 +292,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     # ------------------------------------------------------------------
 
     async def _async_periodic_update(self, now: datetime | None = None) -> None:
-        if not self._within_active_window():
+        if not self._switch_state(SWITCH_KEY_MASTER, True):
             return
         if self._is_window_open():
             return
@@ -295,8 +302,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         target = self._target_temperature
 
-        await self._async_handle_fv_turn_on(temp, target)
+        # La regolazione termica gira sempre, dentro e fuori dalla fascia FV.
         await self._async_handle_thermal(temp, target)
+
+        # L'accensione automatica da FV scatta solo se lo switch dedicato è
+        # acceso e siamo dentro la fascia oraria configurata.
+        if self._switch_state(SWITCH_KEY_FV, True) and self._within_active_window():
+            await self._async_handle_fv_turn_on(temp, target)
+
         await self._async_handle_presence_boost(temp, target)
         self.async_write_ha_state()
 
@@ -314,10 +327,27 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         return now_t >= start or now_t <= end
 
     def _is_window_open(self) -> bool:
+        # Bypass: nessun sensore configurato, oppure sensore presente ma con
+        # stato non valido (unavailable/unknown) -> trattiamo come "chiusa"
+        # per non bloccare la regolazione.
         if not self._window_sensor:
             return False
         state = self.hass.states.get(self._window_sensor)
-        return bool(state and state.state == "on")
+        if state is None or state.state in ("unknown", "unavailable"):
+            return False
+        return state.state == "on"
+
+    def _switch_state(self, key: str, default: bool) -> bool:
+        """Legge lo stato di uno switch ausiliario (master/FV/quick).
+
+        Se lo switch non è ancora pronto (es. ordine di avvio piattaforme)
+        restituisce il default, per non bloccare il termostato.
+        """
+        data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
+        switch = data.get(key)
+        if switch is None:
+            return default
+        return bool(getattr(switch, "is_on", default))
 
     def _read_float(self, entity_id: str | None) -> float | None:
         if not entity_id:
@@ -385,6 +415,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             new_temp, fan_mode = target, "low"
         else:
             new_temp, fan_mode = target + delta, "low"
+
+        # Raffreddamento rapido: nelle 3 fasce calde (estremo/forte/caldo)
+        # forza la ventola al massimo e scende di un altro grado.
+        if self._switch_state(SWITCH_KEY_QUICK, False) and (
+            temp > target + range_offset
+        ):
+            new_temp -= 1.0
+            fan_mode = "high"
 
         real_state = self.hass.states.get(self._climate_entity)
         current_temp = real_state.attributes.get("temperature") if real_state else None
