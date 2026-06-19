@@ -43,6 +43,11 @@ CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_NOTIFY_CHAT_IDS = "notify_chat_ids"
 CONF_NOTIFY_MESSAGE = "notify_message"
 
+# --- Switch ausiliari ---
+SWITCH_KEY_MASTER = "switch_master"
+SWITCH_KEY_FV = "switch_fv"
+SWITCH_KEY_QUICK = "switch_quick"
+
 # --- Default ---
 DEFAULT_NAME = "Termostato Intelligente"
 DEFAULT_TARGET_TEMP = 25.0
