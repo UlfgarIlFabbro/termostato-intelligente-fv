@@ -33,15 +33,24 @@
         "title": "Soglie termiche e tempistiche",
         "data": {
           "target_temp_default": "Temperatura target iniziale",
+          "extreme_offset": "Soglia 'caldo estremo'",
           "hot_offset": "Scostamento 'caldo forte'",
-          "range_offset": "Scostamento 'sopra target'",
+          "range_offset": "Soglia inizio fascia 'caldo'",
+          "below_offset": "Margine sotto target (ventola bassa)",
           "turn_on_offset": "Scostamento minimo per accendere da FV",
           "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
+          "extreme_delta": "Scostamento estremo (target meno questo valore)",
           "presence_boost_enabled": "Attiva il boost da presenza",
           "presence_boost_minutes": "Minuti di presenza continua prima del boost",
           "presence_boost_offset": "Scostamento minimo per il boost presenza",
           "window_delay_minutes": "Minuti di attesa con finestra aperta prima di spegnere",
           "update_interval_minutes": "Ogni quanto ricontrollare (minuti)"
+        },
+        "data_description": {
+          "extreme_offset": "Sopra questa soglia il climatizzatore va al massimo: target meno lo scostamento estremo, ventola alta.",
+          "hot_offset": "Da qui (e fino alla soglia 'caldo estremo') il climatizzatore lavora a target-delta con ventola media.",
+          "range_offset": "Sopra questa soglia (e fino a 'caldo forte') il climatizzatore lavora a target-delta con ventola bassa.",
+          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo."
         }
       },
       "notifiche": {
@@ -84,15 +93,24 @@
         "title": "Soglie termiche e tempistiche",
         "data": {
           "target_temp_default": "Temperatura target iniziale",
+          "extreme_offset": "Soglia 'caldo estremo'",
           "hot_offset": "Scostamento 'caldo forte'",
-          "range_offset": "Scostamento 'sopra target'",
+          "range_offset": "Soglia inizio fascia 'caldo'",
+          "below_offset": "Margine sotto target (ventola bassa)",
           "turn_on_offset": "Scostamento minimo per accendere da FV",
           "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
+          "extreme_delta": "Scostamento estremo (target meno questo valore)",
           "presence_boost_enabled": "Attiva il boost da presenza",
           "presence_boost_minutes": "Minuti di presenza continua prima del boost",
           "presence_boost_offset": "Scostamento minimo per il boost presenza",
           "window_delay_minutes": "Minuti di attesa con finestra aperta prima di spegnere",
           "update_interval_minutes": "Ogni quanto ricontrollare (minuti)"
+        },
+        "data_description": {
+          "extreme_offset": "Sopra questa soglia il climatizzatore va al massimo: target meno lo scostamento estremo, ventola alta.",
+          "hot_offset": "Da qui (e fino alla soglia 'caldo estremo') il climatizzatore lavora a target-delta con ventola media.",
+          "range_offset": "Sopra questa soglia (e fino a 'caldo forte') il climatizzatore lavora a target-delta con ventola bassa.",
+          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo."
         }
       },
       "notifiche": {
