@@ -18,6 +18,8 @@ from .const import (
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
     CONF_FV_END_TIME,
+    CONF_FV_PRIORITY,
+    CONF_FV_STAGGER_MIN,
     CONF_FV_MARGIN_W,
     CONF_FV_SENSOR,
     CONF_FV_START_TIME,
@@ -129,6 +131,20 @@ def _schema_energia(defaults: dict) -> vol.Schema:
             _f(
                 vol.Optional, CONF_FV_END_TIME, defaults, DEFAULT_FV_END_TIME
             ): selector.TimeSelector(),
+            _f(
+                vol.Optional, CONF_FV_PRIORITY, defaults, DEFAULT_FV_PRIORITY
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=99, step=1, mode="box"
+                )
+            ),
+            _f(
+                vol.Optional, CONF_FV_STAGGER_MIN, defaults, DEFAULT_FV_STAGGER_MIN
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=60, step=1, unit_of_measurement="min", mode="box"
+                )
+            ),
         }
     )
 
