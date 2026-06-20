@@ -132,6 +132,27 @@ def _schema_user(defaults: dict) -> vol.Schema:
     )
 
 
+def _schema_sensori(defaults: dict) -> vol.Schema:
+    """Schema per modificare nome e sensori ausiliari di un termostato già esistente."""
+    return vol.Schema(
+        {
+            _f(vol.Optional, CONF_NAME, defaults, DEFAULT_NAME): selector.TextSelector(),
+            _f(vol.Required, CONF_TEMP_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            _f(vol.Required, CONF_WINDOW_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            _f(vol.Optional, CONF_PRESENCE_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            _f(vol.Optional, CONF_DOOR_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+        }
+    )
+
+
 def _schema_energia(defaults: dict) -> vol.Schema:
     return vol.Schema(
         {
@@ -483,12 +504,29 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         merged = dict(config_entry.data)
         merged.update(config_entry.options)
+        # I termostati configurati prima dell'introduzione dei profili non
+        # hanno ancora un profilo salvato: di default li trattiamo come
+        # "Personalizzato", così le loro soglie già impostate restano sempre
+        # visibili e modificabili invece di essere silenziosamente
+        # sovrascritte da un preset.
+        if CONF_PROFILE not in merged:
+            merged[CONF_PROFILE] = PRESET_PERSONALIZZATO
         self._data: dict[str, Any] = merged
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        return await self.async_step_energia()
+        return await self.async_step_sensori()
+
+    async def async_step_sensori(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_energia()
+        return self.async_show_form(
+            step_id="sensori", data_schema=_schema_sensori(self._data)
+        )
 
     async def async_step_energia(
         self, user_input: dict[str, Any] | None = None
