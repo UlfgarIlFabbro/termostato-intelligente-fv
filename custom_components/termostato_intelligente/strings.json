@@ -22,7 +22,9 @@
           "fv_margin_w": "Required solar surplus margin",
           "soc_min": "Minimum battery SOC to turn on",
           "fv_start_time": "Active window start",
-          "fv_end_time": "Active window end"
+          "fv_end_time": "Active window end",
+          "fv_priority": "Turn-on priority (lower = first)",
+          "fv_stagger_minutes": "Minimum gap between FV turn-ons"
         },
         "data_description": {
           "fv_start_time": "Outside this time window the thermostat won't turn on or adjust anything.",
@@ -86,7 +88,9 @@
           "fv_margin_w": "Required solar surplus margin",
           "soc_min": "Minimum battery SOC to turn on",
           "fv_start_time": "Active window start",
-          "fv_end_time": "Active window end"
+          "fv_end_time": "Active window end",
+          "fv_priority": "Turn-on priority (lower = first)",
+          "fv_stagger_minutes": "Minimum gap between FV turn-ons"
         }
       },
       "soglie": {
