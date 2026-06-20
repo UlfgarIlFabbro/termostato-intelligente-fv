@@ -128,8 +128,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     - accensione solo con surplus FV (fascia oraria + switch dedicato +
       coordinamento priorità/distacco tra più istanze)
     - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte /
-      caldo / vicino target / sotto target), sempre attiva indipendentemente
-      dalla fascia oraria FV
+      caldo / vicino target / sotto target), attiva ogni volta che il
+      climatizzatore è acceso, indipendentemente dalla fascia oraria FV
     - calibrazione proporzionale sullo scostamento tra la sonda ambiente e la
       sonda interna del climatizzatore reale: più siamo vicini al target,
       meno la correzione viene applicata
@@ -138,12 +138,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
       garantire che continui davvero a raffreddare
     - modalità notturna (target più alto in una fascia oraria configurabile)
     - raffreddamento rapido opzionale (ventola alta + ulteriore grado)
-    - boost presenza dopo N minuti continuativi
+    - boost presenza dopo N minuti continuativi (solo a clima acceso)
     - arrotondamento del setpoint a numero intero (molti climatizzatori non
       accettano decimali): decimale <= 0,5 per difetto, > 0,5 per eccesso
     - snapshot/restore + avviso TTS + notifica alla finestra + notifica ad
-      ogni cambio di temperatura inviato al climatizzatore + avviso opzionale
-      se la porta si apre (nessuna azione sul clima, solo avviso)
+      ogni cambio di temperatura inviato al climatizzatore (solo a clima
+      acceso) + avviso opzionale se la porta si apre (nessuna azione sul
+      clima, solo avviso)
     - bypass automatico se finestra/presenza/porta non sono configurati o
       non disponibili
     """
@@ -356,7 +357,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         target = self._effective_target()
 
-        # La regolazione termica gira sempre, dentro e fuori dalla fascia FV.
+        # La regolazione termica gira sempre (quando il clima è acceso),
+        # dentro e fuori dalla fascia FV.
         await self._async_handle_thermal(temp, target)
 
         # L'accensione automatica da FV scatta solo se lo switch dedicato è
@@ -526,6 +528,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         return fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset
 
     async def _async_handle_thermal(self, temp: float, target: float) -> None:
+        # Se il climatizzatore è spento non ha senso ricalcolare/inviare un
+        # setpoint (e generare notifiche): la regolazione riprende
+        # automaticamente non appena viene riacceso (manualmente, da FV, o
+        # al ripristino dopo la finestra).
+        if self.hvac_mode == HVACMode.OFF:
+            return
+
         extreme_offset = float(
             get_conf(self.entry, CONF_EXTREME_OFFSET, DEFAULT_EXTREME_OFFSET)
         )
@@ -653,6 +662,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
 
     async def _async_handle_presence_boost(self, temp: float, target: float) -> None:
+        if self.hvac_mode != HVACMode.COOL:
+            return
         if not self._presence_sensor or self._presence_since is None:
             return
         if not bool(
@@ -878,7 +889,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     ) -> None:
         """Avvisa su Telegram/notify ogni volta che il setpoint inviato al
         climatizzatore reale cambia (per qualunque motivo: fasce termiche,
-        raffreddamento rapido, calibrazione, modalità notturna)."""
+        raffreddamento rapido, calibrazione, modalità notturna). Mai via TTS."""
         if not bool(
             get_conf(
                 self.entry,
