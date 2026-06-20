@@ -77,7 +77,8 @@
         "data_description": {
           "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
           "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
-          "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected."
+          "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
+          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature."
         }
       }
     },
