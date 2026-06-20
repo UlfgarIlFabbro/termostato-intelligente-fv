@@ -25,10 +25,9 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_FV_PRIORITY,
-    CONF_FV_STAGGER_MIN,
     CONF_BATTERY_SENSOR,
     CONF_BELOW_OFFSET,
+    CONF_CALIBRATION_MAX_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_CONSUMPTION_SENSOR,
     CONF_EXTREME_DELTA,
@@ -39,10 +38,15 @@ from .const import (
     SWITCH_KEY_QUICK,
     CONF_FV_END_TIME,
     CONF_FV_MARGIN_W,
+    CONF_FV_PRIORITY,
     CONF_FV_SENSOR,
+    CONF_FV_STAGGER_MIN,
     CONF_FV_START_TIME,
     CONF_HOT_OFFSET,
     CONF_NAME,
+    CONF_NIGHT_END_TIME,
+    CONF_NIGHT_OFFSET,
+    CONF_NIGHT_START_TIME,
     CONF_NOTIFY_CHAT_IDS,
     CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_TARGETS,
@@ -62,6 +66,7 @@ from .const import (
     CONF_UPDATE_INTERVAL_MIN,
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
+    DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
@@ -72,6 +77,9 @@ from .const import (
     DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
     DEFAULT_NAME,
+    DEFAULT_NIGHT_END_TIME,
+    DEFAULT_NIGHT_OFFSET,
+    DEFAULT_NIGHT_START_TIME,
     DEFAULT_NOTIFY_MESSAGE,
     DEFAULT_PRESENCE_BOOST_ENABLED,
     DEFAULT_PRESENCE_BOOST_MIN,
@@ -103,13 +111,21 @@ async def async_setup_entry(
 class SmartFvClimate(ClimateEntity, RestoreEntity):
     """Termostato intelligente: pilota un climatizzatore reale.
 
-    Logica riprodotta dalle automazioni originali:
-    - blocco totale se la finestra è aperta
-    - accensione solo con surplus FV (fascia oraria configurabile)
-    - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte / caldo / vicino target / sotto target)
-    - fan limitato a low/medium/high
+    Logica:
+    - blocco totale se la finestra è aperta o se il master è spento
+    - accensione solo con surplus FV (fascia oraria + switch dedicato +
+      coordinamento priorità/distacco tra più istanze)
+    - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte /
+      caldo / vicino target / sotto target), sempre attiva indipendentemente
+      dalla fascia oraria FV
+    - calibrazione automatica sullo scostamento tra la sonda ambiente e la
+      sonda interna del climatizzatore reale
+    - modalità notturna (target più alto in una fascia oraria configurabile)
+    - raffreddamento rapido opzionale (ventola alta + ulteriore grado)
     - boost presenza dopo N minuti continuativi
     - snapshot/restore + avviso TTS + notifica alla finestra
+    - bypass automatico se finestra/presenza non sono configurati o non
+      disponibili
     """
 
     _attr_should_poll = False
@@ -188,6 +204,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "termostato_abilitato": self._switch_state(SWITCH_KEY_MASTER, True),
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
             "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
+            "modalita_notturna_attiva": self._is_night_mode_active(),
+            "target_effettivo": self._effective_target(),
         }
 
     # ------------------------------------------------------------------
@@ -254,7 +272,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Annulla un eventuale timer finestra pendente per evitare leak/azioni a entità rimossa."""
+        """Annulla un eventuale timer finestra pendente e si deregistra da hass.data."""
         if self._window_cancel_timer is not None:
             self._window_cancel_timer()
             self._window_cancel_timer = None
@@ -311,7 +329,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         temp = self.current_temperature
         if temp is None:
             return
-        target = self._target_temperature
+        target = self._effective_target()
 
         # La regolazione termica gira sempre, dentro e fuori dalla fascia FV.
         await self._async_handle_thermal(temp, target)
@@ -323,6 +341,31 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         await self._async_handle_presence_boost(temp, target)
         self.async_write_ha_state()
+
+    def _effective_target(self) -> float:
+        """Target base impostato dall'utente, più l'eventuale scostamento notturno."""
+        target = self._target_temperature
+        if self._is_night_mode_active():
+            night_offset = float(
+                get_conf(self.entry, CONF_NIGHT_OFFSET, DEFAULT_NIGHT_OFFSET)
+            )
+            target += night_offset
+        return target
+
+    def _is_night_mode_active(self) -> bool:
+        start_str = get_conf(self.entry, CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME)
+        end_str = get_conf(self.entry, CONF_NIGHT_END_TIME, DEFAULT_NIGHT_END_TIME)
+        try:
+            start = dt_time.fromisoformat(str(start_str))
+            end = dt_time.fromisoformat(str(end_str))
+        except ValueError:
+            return False
+        if start == end:
+            return False
+        now_t = dt_util.now().time()
+        if start <= end:
+            return start <= now_t <= end
+        return now_t >= start or now_t <= end
 
     def _within_active_window(self) -> bool:
         start_str = get_conf(self.entry, CONF_FV_START_TIME, DEFAULT_FV_START_TIME)
@@ -372,24 +415,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return None
 
     async def _async_handle_fv_turn_on(self, temp: float, target: float) -> None:
-        if not (self._fv_sensor and self._consumption_sensor and self._battery_sensor):
-            return
-        if self.hvac_mode != HVACMode.OFF:
-            return
-
-        fv = self._read_float(self._fv_sensor)
-        consumo = self._read_float(self._consumption_sensor)
-        soc = self._read_float(self._battery_sensor)
-        if fv is None or consumo is None or soc is None:
-            return
-
-        margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
-        soc_min = float(get_conf(self.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
-        turn_on_offset = float(
-            get_conf(self.entry, CONF_TURN_ON_OFFSET, DEFAULT_TURN_ON_OFFSET)
-        )
-
-        if not (fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset):
+        if not self._fv_basic_eligible(temp, target):
             return
 
         # Coordinamento tra le istanze: rispetta un distacco minimo
@@ -416,7 +442,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if sibling is None or sibling is self:
                 continue
             sib_temp = sibling.current_temperature
-            sib_target = sibling._target_temperature
+            sib_target = sibling._effective_target()
             if not sibling._fv_basic_eligible(sib_temp, sib_target):
                 continue
             sib_priority = (
@@ -496,6 +522,32 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         real_state = self.hass.states.get(self._climate_entity)
         current_temp = real_state.attributes.get("temperature") if real_state else None
         current_fan = real_state.attributes.get("fan_mode") if real_state else None
+        internal_temp = (
+            real_state.attributes.get("current_temperature") if real_state else None
+        )
+
+        # Calibrazione: la sonda interna del climatizzatore reale spesso legge
+        # una temperatura diversa da quella della stanza. Se il clima "vede"
+        # più fresco di quanto sia realmente in stanza, il setpoint che gli
+        # mandiamo viene abbassato della stessa quantità, così il compressore
+        # continua a lavorare finché la sua sonda interna non scende al
+        # livello che corrisponde al vero raggiungimento del target reale.
+        if internal_temp is not None:
+            try:
+                internal_temp = float(internal_temp)
+                calib_offset = temp - internal_temp
+                if calib_offset > 0:
+                    max_calib = float(
+                        get_conf(
+                            self.entry,
+                            CONF_CALIBRATION_MAX_OFFSET,
+                            DEFAULT_CALIBRATION_MAX_OFFSET,
+                        )
+                    )
+                    calib_offset = min(calib_offset, max_calib)
+                    new_temp -= calib_offset
+            except (TypeError, ValueError):
+                pass
 
         if current_temp is None or abs(float(current_temp) - new_temp) > 0.01:
             await self.hass.services.async_call(
