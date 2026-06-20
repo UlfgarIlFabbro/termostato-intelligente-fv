@@ -42,6 +42,10 @@
           "turn_on_offset": "Minimum offset to turn on from solar",
           "temp_delta": "Regulation offset (±) applied to the AC",
           "extreme_delta": "Extreme offset (target minus this value)",
+          "calibration_max_offset": "Max internal-sensor calibration offset",
+          "night_start_time": "Night mode start",
+          "night_end_time": "Night mode end",
+          "night_offset": "Night mode target offset (+°C)",
           "presence_boost_enabled": "Enable presence boost",
           "presence_boost_minutes": "Continuous presence minutes before boost",
           "presence_boost_offset": "Minimum offset for presence boost",
@@ -52,7 +56,9 @@
           "extreme_offset": "Above this threshold the AC goes all out: target minus the extreme offset, high fan.",
           "hot_offset": "From here (and up to the 'extreme heat' threshold) the AC runs at target-delta with medium fan.",
           "range_offset": "Above this threshold (and up to 'strong heat') the AC runs at target-delta with low fan.",
-          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling."
+          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling.",
+          "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's own internal sensor reading cooler than the room sensor.",
+          "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target+offset. Set to 0 to disable."
         }
       },
       "notifiche": {
@@ -104,6 +110,10 @@
           "turn_on_offset": "Minimum offset to turn on from solar",
           "temp_delta": "Regulation offset (±) applied to the AC",
           "extreme_delta": "Extreme offset (target minus this value)",
+          "calibration_max_offset": "Max internal-sensor calibration offset",
+          "night_start_time": "Night mode start",
+          "night_end_time": "Night mode end",
+          "night_offset": "Night mode target offset (+°C)",
           "presence_boost_enabled": "Enable presence boost",
           "presence_boost_minutes": "Continuous presence minutes before boost",
           "presence_boost_offset": "Minimum offset for presence boost",
@@ -114,7 +124,9 @@
           "extreme_offset": "Above this threshold the AC goes all out: target minus the extreme offset, high fan.",
           "hot_offset": "From here (and up to the 'extreme heat' threshold) the AC runs at target-delta with medium fan.",
           "range_offset": "Above this threshold (and up to 'strong heat') the AC runs at target-delta with low fan.",
-          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling."
+          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling.",
+          "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's own internal sensor reading cooler than the room sensor.",
+          "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target+offset. Set to 0 to disable."
         }
       },
       "notifiche": {
@@ -126,6 +138,11 @@
           "notify_targets": "Notify/Telegram entities to send the alert to",
           "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
           "notify_message": "'AC turned off' notification message"
+        },
+        "data_description": {
+          "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
+          "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
+          "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected."
         }
       }
     }
