@@ -79,12 +79,12 @@
         "data_description": {
           "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's own internal sensor reading cooler than the room sensor.",
           "min_below_internal": "While in an active heat band, the setpoint sent to the AC will always stay at least this much below what the AC itself is currently reading, so the compressor keeps actually cooling.",
-          "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target+offset. Set to 0 to disable."
+          "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target plus offset. Set to 0 to disable."
         }
       },
       "notifiche": {
         "title": "Voice and Telegram alerts",
-        "description": "Choose the Google devices to announce alerts on and where to send Telegram notifications. Messages support templates (e.g. {{ delay }}, {{ name }}, {{ target }}).",
+        "description": "Choose the Google devices to announce alerts on and where to send Telegram notifications. Messages support template variables (delay, name, target).",
         "data": {
           "tts_media_players": "Google devices for the voice announcement",
           "tts_engine_entity": "TTS engine (optional, auto if empty)",
@@ -98,11 +98,11 @@
           "door_alert_message": "Door-open alert message"
         },
         "data_description": {
-          "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
-          "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
+          "tts_message_open": "Available variables: delay (wait minutes), name (thermostat name), target (target temperature).",
+          "notify_message": "Available variables: name (thermostat name), target (target temperature).",
           "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
-          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature.",
-          "door_alert_message": "Available variables: {{ name }} thermostat name. This only sends an alert - it never turns off the AC or changes its temperature/fan."
+          "notify_temp_change_message": "Available variables: name (thermostat name), old_temp (previous setpoint), new_temp (new setpoint), fan_mode (fan mode), room_temp (room temperature), target (target temperature).",
+          "door_alert_message": "Available variable: name (thermostat name). This only sends an alert - it never turns off the AC or changes its temperature/fan."
         }
       }
     },
@@ -112,6 +112,16 @@
   },
   "options": {
     "step": {
+      "sensori": {
+        "title": "Entities and sensors",
+        "data": {
+          "name": "Thermostat name",
+          "temp_sensor": "Room temperature sensor",
+          "window_sensor": "Window/opening sensor",
+          "presence_sensor": "Presence sensor (optional)",
+          "door_sensor": "Door sensor (optional)"
+        }
+      },
       "energia": {
         "title": "Solar and battery",
         "data": {
@@ -163,7 +173,7 @@
         "data_description": {
           "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's own internal sensor reading cooler than the room sensor.",
           "min_below_internal": "While in an active heat band, the setpoint sent to the AC will always stay at least this much below what the AC itself is currently reading, so the compressor keeps actually cooling.",
-          "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target+offset. Set to 0 to disable."
+          "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target plus offset. Set to 0 to disable."
         }
       },
       "notifiche": {
@@ -181,11 +191,11 @@
           "door_alert_message": "Door-open alert message"
         },
         "data_description": {
-          "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
-          "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
+          "tts_message_open": "Available variables: delay (wait minutes), name (thermostat name), target (target temperature).",
+          "notify_message": "Available variables: name (thermostat name), target (target temperature).",
           "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
-          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature.",
-          "door_alert_message": "Available variables: {{ name }} thermostat name. This only sends an alert - it never turns off the AC or changes its temperature/fan."
+          "notify_temp_change_message": "Available variables: name (thermostat name), old_temp (previous setpoint), new_temp (new setpoint), fan_mode (fan mode), room_temp (room temperature), target (target temperature).",
+          "door_alert_message": "Available variable: name (thermostat name). This only sends an alert - it never turns off the AC or changes its temperature/fan."
         }
       }
     }
