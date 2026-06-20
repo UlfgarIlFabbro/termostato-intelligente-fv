@@ -1,4 +1,14 @@
 {
+  "selector": {
+    "profile": {
+      "options": {
+        "bilanciato": "Bilanciato",
+        "aggressivo": "Aggressivo",
+        "delicato": "Delicato",
+        "personalizzato": "Personalizzato"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -9,7 +19,8 @@
           "climate_entity": "Climatizzatore da pilotare",
           "temp_sensor": "Sensore di temperatura della stanza",
           "window_sensor": "Sensore finestra/apertura",
-          "presence_sensor": "Sensore di presenza (opzionale)"
+          "presence_sensor": "Sensore di presenza (opzionale)",
+          "door_sensor": "Sensore porta (opzionale)"
         }
       },
       "energia": {
@@ -31,8 +42,15 @@
           "fv_end_time": "Fuori da questa fascia oraria il termostato non accende né regola nulla."
         }
       },
-      "soglie": {
-        "title": "Soglie termiche e tempistiche",
+      "profilo": {
+        "title": "Profilo di regolazione",
+        "description": "Scegli un profilo preconfigurato, oppure seleziona Personalizzato per impostare ogni parametro manualmente.",
+        "data": {
+          "profile": "Profilo"
+        }
+      },
+      "soglie_termiche": {
+        "title": "Soglie termiche",
         "data": {
           "target_temp_default": "Temperatura target iniziale",
           "extreme_offset": "Soglia 'caldo estremo'",
@@ -41,8 +59,14 @@
           "below_offset": "Margine sotto target (ventola bassa)",
           "turn_on_offset": "Scostamento minimo per accendere da FV",
           "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
-          "extreme_delta": "Scostamento estremo (target meno questo valore)",
+          "extreme_delta": "Scostamento estremo (target meno questo valore)"
+        }
+      },
+      "soglie_avanzate": {
+        "title": "Funzioni avanzate",
+        "data": {
           "calibration_max_offset": "Scostamento massimo calibrazione sonda interna",
+          "min_below_internal": "Margine minimo sotto sonda interna",
           "night_start_time": "Inizio modalità notturna",
           "night_end_time": "Fine modalità notturna",
           "night_offset": "Scostamento target notturno (+°C)",
@@ -53,17 +77,14 @@
           "update_interval_minutes": "Ogni quanto ricontrollare (minuti)"
         },
         "data_description": {
-          "extreme_offset": "Sopra questa soglia il climatizzatore va al massimo: target meno lo scostamento estremo, ventola alta.",
-          "hot_offset": "Da qui (e fino alla soglia 'caldo estremo') il climatizzatore lavora a target-delta con ventola media.",
-          "range_offset": "Sopra questa soglia (e fino a 'caldo forte') il climatizzatore lavora a target-delta con ventola bassa.",
-          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo.",
           "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
+          "min_below_internal": "Quando si è in una fascia di caldo attiva, il setpoint inviato al climatizzatore resterà sempre almeno questo margine sotto la temperatura che il climatizzatore stesso sta rilevando, per garantire che continui davvero a raffreddare.",
           "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target+scostamento. Imposta 0 per disattivare."
         }
       },
       "notifiche": {
         "title": "Avvisi vocali e Telegram",
-        "description": "Scegli i dispositivi Google su cui annunciare l'avviso finestra e dove inviare la notifica Telegram. I messaggi accettano template (es. {{ delay }}, {{ name }}, {{ target }}).",
+        "description": "Scegli i dispositivi Google su cui annunciare gli avvisi e dove inviare le notifiche Telegram. I messaggi accettano template (es. {{ delay }}, {{ name }}, {{ target }}).",
         "data": {
           "tts_media_players": "Dispositivi Google per l'annuncio vocale",
           "tts_engine_entity": "Motore TTS (opzionale, auto se vuoto)",
@@ -72,13 +93,16 @@
           "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
           "notify_message": "Messaggio di notifica 'clima spento'",
           "notify_temp_change_enabled": "Notifica ad ogni cambio temperatura climatizzatore",
-          "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore"
+          "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore",
+          "door_alert_enabled": "Abilita avviso porta aperta",
+          "door_alert_message": "Messaggio avviso porta aperta"
         },
         "data_description": {
           "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
           "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
           "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
-          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target."
+          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target.",
+          "door_alert_message": "Variabili disponibili: {{ name }} nome del termostato. Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
         }
       }
     },
@@ -102,8 +126,15 @@
           "fv_stagger_minutes": "Distacco minimo tra le accensioni FV"
         }
       },
-      "soglie": {
-        "title": "Soglie termiche e tempistiche",
+      "profilo": {
+        "title": "Profilo di regolazione",
+        "description": "Scegli un profilo preconfigurato, oppure seleziona Personalizzato per impostare ogni parametro manualmente.",
+        "data": {
+          "profile": "Profilo"
+        }
+      },
+      "soglie_termiche": {
+        "title": "Soglie termiche",
         "data": {
           "target_temp_default": "Temperatura target iniziale",
           "extreme_offset": "Soglia 'caldo estremo'",
@@ -112,8 +143,14 @@
           "below_offset": "Margine sotto target (ventola bassa)",
           "turn_on_offset": "Scostamento minimo per accendere da FV",
           "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
-          "extreme_delta": "Scostamento estremo (target meno questo valore)",
+          "extreme_delta": "Scostamento estremo (target meno questo valore)"
+        }
+      },
+      "soglie_avanzate": {
+        "title": "Funzioni avanzate",
+        "data": {
           "calibration_max_offset": "Scostamento massimo calibrazione sonda interna",
+          "min_below_internal": "Margine minimo sotto sonda interna",
           "night_start_time": "Inizio modalità notturna",
           "night_end_time": "Fine modalità notturna",
           "night_offset": "Scostamento target notturno (+°C)",
@@ -124,11 +161,8 @@
           "update_interval_minutes": "Ogni quanto ricontrollare (minuti)"
         },
         "data_description": {
-          "extreme_offset": "Sopra questa soglia il climatizzatore va al massimo: target meno lo scostamento estremo, ventola alta.",
-          "hot_offset": "Da qui (e fino alla soglia 'caldo estremo') il climatizzatore lavora a target-delta con ventola media.",
-          "range_offset": "Sopra questa soglia (e fino a 'caldo forte') il climatizzatore lavora a target-delta con ventola bassa.",
-          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo.",
           "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
+          "min_below_internal": "Quando si è in una fascia di caldo attiva, il setpoint inviato al climatizzatore resterà sempre almeno questo margine sotto la temperatura che il climatizzatore stesso sta rilevando, per garantire che continui davvero a raffreddare.",
           "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target+scostamento. Imposta 0 per disattivare."
         }
       },
@@ -142,13 +176,16 @@
           "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
           "notify_message": "Messaggio di notifica 'clima spento'",
           "notify_temp_change_enabled": "Notifica ad ogni cambio temperatura climatizzatore",
-          "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore"
+          "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore",
+          "door_alert_enabled": "Abilita avviso porta aperta",
+          "door_alert_message": "Messaggio avviso porta aperta"
         },
         "data_description": {
           "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
           "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
           "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
-          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target."
+          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target.",
+          "door_alert_message": "Variabili disponibili: {{ name }} nome del termostato. Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
         }
       }
     }
