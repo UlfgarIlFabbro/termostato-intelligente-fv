@@ -50,6 +50,8 @@ from .const import (
     CONF_NOTIFY_CHAT_IDS,
     CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_TARGETS,
+    CONF_NOTIFY_TEMP_CHANGE_ENABLED,
+    CONF_NOTIFY_TEMP_CHANGE_MESSAGE,
     CONF_PRESENCE_BOOST_ENABLED,
     CONF_PRESENCE_BOOST_MIN,
     CONF_PRESENCE_BOOST_OFFSET,
@@ -81,6 +83,8 @@ from .const import (
     DEFAULT_NIGHT_OFFSET,
     DEFAULT_NIGHT_START_TIME,
     DEFAULT_NOTIFY_MESSAGE,
+    DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
+    DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
     DEFAULT_PRESENCE_BOOST_ENABLED,
     DEFAULT_PRESENCE_BOOST_MIN,
     DEFAULT_PRESENCE_BOOST_OFFSET,
@@ -123,7 +127,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     - modalità notturna (target più alto in una fascia oraria configurabile)
     - raffreddamento rapido opzionale (ventola alta + ulteriore grado)
     - boost presenza dopo N minuti continuativi
-    - snapshot/restore + avviso TTS + notifica alla finestra
+    - snapshot/restore + avviso TTS + notifica alla finestra + notifica ad
+      ogni cambio di temperatura inviato al climatizzatore
     - bypass automatico se finestra/presenza non sono configurati o non
       disponibili
     """
@@ -549,12 +554,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             except (TypeError, ValueError):
                 pass
 
-        if current_temp is None or abs(float(current_temp) - new_temp) > 0.01:
+        temp_changed = current_temp is None or abs(float(current_temp) - new_temp) > 0.01
+
+        if temp_changed:
             await self.hass.services.async_call(
                 "climate",
                 "set_temperature",
                 {"entity_id": self._climate_entity, "temperature": new_temp},
                 blocking=True,
+            )
+            old_temp_for_notify = (
+                float(current_temp) if current_temp is not None else None
+            )
+            await self._async_notify_temp_change(
+                old_temp_for_notify, new_temp, fan_mode, temp, target
             )
         if current_fan != fan_mode:
             await self.hass.services.async_call(
@@ -640,7 +653,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self.hass.services.async_call(
             "climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True
         )
-        await self._async_notify_notify()
+        await self._async_notify_window_closed_off()
         self.async_write_ha_state()
 
     async def _async_window_closed(self) -> None:
@@ -724,16 +737,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             blocking=True,
         )
 
-    async def _async_notify_notify(self) -> None:
+    async def _async_send_notification(self, message: str) -> None:
+        """Invia un messaggio sugli stessi canali notify/Telegram configurati."""
         targets = get_conf(self.entry, CONF_NOTIFY_TARGETS, [])
         chat_ids = get_conf(self.entry, CONF_NOTIFY_CHAT_IDS)
         if not targets and not chat_ids:
             return
-
-        message_tpl = get_conf(self.entry, CONF_NOTIFY_MESSAGE, DEFAULT_NOTIFY_MESSAGE)
-        message = await self._async_render(
-            message_tpl, {"name": self._attr_name, "target": self._target_temperature}
-        )
 
         if targets:
             await self.hass.services.async_call(
@@ -750,3 +759,48 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 {"target": ids, "message": message},
                 blocking=True,
             )
+
+    async def _async_notify_window_closed_off(self) -> None:
+        message_tpl = get_conf(self.entry, CONF_NOTIFY_MESSAGE, DEFAULT_NOTIFY_MESSAGE)
+        message = await self._async_render(
+            message_tpl, {"name": self._attr_name, "target": self._target_temperature}
+        )
+        await self._async_send_notification(message)
+
+    async def _async_notify_temp_change(
+        self,
+        old_temp: float | None,
+        new_temp: float,
+        fan_mode: str,
+        room_temp: float,
+        target: float,
+    ) -> None:
+        """Avvisa su Telegram/notify ogni volta che il setpoint inviato al
+        climatizzatore reale cambia (per qualunque motivo: fasce termiche,
+        raffreddamento rapido, calibrazione, modalità notturna)."""
+        if not bool(
+            get_conf(
+                self.entry,
+                CONF_NOTIFY_TEMP_CHANGE_ENABLED,
+                DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
+            )
+        ):
+            return
+
+        message_tpl = get_conf(
+            self.entry,
+            CONF_NOTIFY_TEMP_CHANGE_MESSAGE,
+            DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
+        )
+        message = await self._async_render(
+            message_tpl,
+            {
+                "name": self._attr_name,
+                "old_temp": old_temp,
+                "new_temp": round(new_temp, 1),
+                "fan_mode": fan_mode,
+                "room_temp": round(room_temp, 1),
+                "target": round(target, 1),
+            },
+        )
+        await self._async_send_notification(message)
