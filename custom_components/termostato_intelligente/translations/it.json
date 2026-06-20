@@ -22,7 +22,9 @@
           "fv_margin_w": "Margine surplus FV richiesto",
           "soc_min": "SOC minimo batteria per accendere",
           "fv_start_time": "Inizio fascia attiva",
-          "fv_end_time": "Fine fascia attiva"
+          "fv_end_time": "Fine fascia attiva",
+          "fv_priority": "Priorità di accensione (più basso = prima)",
+          "fv_stagger_minutes": "Distacco minimo tra le accensioni FV"
         },
         "data_description": {
           "fv_start_time": "Fuori da questa fascia oraria il termostato non accende né regola nulla.",
@@ -86,7 +88,9 @@
           "fv_margin_w": "Margine surplus FV richiesto",
           "soc_min": "SOC minimo batteria per accendere",
           "fv_start_time": "Inizio fascia attiva",
-          "fv_end_time": "Fine fascia attiva"
+          "fv_end_time": "Fine fascia attiva",
+          "fv_priority": "Priorità di accensione (più basso = prima)",
+          "fv_stagger_minutes": "Distacco minimo tra le accensioni FV"
         }
       },
       "soglie": {
