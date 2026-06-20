@@ -25,6 +25,8 @@ from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_FV_PRIORITY,
+    CONF_FV_STAGGER_MIN,
     CONF_BATTERY_SENSOR,
     CONF_BELOW_OFFSET,
     CONF_CLIMATE_ENTITY,
@@ -64,6 +66,8 @@ from .const import (
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
     DEFAULT_FV_MARGIN_W,
+    DEFAULT_FV_PRIORITY,
+    DEFAULT_FV_STAGGER_MIN,
     DEFAULT_FV_START_TIME,
     DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
@@ -141,6 +145,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._snapshot: dict[str, Any] | None = None
         self._window_cancel_timer = None
         self._presence_since: datetime | None = None
+
+        # Si registra in hass.data per essere visibile alle altre istanze
+        # (coordinamento priorità/distacco nell'accensione da FV).
+        hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})["climate"] = self
 
     # ------------------------------------------------------------------
     # Proprietà esposte (mirror del climatizzatore reale dove sensato)
@@ -250,6 +258,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if self._window_cancel_timer is not None:
             self._window_cancel_timer()
             self._window_cancel_timer = None
+        data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
+        if data.get("climate") is self:
+            data.pop("climate", None)
 
     # ------------------------------------------------------------------
     # Comandi utente sull'entità "termostato intelligente"
@@ -378,10 +389,68 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             get_conf(self.entry, CONF_TURN_ON_OFFSET, DEFAULT_TURN_ON_OFFSET)
         )
 
-        if fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset:
-            await self.hass.services.async_call(
-                "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
+        if not (fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset):
+            return
+
+        # Coordinamento tra le istanze: rispetta un distacco minimo
+        # dall'ultima accensione FV (di qualunque termostato) e, a parità di
+        # tempo, lascia precedenza a chi ha priorità migliore (numero più basso).
+        coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+        stagger_min = float(
+            get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN)
+        )
+        last_on = coord.get("last_fv_turn_on")
+        if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(
+            minutes=stagger_min
+        ):
+            return
+
+        my_priority = (
+            float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)),
+            self.entry.entry_id,
+        )
+        for entry_data in self.hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            sibling = entry_data.get("climate")
+            if sibling is None or sibling is self:
+                continue
+            sib_temp = sibling.current_temperature
+            sib_target = sibling._target_temperature
+            if not sibling._fv_basic_eligible(sib_temp, sib_target):
+                continue
+            sib_priority = (
+                float(
+                    get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)
+                ),
+                sibling.entry.entry_id,
             )
+            if sib_priority < my_priority:
+                return
+
+        await self.hass.services.async_call(
+            "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
+        )
+        coord["last_fv_turn_on"] = dt_util.utcnow()
+
+    def _fv_basic_eligible(self, temp: float | None, target: float) -> bool:
+        if not (self._fv_sensor and self._consumption_sensor and self._battery_sensor):
+            return False
+        if self.hvac_mode != HVACMode.OFF:
+            return False
+        if temp is None:
+            return False
+        fv = self._read_float(self._fv_sensor)
+        consumo = self._read_float(self._consumption_sensor)
+        soc = self._read_float(self._battery_sensor)
+        if fv is None or consumo is None or soc is None:
+            return False
+        margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+        soc_min = float(get_conf(self.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
+        turn_on_offset = float(
+            get_conf(self.entry, CONF_TURN_ON_OFFSET, DEFAULT_TURN_ON_OFFSET)
+        )
+        return fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset
 
     async def _async_handle_thermal(self, temp: float, target: float) -> None:
         extreme_offset = float(
