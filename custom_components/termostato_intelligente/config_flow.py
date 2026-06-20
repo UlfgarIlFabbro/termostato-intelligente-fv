@@ -16,6 +16,9 @@ from .const import (
     CONF_CALIBRATION_MAX_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_CONSUMPTION_SENSOR,
+    CONF_DOOR_ALERT_ENABLED,
+    CONF_DOOR_ALERT_MESSAGE,
+    CONF_DOOR_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
     CONF_FV_END_TIME,
@@ -25,6 +28,7 @@ from .const import (
     CONF_FV_STAGGER_MIN,
     CONF_FV_START_TIME,
     CONF_HOT_OFFSET,
+    CONF_MIN_BELOW_INTERNAL,
     CONF_NAME,
     CONF_NIGHT_END_TIME,
     CONF_NIGHT_OFFSET,
@@ -38,6 +42,7 @@ from .const import (
     CONF_PRESENCE_BOOST_MIN,
     CONF_PRESENCE_BOOST_OFFSET,
     CONF_PRESENCE_SENSOR,
+    CONF_PROFILE,
     CONF_RANGE_OFFSET,
     CONF_SOC_MIN,
     CONF_TARGET_TEMP_DEFAULT,
@@ -51,6 +56,8 @@ from .const import (
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
     DEFAULT_CALIBRATION_MAX_OFFSET,
+    DEFAULT_DOOR_ALERT_ENABLED,
+    DEFAULT_DOOR_ALERT_MESSAGE,
     DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
@@ -60,6 +67,7 @@ from .const import (
     DEFAULT_FV_START_TIME,
     DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
+    DEFAULT_MIN_BELOW_INTERNAL,
     DEFAULT_NAME,
     DEFAULT_NIGHT_END_TIME,
     DEFAULT_NIGHT_OFFSET,
@@ -70,6 +78,7 @@ from .const import (
     DEFAULT_PRESENCE_BOOST_ENABLED,
     DEFAULT_PRESENCE_BOOST_MIN,
     DEFAULT_PRESENCE_BOOST_OFFSET,
+    DEFAULT_PROFILE,
     DEFAULT_RANGE_OFFSET,
     DEFAULT_SOC_MIN,
     DEFAULT_TARGET_TEMP,
@@ -79,6 +88,11 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL_MIN,
     DEFAULT_WINDOW_DELAY_MIN,
     DOMAIN,
+    PRESET_AGGRESSIVO,
+    PRESET_BILANCIATO,
+    PRESET_DELICATO,
+    PRESET_PERSONALIZZATO,
+    PRESET_VALUES,
 )
 
 
@@ -109,6 +123,9 @@ def _schema_user(defaults: dict) -> vol.Schema:
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
             _f(vol.Optional, CONF_PRESENCE_SENSOR, defaults): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            _f(vol.Optional, CONF_DOOR_SENSOR, defaults): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
         }
@@ -148,9 +165,7 @@ def _schema_energia(defaults: dict) -> vol.Schema:
             _f(
                 vol.Optional, CONF_FV_PRIORITY, defaults, DEFAULT_FV_PRIORITY
             ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1, max=99, step=1, mode="box"
-                )
+                selector.NumberSelectorConfig(min=1, max=99, step=1, mode="box")
             ),
             _f(
                 vol.Optional, CONF_FV_STAGGER_MIN, defaults, DEFAULT_FV_STAGGER_MIN
@@ -163,7 +178,28 @@ def _schema_energia(defaults: dict) -> vol.Schema:
     )
 
 
-def _schema_soglie(defaults: dict) -> vol.Schema:
+def _schema_profilo(defaults: dict) -> vol.Schema:
+    return vol.Schema(
+        {
+            _f(
+                vol.Required, CONF_PROFILE, defaults, DEFAULT_PROFILE
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        PRESET_BILANCIATO,
+                        PRESET_AGGRESSIVO,
+                        PRESET_DELICATO,
+                        PRESET_PERSONALIZZATO,
+                    ],
+                    mode=selector.SelectSelectorMode.LIST,
+                    translation_key="profile",
+                )
+            ),
+        }
+    )
+
+
+def _schema_soglie_termiche(defaults: dict) -> vol.Schema:
     return vol.Schema(
         {
             _f(
@@ -222,6 +258,13 @@ def _schema_soglie(defaults: dict) -> vol.Schema:
                     min=0.5, max=8, step=0.5, unit_of_measurement="°C", mode="box"
                 )
             ),
+        }
+    )
+
+
+def _schema_soglie_avanzate(defaults: dict) -> vol.Schema:
+    return vol.Schema(
+        {
             _f(
                 vol.Optional,
                 CONF_CALIBRATION_MAX_OFFSET,
@@ -230,6 +273,16 @@ def _schema_soglie(defaults: dict) -> vol.Schema:
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0, max=8, step=0.5, unit_of_measurement="°C", mode="box"
+                )
+            ),
+            _f(
+                vol.Optional,
+                CONF_MIN_BELOW_INTERNAL,
+                defaults,
+                DEFAULT_MIN_BELOW_INTERNAL,
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=5, step=0.5, unit_of_measurement="°C", mode="box"
                 )
             ),
             _f(
@@ -323,12 +376,24 @@ def _schema_notifiche(defaults: dict) -> vol.Schema:
                 defaults,
                 DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
             ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+            _f(
+                vol.Optional,
+                CONF_DOOR_ALERT_ENABLED,
+                defaults,
+                DEFAULT_DOOR_ALERT_ENABLED,
+            ): selector.BooleanSelector(),
+            _f(
+                vol.Optional,
+                CONF_DOOR_ALERT_MESSAGE,
+                defaults,
+                DEFAULT_DOOR_ALERT_MESSAGE,
+            ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
         }
     )
 
 
 class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Flow di configurazione iniziale (4 step)."""
+    """Flow di configurazione iniziale."""
 
     VERSION = 1
 
@@ -353,19 +418,43 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_soglie()
+            return await self.async_step_profilo()
         return self.async_show_form(
             step_id="energia", data_schema=_schema_energia(self._data)
         )
 
-    async def async_step_soglie(
+    async def async_step_profilo(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            profile = user_input[CONF_PROFILE]
+            self._data[CONF_PROFILE] = profile
+            if profile in PRESET_VALUES:
+                self._data.update(PRESET_VALUES[profile])
+                return await self.async_step_notifiche()
+            return await self.async_step_soglie_termiche()
+        return self.async_show_form(
+            step_id="profilo", data_schema=_schema_profilo(self._data)
+        )
+
+    async def async_step_soglie_termiche(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_soglie_avanzate()
+        return self.async_show_form(
+            step_id="soglie_termiche", data_schema=_schema_soglie_termiche(self._data)
+        )
+
+    async def async_step_soglie_avanzate(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._data.update(user_input)
             return await self.async_step_notifiche()
         return self.async_show_form(
-            step_id="soglie", data_schema=_schema_soglie(self._data)
+            step_id="soglie_avanzate", data_schema=_schema_soglie_avanzate(self._data)
         )
 
     async def async_step_notifiche(
@@ -406,19 +495,43 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_soglie()
+            return await self.async_step_profilo()
         return self.async_show_form(
             step_id="energia", data_schema=_schema_energia(self._data)
         )
 
-    async def async_step_soglie(
+    async def async_step_profilo(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            profile = user_input[CONF_PROFILE]
+            self._data[CONF_PROFILE] = profile
+            if profile in PRESET_VALUES:
+                self._data.update(PRESET_VALUES[profile])
+                return await self.async_step_notifiche()
+            return await self.async_step_soglie_termiche()
+        return self.async_show_form(
+            step_id="profilo", data_schema=_schema_profilo(self._data)
+        )
+
+    async def async_step_soglie_termiche(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_soglie_avanzate()
+        return self.async_show_form(
+            step_id="soglie_termiche", data_schema=_schema_soglie_termiche(self._data)
+        )
+
+    async def async_step_soglie_avanzate(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._data.update(user_input)
             return await self.async_step_notifiche()
         return self.async_show_form(
-            step_id="soglie", data_schema=_schema_soglie(self._data)
+            step_id="soglie_avanzate", data_schema=_schema_soglie_avanzate(self._data)
         )
 
     async def async_step_notifiche(
