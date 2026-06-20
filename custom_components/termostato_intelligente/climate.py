@@ -31,6 +31,9 @@ from .const import (
     CONF_CALIBRATION_MAX_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_CONSUMPTION_SENSOR,
+    CONF_DOOR_ALERT_ENABLED,
+    CONF_DOOR_ALERT_MESSAGE,
+    CONF_DOOR_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
     DOMAIN,
@@ -44,6 +47,7 @@ from .const import (
     CONF_FV_STAGGER_MIN,
     CONF_FV_START_TIME,
     CONF_HOT_OFFSET,
+    CONF_MIN_BELOW_INTERNAL,
     CONF_NAME,
     CONF_NIGHT_END_TIME,
     CONF_NIGHT_OFFSET,
@@ -70,6 +74,8 @@ from .const import (
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
     DEFAULT_CALIBRATION_MAX_OFFSET,
+    DEFAULT_DOOR_ALERT_ENABLED,
+    DEFAULT_DOOR_ALERT_MESSAGE,
     DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
@@ -79,6 +85,7 @@ from .const import (
     DEFAULT_FV_START_TIME,
     DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
+    DEFAULT_MIN_BELOW_INTERNAL,
     DEFAULT_NAME,
     DEFAULT_NIGHT_END_TIME,
     DEFAULT_NIGHT_OFFSET,
@@ -123,18 +130,22 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte /
       caldo / vicino target / sotto target), sempre attiva indipendentemente
       dalla fascia oraria FV
-    - calibrazione automatica e proporzionale sullo scostamento tra la sonda
-      ambiente e la sonda interna del climatizzatore reale: più siamo vicini
-      al target, meno la correzione viene applicata
+    - calibrazione proporzionale sullo scostamento tra la sonda ambiente e la
+      sonda interna del climatizzatore reale: più siamo vicini al target,
+      meno la correzione viene applicata
+    - vincolo di sicurezza: nelle fasce calde attive, il setpoint resta
+      sempre almeno un margine minimo sotto la sonda interna del clima, per
+      garantire che continui davvero a raffreddare
     - modalità notturna (target più alto in una fascia oraria configurabile)
     - raffreddamento rapido opzionale (ventola alta + ulteriore grado)
     - boost presenza dopo N minuti continuativi
     - arrotondamento del setpoint a numero intero (molti climatizzatori non
       accettano decimali): decimale <= 0,5 per difetto, > 0,5 per eccesso
     - snapshot/restore + avviso TTS + notifica alla finestra + notifica ad
-      ogni cambio di temperatura inviato al climatizzatore
-    - bypass automatico se finestra/presenza non sono configurati o non
-      disponibili
+      ogni cambio di temperatura inviato al climatizzatore + avviso opzionale
+      se la porta si apre (nessuna azione sul clima, solo avviso)
+    - bypass automatico se finestra/presenza/porta non sono configurati o
+      non disponibili
     """
 
     _attr_should_poll = False
@@ -159,6 +170,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._temp_sensor: str = get_conf(entry, CONF_TEMP_SENSOR)
         self._window_sensor: str | None = get_conf(entry, CONF_WINDOW_SENSOR)
         self._presence_sensor: str | None = get_conf(entry, CONF_PRESENCE_SENSOR)
+        self._door_sensor: str | None = get_conf(entry, CONF_DOOR_SENSOR)
         self._fv_sensor: str | None = get_conf(entry, CONF_FV_SENSOR)
         self._consumption_sensor: str | None = get_conf(entry, CONF_CONSUMPTION_SENSOR)
         self._battery_sensor: str | None = get_conf(entry, CONF_BATTERY_SENSOR)
@@ -205,6 +217,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "finestra_aperta": self._is_window_open(),
+            "porta_aperta": self._is_door_open(),
             "snapshot_attivo": self._snapshot is not None,
             "presenza_da": self._presence_since.isoformat()
             if self._presence_since
@@ -254,6 +267,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._temp_sensor,
                 self._window_sensor,
                 self._presence_sensor,
+                self._door_sensor,
             )
             if e
         ]
@@ -271,6 +285,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         if entity_id == self._window_sensor:
             await self._async_handle_window(new_state, old_state)
+        elif entity_id == self._door_sensor:
+            await self._async_handle_door(new_state, old_state)
         elif entity_id == self._presence_sensor:
             if new_state and new_state.state == "on":
                 if old_state is None or old_state.state != "on":
@@ -396,6 +412,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not self._window_sensor:
             return False
         state = self.hass.states.get(self._window_sensor)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return False
+        return state.state == "on"
+
+    def _is_door_open(self) -> bool:
+        if not self._door_sensor:
+            return False
+        state = self.hass.states.get(self._door_sensor)
         if state is None or state.state in ("unknown", "unavailable"):
             return False
         return state.state == "on"
@@ -545,9 +569,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         real_state = self.hass.states.get(self._climate_entity)
         current_temp = real_state.attributes.get("temperature") if real_state else None
         current_fan = real_state.attributes.get("fan_mode") if real_state else None
-        internal_temp = (
+        internal_temp_raw = (
             real_state.attributes.get("current_temperature") if real_state else None
         )
+
+        internal_temp_value: float | None = None
+        if internal_temp_raw is not None:
+            try:
+                internal_temp_value = float(internal_temp_raw)
+            except (TypeError, ValueError):
+                internal_temp_value = None
 
         # Calibrazione proporzionale: la sonda interna del climatizzatore
         # reale spesso legge una temperatura diversa da quella della stanza.
@@ -555,34 +586,42 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # setpoint che gli mandiamo viene abbassato per compensare - ma in
         # proporzione a quanto siamo lontani dal target, non per intero:
         # quasi 0% di correzione appena sopra il target, fino al 100% quando
-        # si è alla soglia di "caldo estremo" (o oltre). Così la calibrazione
-        # rispetta comunque i 3 step di caldo già configurati, senza scatti
-        # bruschi tra una fascia e l'altra.
-        if internal_temp is not None:
-            try:
-                internal_temp = float(internal_temp)
-                calib_raw = temp - internal_temp
-                if calib_raw > 0:
-                    gap = max(0.0, temp - target)
-                    if extreme_offset > 0:
-                        fraction = min(gap / extreme_offset, 1.0)
-                    else:
-                        fraction = 1.0 if gap > 0 else 0.0
-                    calib_scaled = calib_raw * fraction
-                    max_calib = float(
-                        get_conf(
-                            self.entry,
-                            CONF_CALIBRATION_MAX_OFFSET,
-                            DEFAULT_CALIBRATION_MAX_OFFSET,
-                        )
+        # si è alla soglia di "caldo estremo" (o oltre).
+        if internal_temp_value is not None:
+            calib_raw = temp - internal_temp_value
+            if calib_raw > 0:
+                gap = max(0.0, temp - target)
+                if extreme_offset > 0:
+                    fraction = min(gap / extreme_offset, 1.0)
+                else:
+                    fraction = 1.0 if gap > 0 else 0.0
+                calib_scaled = calib_raw * fraction
+                max_calib = float(
+                    get_conf(
+                        self.entry,
+                        CONF_CALIBRATION_MAX_OFFSET,
+                        DEFAULT_CALIBRATION_MAX_OFFSET,
                     )
-                    calib_scaled = min(calib_scaled, max_calib)
-                    new_temp -= calib_scaled
-            except (TypeError, ValueError):
-                pass
+                )
+                calib_scaled = min(calib_scaled, max_calib)
+                new_temp -= calib_scaled
 
         # I climatizzatori in genere accettano solo temperature intere.
         new_temp_rounded = self._round_setpoint(new_temp)
+
+        # Vincolo di sicurezza: nelle fasce calde attive, il setpoint deve
+        # restare sotto la sonda interna del clima di almeno un margine
+        # minimo, altrimenti il compressore si considera già soddisfatto e
+        # smette di raffreddare anche se la stanza è ancora calda. Non si
+        # applica nella fascia "vicino al target", dove è normale che il
+        # clima non spinga oltre.
+        if internal_temp_value is not None and temp > target + range_offset:
+            min_gap = float(
+                get_conf(self.entry, CONF_MIN_BELOW_INTERNAL, DEFAULT_MIN_BELOW_INTERNAL)
+            )
+            max_allowed = math.floor(internal_temp_value - min_gap)
+            if new_temp_rounded > max_allowed:
+                new_temp_rounded = int(max_allowed)
 
         current_temp_rounded: int | None = None
         if current_temp is not None:
@@ -676,7 +715,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         delay_min = int(
             get_conf(self.entry, CONF_WINDOW_DELAY_MIN, DEFAULT_WINDOW_DELAY_MIN)
         )
-        await self._async_notify_tts(delay_min)
+        await self._async_notify_window_open_tts(delay_min)
 
         self._window_cancel_timer = async_call_later(
             self.hass, timedelta(minutes=delay_min), self._async_window_timeout
@@ -719,6 +758,29 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
 
     # ------------------------------------------------------------------
+    # Gestione porta: solo avviso opzionale, nessuna azione sul clima
+    # ------------------------------------------------------------------
+
+    async def _async_handle_door(
+        self, new_state: State | None, old_state: State | None
+    ) -> None:
+        if new_state is None or new_state.state != "on":
+            return
+        if old_state is not None and old_state.state == "on":
+            return
+        if not bool(
+            get_conf(self.entry, CONF_DOOR_ALERT_ENABLED, DEFAULT_DOOR_ALERT_ENABLED)
+        ):
+            return
+
+        message_tpl = get_conf(
+            self.entry, CONF_DOOR_ALERT_MESSAGE, DEFAULT_DOOR_ALERT_MESSAGE
+        )
+        message = await self._async_render(message_tpl, {"name": self._attr_name})
+        await self._async_speak(message)
+        await self._async_send_notification(message)
+
+    # ------------------------------------------------------------------
     # Notifiche: TTS su dispositivi Google + notify/Telegram, personalizzabili
     # ------------------------------------------------------------------
 
@@ -735,7 +797,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
             return template_str
 
-    async def _async_notify_tts(self, delay_min: int) -> None:
+    async def _async_speak(self, message: str) -> None:
+        """Pronuncia un messaggio sui dispositivi Google configurati."""
         players = get_conf(self.entry, CONF_TTS_PLAYERS, [])
         if not players:
             return
@@ -745,21 +808,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             tts_states = self.hass.states.async_all("tts")
             if not tts_states:
                 _LOGGER.warning(
-                    "%s: nessun motore TTS disponibile per l'avviso finestra",
+                    "%s: nessun motore TTS disponibile per l'avviso vocale",
                     self._attr_name,
                 )
                 return
             engine = tts_states[0].entity_id
-
-        message_tpl = get_conf(self.entry, CONF_TTS_MESSAGE_OPEN, DEFAULT_TTS_MESSAGE_OPEN)
-        message = await self._async_render(
-            message_tpl,
-            {
-                "delay": delay_min,
-                "name": self._attr_name,
-                "target": self._target_temperature,
-            },
-        )
 
         await self.hass.services.async_call(
             "tts",
@@ -772,6 +825,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             },
             blocking=True,
         )
+
+    async def _async_notify_window_open_tts(self, delay_min: int) -> None:
+        message_tpl = get_conf(self.entry, CONF_TTS_MESSAGE_OPEN, DEFAULT_TTS_MESSAGE_OPEN)
+        message = await self._async_render(
+            message_tpl,
+            {
+                "delay": delay_min,
+                "name": self._attr_name,
+                "target": self._target_temperature,
+            },
+        )
+        await self._async_speak(message)
 
     async def _async_send_notification(self, message: str) -> None:
         """Invia un messaggio sugli stessi canali notify/Telegram configurati."""
