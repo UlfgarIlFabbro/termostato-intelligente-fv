@@ -13,18 +13,22 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_BATTERY_SENSOR,
     CONF_BELOW_OFFSET,
+    CONF_CALIBRATION_MAX_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_CONSUMPTION_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
     CONF_FV_END_TIME,
-    CONF_FV_PRIORITY,
-    CONF_FV_STAGGER_MIN,
     CONF_FV_MARGIN_W,
+    CONF_FV_PRIORITY,
     CONF_FV_SENSOR,
+    CONF_FV_STAGGER_MIN,
     CONF_FV_START_TIME,
     CONF_HOT_OFFSET,
     CONF_NAME,
+    CONF_NIGHT_END_TIME,
+    CONF_NIGHT_OFFSET,
+    CONF_NIGHT_START_TIME,
     CONF_NOTIFY_CHAT_IDS,
     CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_TARGETS,
@@ -44,14 +48,20 @@ from .const import (
     CONF_UPDATE_INTERVAL_MIN,
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
+    DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
     DEFAULT_FV_MARGIN_W,
+    DEFAULT_FV_PRIORITY,
+    DEFAULT_FV_STAGGER_MIN,
     DEFAULT_FV_START_TIME,
     DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
     DEFAULT_NAME,
+    DEFAULT_NIGHT_END_TIME,
+    DEFAULT_NIGHT_OFFSET,
+    DEFAULT_NIGHT_START_TIME,
     DEFAULT_NOTIFY_MESSAGE,
     DEFAULT_PRESENCE_BOOST_ENABLED,
     DEFAULT_PRESENCE_BOOST_MIN,
@@ -206,6 +216,29 @@ def _schema_soglie(defaults: dict) -> vol.Schema:
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=0.5, max=8, step=0.5, unit_of_measurement="°C", mode="box"
+                )
+            ),
+            _f(
+                vol.Optional,
+                CONF_CALIBRATION_MAX_OFFSET,
+                defaults,
+                DEFAULT_CALIBRATION_MAX_OFFSET,
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=8, step=0.5, unit_of_measurement="°C", mode="box"
+                )
+            ),
+            _f(
+                vol.Optional, CONF_NIGHT_START_TIME, defaults, DEFAULT_NIGHT_START_TIME
+            ): selector.TimeSelector(),
+            _f(
+                vol.Optional, CONF_NIGHT_END_TIME, defaults, DEFAULT_NIGHT_END_TIME
+            ): selector.TimeSelector(),
+            _f(
+                vol.Optional, CONF_NIGHT_OFFSET, defaults, DEFAULT_NIGHT_OFFSET
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=5, step=0.5, unit_of_measurement="°C", mode="box"
                 )
             ),
             _f(
