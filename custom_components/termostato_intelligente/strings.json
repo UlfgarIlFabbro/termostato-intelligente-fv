@@ -139,7 +139,9 @@
           "tts_message_open": "Window open voice message",
           "notify_targets": "Notify/Telegram entities to send the alert to",
           "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
-          "notify_message": "'AC turned off' notification message"
+          "notify_message": "'AC turned off' notification message",
+          "notify_temp_change_enabled": "Notify on every AC temperature change",
+          "notify_temp_change_message": "AC temperature change message"
         },
         "data_description": {
           "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
