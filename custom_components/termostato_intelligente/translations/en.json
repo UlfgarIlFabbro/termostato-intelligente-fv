@@ -1,4 +1,14 @@
 {
+  "selector": {
+    "profile": {
+      "options": {
+        "bilanciato": "Balanced",
+        "aggressivo": "Aggressive",
+        "delicato": "Gentle",
+        "personalizzato": "Custom"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -9,7 +19,8 @@
           "climate_entity": "Air conditioner to control",
           "temp_sensor": "Room temperature sensor",
           "window_sensor": "Window/opening sensor",
-          "presence_sensor": "Presence sensor (optional)"
+          "presence_sensor": "Presence sensor (optional)",
+          "door_sensor": "Door sensor (optional)"
         }
       },
       "energia": {
@@ -31,8 +42,15 @@
           "fv_end_time": "Outside this time window the thermostat won't turn on or adjust anything."
         }
       },
-      "soglie": {
-        "title": "Thermal thresholds and timing",
+      "profilo": {
+        "title": "Regulation profile",
+        "description": "Choose a preconfigured profile, or pick Custom to set every parameter manually.",
+        "data": {
+          "profile": "Profile"
+        }
+      },
+      "soglie_termiche": {
+        "title": "Thermal thresholds",
         "data": {
           "target_temp_default": "Initial target temperature",
           "extreme_offset": "'Extreme heat' threshold",
@@ -41,8 +59,14 @@
           "below_offset": "Margin below target (low fan)",
           "turn_on_offset": "Minimum offset to turn on from solar",
           "temp_delta": "Regulation offset (±) applied to the AC",
-          "extreme_delta": "Extreme offset (target minus this value)",
+          "extreme_delta": "Extreme offset (target minus this value)"
+        }
+      },
+      "soglie_avanzate": {
+        "title": "Advanced functions",
+        "data": {
           "calibration_max_offset": "Max internal-sensor calibration offset",
+          "min_below_internal": "Min. margin below internal sensor",
           "night_start_time": "Night mode start",
           "night_end_time": "Night mode end",
           "night_offset": "Night mode target offset (+°C)",
@@ -53,17 +77,14 @@
           "update_interval_minutes": "Check interval (minutes)"
         },
         "data_description": {
-          "extreme_offset": "Above this threshold the AC goes all out: target minus the extreme offset, high fan.",
-          "hot_offset": "From here (and up to the 'extreme heat' threshold) the AC runs at target-delta with medium fan.",
-          "range_offset": "Above this threshold (and up to 'strong heat') the AC runs at target-delta with low fan.",
-          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling.",
           "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's own internal sensor reading cooler than the room sensor.",
+          "min_below_internal": "While in an active heat band, the setpoint sent to the AC will always stay at least this much below what the AC itself is currently reading, so the compressor keeps actually cooling.",
           "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target+offset. Set to 0 to disable."
         }
       },
       "notifiche": {
         "title": "Voice and Telegram alerts",
-        "description": "Choose the Google devices to announce the window alert on and where to send the Telegram notification. Messages support templates (e.g. {{ delay }}, {{ name }}, {{ target }}).",
+        "description": "Choose the Google devices to announce alerts on and where to send Telegram notifications. Messages support templates (e.g. {{ delay }}, {{ name }}, {{ target }}).",
         "data": {
           "tts_media_players": "Google devices for the voice announcement",
           "tts_engine_entity": "TTS engine (optional, auto if empty)",
@@ -72,13 +93,16 @@
           "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
           "notify_message": "'AC turned off' notification message",
           "notify_temp_change_enabled": "Notify on every AC temperature change",
-          "notify_temp_change_message": "AC temperature change message"
+          "notify_temp_change_message": "AC temperature change message",
+          "door_alert_enabled": "Enable door-open alert",
+          "door_alert_message": "Door-open alert message"
         },
         "data_description": {
           "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
           "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
           "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
-          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature."
+          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature.",
+          "door_alert_message": "Available variables: {{ name }} thermostat name. This only sends an alert - it never turns off the AC or changes its temperature/fan."
         }
       }
     },
@@ -102,8 +126,15 @@
           "fv_stagger_minutes": "Minimum gap between FV turn-ons"
         }
       },
-      "soglie": {
-        "title": "Thermal thresholds and timing",
+      "profilo": {
+        "title": "Regulation profile",
+        "description": "Choose a preconfigured profile, or pick Custom to set every parameter manually.",
+        "data": {
+          "profile": "Profile"
+        }
+      },
+      "soglie_termiche": {
+        "title": "Thermal thresholds",
         "data": {
           "target_temp_default": "Initial target temperature",
           "extreme_offset": "'Extreme heat' threshold",
@@ -112,8 +143,14 @@
           "below_offset": "Margin below target (low fan)",
           "turn_on_offset": "Minimum offset to turn on from solar",
           "temp_delta": "Regulation offset (±) applied to the AC",
-          "extreme_delta": "Extreme offset (target minus this value)",
+          "extreme_delta": "Extreme offset (target minus this value)"
+        }
+      },
+      "soglie_avanzate": {
+        "title": "Advanced functions",
+        "data": {
           "calibration_max_offset": "Max internal-sensor calibration offset",
+          "min_below_internal": "Min. margin below internal sensor",
           "night_start_time": "Night mode start",
           "night_end_time": "Night mode end",
           "night_offset": "Night mode target offset (+°C)",
@@ -124,11 +161,8 @@
           "update_interval_minutes": "Check interval (minutes)"
         },
         "data_description": {
-          "extreme_offset": "Above this threshold the AC goes all out: target minus the extreme offset, high fan.",
-          "hot_offset": "From here (and up to the 'extreme heat' threshold) the AC runs at target-delta with medium fan.",
-          "range_offset": "Above this threshold (and up to 'strong heat') the AC runs at target-delta with low fan.",
-          "below_offset": "Below this threshold (below target) the AC switches to target+delta to avoid overcooling.",
           "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's own internal sensor reading cooler than the room sensor.",
+          "min_below_internal": "While in an active heat band, the setpoint sent to the AC will always stay at least this much below what the AC itself is currently reading, so the compressor keeps actually cooling.",
           "night_offset": "Degrees added to the target during the night window. The thermostat's displayed target is unchanged; only the internal regulation uses target+offset. Set to 0 to disable."
         }
       },
@@ -142,13 +176,16 @@
           "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
           "notify_message": "'AC turned off' notification message",
           "notify_temp_change_enabled": "Notify on every AC temperature change",
-          "notify_temp_change_message": "AC temperature change message"
+          "notify_temp_change_message": "AC temperature change message",
+          "door_alert_enabled": "Enable door-open alert",
+          "door_alert_message": "Door-open alert message"
         },
         "data_description": {
           "tts_message_open": "Available variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temperature.",
           "notify_message": "Available variables: {{ name }} thermostat name, {{ target }} target temperature.",
           "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
-          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature."
+          "notify_temp_change_message": "Available variables: {{ name }} thermostat name, {{ old_temp }} previous setpoint, {{ new_temp }} new setpoint, {{ fan_mode }} fan mode, {{ room_temp }} room temperature, {{ target }} target temperature.",
+          "door_alert_message": "Available variables: {{ name }} thermostat name. This only sends an alert - it never turns off the AC or changes its temperature/fan."
         }
       }
     }
