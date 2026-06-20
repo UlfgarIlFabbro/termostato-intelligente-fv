@@ -42,6 +42,10 @@
           "turn_on_offset": "Scostamento minimo per accendere da FV",
           "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
           "extreme_delta": "Scostamento estremo (target meno questo valore)",
+          "calibration_max_offset": "Scostamento massimo calibrazione sonda interna",
+          "night_start_time": "Inizio modalità notturna",
+          "night_end_time": "Fine modalità notturna",
+          "night_offset": "Scostamento target notturno (+°C)",
           "presence_boost_enabled": "Attiva il boost da presenza",
           "presence_boost_minutes": "Minuti di presenza continua prima del boost",
           "presence_boost_offset": "Scostamento minimo per il boost presenza",
@@ -52,7 +56,9 @@
           "extreme_offset": "Sopra questa soglia il climatizzatore va al massimo: target meno lo scostamento estremo, ventola alta.",
           "hot_offset": "Da qui (e fino alla soglia 'caldo estremo') il climatizzatore lavora a target-delta con ventola media.",
           "range_offset": "Sopra questa soglia (e fino a 'caldo forte') il climatizzatore lavora a target-delta con ventola bassa.",
-          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo."
+          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo.",
+          "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
+          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target+scostamento. Imposta 0 per disattivare."
         }
       },
       "notifiche": {
@@ -104,6 +110,10 @@
           "turn_on_offset": "Scostamento minimo per accendere da FV",
           "temp_delta": "Scostamento di regolazione (±) sul climatizzatore",
           "extreme_delta": "Scostamento estremo (target meno questo valore)",
+          "calibration_max_offset": "Scostamento massimo calibrazione sonda interna",
+          "night_start_time": "Inizio modalità notturna",
+          "night_end_time": "Fine modalità notturna",
+          "night_offset": "Scostamento target notturno (+°C)",
           "presence_boost_enabled": "Attiva il boost da presenza",
           "presence_boost_minutes": "Minuti di presenza continua prima del boost",
           "presence_boost_offset": "Scostamento minimo per il boost presenza",
@@ -114,7 +124,9 @@
           "extreme_offset": "Sopra questa soglia il climatizzatore va al massimo: target meno lo scostamento estremo, ventola alta.",
           "hot_offset": "Da qui (e fino alla soglia 'caldo estremo') il climatizzatore lavora a target-delta con ventola media.",
           "range_offset": "Sopra questa soglia (e fino a 'caldo forte') il climatizzatore lavora a target-delta con ventola bassa.",
-          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo."
+          "below_offset": "Sotto questa soglia (al di sotto del target) il climatizzatore passa a target+delta per non raffreddare troppo.",
+          "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
+          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target+scostamento. Imposta 0 per disattivare."
         }
       },
       "notifiche": {
@@ -126,6 +138,11 @@
           "notify_targets": "Entità notify/Telegram a cui inviare l'avviso",
           "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
           "notify_message": "Messaggio di notifica 'clima spento'"
+        },
+        "data_description": {
+          "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
+          "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
+          "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify."
         }
       }
     }
