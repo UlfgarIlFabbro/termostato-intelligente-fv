@@ -70,12 +70,15 @@
           "tts_message_open": "Messaggio vocale finestra aperta",
           "notify_targets": "Entità notify/Telegram a cui inviare l'avviso",
           "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
-          "notify_message": "Messaggio di notifica 'clima spento'"
+          "notify_message": "Messaggio di notifica 'clima spento'",
+          "notify_temp_change_enabled": "Notifica ad ogni cambio temperatura climatizzatore",
+          "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore"
         },
         "data_description": {
           "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
           "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
-          "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify."
+          "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
+          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target."
         }
       }
     },
@@ -137,12 +140,15 @@
           "tts_message_open": "Messaggio vocale finestra aperta",
           "notify_targets": "Entità notify/Telegram a cui inviare l'avviso",
           "notify_chat_ids": "Chat ID Telegram (solo se non hai entità notify)",
-          "notify_message": "Messaggio di notifica 'clima spento'"
+          "notify_message": "Messaggio di notifica 'clima spento'",
+          "notify_temp_change_enabled": "Notifica ad ogni cambio temperatura climatizzatore",
+          "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore"
         },
         "data_description": {
           "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
           "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
-          "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify."
+          "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
+          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target."
         }
       }
     }
