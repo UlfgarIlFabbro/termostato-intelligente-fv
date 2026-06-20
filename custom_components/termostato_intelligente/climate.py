@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, time as dt_time, timedelta
 from typing import Any
 
@@ -122,11 +123,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte /
       caldo / vicino target / sotto target), sempre attiva indipendentemente
       dalla fascia oraria FV
-    - calibrazione automatica sullo scostamento tra la sonda ambiente e la
-      sonda interna del climatizzatore reale
+    - calibrazione automatica e proporzionale sullo scostamento tra la sonda
+      ambiente e la sonda interna del climatizzatore reale: più siamo vicini
+      al target, meno la correzione viene applicata
     - modalità notturna (target più alto in una fascia oraria configurabile)
     - raffreddamento rapido opzionale (ventola alta + ulteriore grado)
     - boost presenza dopo N minuti continuativi
+    - arrotondamento del setpoint a numero intero (molti climatizzatori non
+      accettano decimali): decimale <= 0,5 per difetto, > 0,5 per eccesso
     - snapshot/restore + avviso TTS + notifica alla finestra + notifica ad
       ogni cambio di temperatura inviato al climatizzatore
     - bypass automatico se finestra/presenza non sono configurati o non
@@ -419,6 +423,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _round_setpoint(value: float) -> int:
+        """Arrotonda a intero per i climatizzatori che non accettano decimali.
+
+        Regola: decimale <= 0,5 arrotonda per difetto, > 0,5 per eccesso
+        (es. 22,4 -> 22, 22,5 -> 22, 22,6 -> 23). Diverso dall'arrotondamento
+        matematico standard di Python sui valori .5.
+        """
+        floor_val = math.floor(value)
+        decimal = value - floor_val
+        if decimal <= 0.5:
+            return int(floor_val)
+        return int(floor_val) + 1
+
     async def _async_handle_fv_turn_on(self, temp: float, target: float) -> None:
         if not self._fv_basic_eligible(temp, target):
             return
@@ -531,17 +549,26 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             real_state.attributes.get("current_temperature") if real_state else None
         )
 
-        # Calibrazione: la sonda interna del climatizzatore reale spesso legge
-        # una temperatura diversa da quella della stanza. Se il clima "vede"
-        # più fresco di quanto sia realmente in stanza, il setpoint che gli
-        # mandiamo viene abbassato della stessa quantità, così il compressore
-        # continua a lavorare finché la sua sonda interna non scende al
-        # livello che corrisponde al vero raggiungimento del target reale.
+        # Calibrazione proporzionale: la sonda interna del climatizzatore
+        # reale spesso legge una temperatura diversa da quella della stanza.
+        # Se il clima "vede" più fresco di quanto sia realmente in stanza, il
+        # setpoint che gli mandiamo viene abbassato per compensare - ma in
+        # proporzione a quanto siamo lontani dal target, non per intero:
+        # quasi 0% di correzione appena sopra il target, fino al 100% quando
+        # si è alla soglia di "caldo estremo" (o oltre). Così la calibrazione
+        # rispetta comunque i 3 step di caldo già configurati, senza scatti
+        # bruschi tra una fascia e l'altra.
         if internal_temp is not None:
             try:
                 internal_temp = float(internal_temp)
-                calib_offset = temp - internal_temp
-                if calib_offset > 0:
+                calib_raw = temp - internal_temp
+                if calib_raw > 0:
+                    gap = max(0.0, temp - target)
+                    if extreme_offset > 0:
+                        fraction = min(gap / extreme_offset, 1.0)
+                    else:
+                        fraction = 1.0 if gap > 0 else 0.0
+                    calib_scaled = calib_raw * fraction
                     max_calib = float(
                         get_conf(
                             self.entry,
@@ -549,25 +576,34 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                             DEFAULT_CALIBRATION_MAX_OFFSET,
                         )
                     )
-                    calib_offset = min(calib_offset, max_calib)
-                    new_temp -= calib_offset
+                    calib_scaled = min(calib_scaled, max_calib)
+                    new_temp -= calib_scaled
             except (TypeError, ValueError):
                 pass
 
-        temp_changed = current_temp is None or abs(float(current_temp) - new_temp) > 0.01
+        # I climatizzatori in genere accettano solo temperature intere.
+        new_temp_rounded = self._round_setpoint(new_temp)
+
+        current_temp_rounded: int | None = None
+        if current_temp is not None:
+            try:
+                current_temp_rounded = self._round_setpoint(float(current_temp))
+            except (TypeError, ValueError):
+                current_temp_rounded = None
+
+        temp_changed = (
+            current_temp_rounded is None or current_temp_rounded != new_temp_rounded
+        )
 
         if temp_changed:
             await self.hass.services.async_call(
                 "climate",
                 "set_temperature",
-                {"entity_id": self._climate_entity, "temperature": new_temp},
+                {"entity_id": self._climate_entity, "temperature": new_temp_rounded},
                 blocking=True,
             )
-            old_temp_for_notify = (
-                float(current_temp) if current_temp is not None else None
-            )
             await self._async_notify_temp_change(
-                old_temp_for_notify, new_temp, fan_mode, temp, target
+                current_temp_rounded, new_temp_rounded, fan_mode, temp, target
             )
         if current_fan != fan_mode:
             await self.hass.services.async_call(
@@ -769,8 +805,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def _async_notify_temp_change(
         self,
-        old_temp: float | None,
-        new_temp: float,
+        old_temp: int | None,
+        new_temp: int,
         fan_mode: str,
         room_temp: float,
         target: float,
@@ -797,7 +833,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             {
                 "name": self._attr_name,
                 "old_temp": old_temp,
-                "new_temp": round(new_temp, 1),
+                "new_temp": new_temp,
                 "fan_mode": fan_mode,
                 "room_temp": round(room_temp, 1),
                 "target": round(target, 1),
