@@ -52,6 +52,8 @@ CONF_TTS_MESSAGE_OPEN = "tts_message_open"
 CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_NOTIFY_CHAT_IDS = "notify_chat_ids"
 CONF_NOTIFY_MESSAGE = "notify_message"
+CONF_NOTIFY_TEMP_CHANGE_ENABLED = "notify_temp_change_enabled"
+CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
 
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"
@@ -83,11 +85,16 @@ DEFAULT_CALIBRATION_MAX_OFFSET = 3.0
 DEFAULT_NIGHT_START_TIME = "23:00:00"
 DEFAULT_NIGHT_END_TIME = "07:00:00"
 DEFAULT_NIGHT_OFFSET = 0.0
+DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED = True
 
 DEFAULT_TTS_MESSAGE_OPEN = (
     "Finestra aperta, chiudila o spengo il climatizzatore tra {{ delay }} minuti"
 )
 DEFAULT_NOTIFY_MESSAGE = "{{ name }}: finestra aperta, clima spento"
+DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE = (
+    "{{ name }}: climatizzatore impostato a {{ new_temp }}°C "
+    "(ventola {{ fan_mode }}) - stanza {{ room_temp }}°C, target {{ target }}°C"
+)
 
 # Limite volontario: il climatizzatore va pilotato solo su questi fan_mode
 FAN_MODES_ALLOWED = ["low", "medium", "high"]
