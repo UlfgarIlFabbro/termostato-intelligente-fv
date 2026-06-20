@@ -35,6 +35,14 @@ CONF_PRESENCE_BOOST_OFFSET = "presence_boost_offset"
 CONF_WINDOW_DELAY_MIN = "window_delay_minutes"
 CONF_UPDATE_INTERVAL_MIN = "update_interval_minutes"
 
+# --- Calibrazione sonda interna climatizzatore ---
+CONF_CALIBRATION_MAX_OFFSET = "calibration_max_offset"
+
+# --- Modalità notturna ---
+CONF_NIGHT_START_TIME = "night_start_time"
+CONF_NIGHT_END_TIME = "night_end_time"
+CONF_NIGHT_OFFSET = "night_offset"
+
 # --- Notifiche TTS (Google / media_player) ---
 CONF_TTS_PLAYERS = "tts_media_players"
 CONF_TTS_ENGINE = "tts_engine_entity"
@@ -71,6 +79,10 @@ DEFAULT_PRESENCE_BOOST_MIN = 10
 DEFAULT_PRESENCE_BOOST_OFFSET = 1.0
 DEFAULT_WINDOW_DELAY_MIN = 5
 DEFAULT_UPDATE_INTERVAL_MIN = 5
+DEFAULT_CALIBRATION_MAX_OFFSET = 3.0
+DEFAULT_NIGHT_START_TIME = "23:00:00"
+DEFAULT_NIGHT_END_TIME = "07:00:00"
+DEFAULT_NIGHT_OFFSET = 0.0
 
 DEFAULT_TTS_MESSAGE_OPEN = (
     "Finestra aperta, chiudila o spengo il climatizzatore tra {{ delay }} minuti"
