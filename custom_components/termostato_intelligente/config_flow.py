@@ -32,6 +32,8 @@ from .const import (
     CONF_NOTIFY_CHAT_IDS,
     CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_TARGETS,
+    CONF_NOTIFY_TEMP_CHANGE_ENABLED,
+    CONF_NOTIFY_TEMP_CHANGE_MESSAGE,
     CONF_PRESENCE_BOOST_ENABLED,
     CONF_PRESENCE_BOOST_MIN,
     CONF_PRESENCE_BOOST_OFFSET,
@@ -63,6 +65,8 @@ from .const import (
     DEFAULT_NIGHT_OFFSET,
     DEFAULT_NIGHT_START_TIME,
     DEFAULT_NOTIFY_MESSAGE,
+    DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
+    DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
     DEFAULT_PRESENCE_BOOST_ENABLED,
     DEFAULT_PRESENCE_BOOST_MIN,
     DEFAULT_PRESENCE_BOOST_OFFSET,
@@ -306,6 +310,18 @@ def _schema_notifiche(defaults: dict) -> vol.Schema:
             _f(vol.Optional, CONF_NOTIFY_CHAT_IDS, defaults): selector.TextSelector(),
             _f(
                 vol.Optional, CONF_NOTIFY_MESSAGE, defaults, DEFAULT_NOTIFY_MESSAGE
+            ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+            _f(
+                vol.Optional,
+                CONF_NOTIFY_TEMP_CHANGE_ENABLED,
+                defaults,
+                DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
+            ): selector.BooleanSelector(),
+            _f(
+                vol.Optional,
+                CONF_NOTIFY_TEMP_CHANGE_MESSAGE,
+                defaults,
+                DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
             ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
         }
     )
