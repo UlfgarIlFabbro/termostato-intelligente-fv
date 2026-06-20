@@ -79,12 +79,12 @@
         "data_description": {
           "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
           "min_below_internal": "Quando si è in una fascia di caldo attiva, il setpoint inviato al climatizzatore resterà sempre almeno questo margine sotto la temperatura che il climatizzatore stesso sta rilevando, per garantire che continui davvero a raffreddare.",
-          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target+scostamento. Imposta 0 per disattivare."
+          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target più scostamento. Imposta 0 per disattivare."
         }
       },
       "notifiche": {
         "title": "Avvisi vocali e Telegram",
-        "description": "Scegli i dispositivi Google su cui annunciare gli avvisi e dove inviare le notifiche Telegram. I messaggi accettano template (es. {{ delay }}, {{ name }}, {{ target }}).",
+        "description": "Scegli i dispositivi Google su cui annunciare gli avvisi e dove inviare le notifiche Telegram. I messaggi accettano variabili template (delay, name, target).",
         "data": {
           "tts_media_players": "Dispositivi Google per l'annuncio vocale",
           "tts_engine_entity": "Motore TTS (opzionale, auto se vuoto)",
@@ -98,11 +98,11 @@
           "door_alert_message": "Messaggio avviso porta aperta"
         },
         "data_description": {
-          "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
-          "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
+          "tts_message_open": "Variabili disponibili: delay (minuti di attesa), name (nome del termostato), target (temperatura target).",
+          "notify_message": "Variabili disponibili: name (nome del termostato), target (temperatura target).",
           "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
-          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target.",
-          "door_alert_message": "Variabili disponibili: {{ name }} nome del termostato. Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
+          "notify_temp_change_message": "Variabili disponibili: name (nome del termostato), old_temp (temperatura precedente), new_temp (nuova temperatura), fan_mode (modalità ventola), room_temp (temperatura stanza), target (temperatura target).",
+          "door_alert_message": "Variabile disponibile: name (nome del termostato). Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
         }
       }
     },
@@ -112,6 +112,16 @@
   },
   "options": {
     "step": {
+      "sensori": {
+        "title": "Entità e sensori",
+        "data": {
+          "name": "Nome del termostato",
+          "temp_sensor": "Sensore di temperatura della stanza",
+          "window_sensor": "Sensore finestra/apertura",
+          "presence_sensor": "Sensore di presenza (opzionale)",
+          "door_sensor": "Sensore porta (opzionale)"
+        }
+      },
       "energia": {
         "title": "Fotovoltaico e batteria",
         "data": {
@@ -163,7 +173,7 @@
         "data_description": {
           "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
           "min_below_internal": "Quando si è in una fascia di caldo attiva, il setpoint inviato al climatizzatore resterà sempre almeno questo margine sotto la temperatura che il climatizzatore stesso sta rilevando, per garantire che continui davvero a raffreddare.",
-          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target+scostamento. Imposta 0 per disattivare."
+          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target più scostamento. Imposta 0 per disattivare."
         }
       },
       "notifiche": {
@@ -181,11 +191,11 @@
           "door_alert_message": "Messaggio avviso porta aperta"
         },
         "data_description": {
-          "tts_message_open": "Variabili disponibili: {{ delay }} minuti di attesa, {{ name }} nome del termostato, {{ target }} temperatura target.",
-          "notify_message": "Variabili disponibili: {{ name }} nome del termostato, {{ target }} temperatura target.",
+          "tts_message_open": "Variabili disponibili: delay (minuti di attesa), name (nome del termostato), target (temperatura target).",
+          "notify_message": "Variabili disponibili: name (nome del termostato), target (temperatura target).",
           "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
-          "notify_temp_change_message": "Variabili disponibili: {{ name }} nome del termostato, {{ old_temp }} temperatura precedente, {{ new_temp }} nuova temperatura, {{ fan_mode }} modalità ventola, {{ room_temp }} temperatura stanza, {{ target }} temperatura target.",
-          "door_alert_message": "Variabili disponibili: {{ name }} nome del termostato. Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
+          "notify_temp_change_message": "Variabili disponibili: name (nome del termostato), old_temp (temperatura precedente), new_temp (nuova temperatura), fan_mode (modalità ventola), room_temp (temperatura stanza), target (temperatura target).",
+          "door_alert_message": "Variabile disponibile: name (nome del termostato). Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
         }
       }
     }
