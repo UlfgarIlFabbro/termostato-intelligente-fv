@@ -21,6 +21,13 @@ CONF_FV_END_TIME = "fv_end_time"
 CONF_FV_PRIORITY = "fv_priority"
 CONF_FV_STAGGER_MIN = "fv_stagger_minutes"
 
+# --- Spegnimento diurno da FV ---
+# La finestra di spegnimento è fv_start_time → fv_end_time + fv_shutoff_extra_hours.
+# La cascata usa la priorità invertita rispetto all'accensione.
+CONF_FV_SHUTOFF_ENABLED = "fv_shutoff_enabled"
+CONF_FV_SHUTOFF_DELAY_MIN = "fv_shutoff_delay_min"
+CONF_FV_SHUTOFF_EXTRA_HOURS = "fv_shutoff_extra_hours"
+
 # --- Profilo di regolazione ---
 CONF_PROFILE = "profile"
 PRESET_BILANCIATO = "bilanciato"
@@ -52,11 +59,13 @@ CONF_MIN_BELOW_INTERNAL = "min_below_internal"
 CONF_NIGHT_START_TIME = "night_start_time"
 CONF_NIGHT_END_TIME = "night_end_time"
 CONF_NIGHT_OFFSET = "night_offset"
-# Offset oltre il target notturno che abilita l'accensione automatica del
-# condizionatore (simile a CONF_TURN_ON_OFFSET ma attivo solo di notte e
-# indipendente dalla logica FV).
 CONF_NIGHT_TURN_ON_OFFSET = "night_turn_on_offset"
 CONF_NIGHT_AC_ENABLED = "night_ac_enabled"
+
+# --- Spegnimento notturno per raggiungimento target ---
+CONF_NIGHT_SHUTOFF_ENABLED = "night_shutoff_enabled"
+CONF_NIGHT_SHUTOFF_DELTA = "night_shutoff_delta"
+CONF_NIGHT_SHUTOFF_MIN = "night_shutoff_min"
 
 # --- Notifiche TTS (Google / media_player) ---
 CONF_TTS_PLAYERS = "tts_media_players"
@@ -73,9 +82,8 @@ CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
 # --- Avviso porta (selettivo per canale) ---
 CONF_DOOR_ALERT_ENABLED = "door_alert_enabled"
 CONF_DOOR_ALERT_MESSAGE = "door_alert_message"
-# Controlla separatamente i canali di notifica per l'avviso porta:
-CONF_DOOR_ALERT_TTS = "door_alert_tts"       # voce su Google Home / media_player
-CONF_DOOR_ALERT_NOTIFY = "door_alert_notify"  # Telegram / notify
+CONF_DOOR_ALERT_TTS = "door_alert_tts"
+CONF_DOOR_ALERT_NOTIFY = "door_alert_notify"
 
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"
@@ -99,6 +107,9 @@ DEFAULT_FV_START_TIME = "10:00:00"
 DEFAULT_FV_END_TIME = "16:00:00"
 DEFAULT_FV_PRIORITY = 50
 DEFAULT_FV_STAGGER_MIN = 5
+DEFAULT_FV_SHUTOFF_ENABLED = False
+DEFAULT_FV_SHUTOFF_DELAY_MIN = 5
+DEFAULT_FV_SHUTOFF_EXTRA_HOURS = 1.0
 DEFAULT_PRESENCE_BOOST_MIN = 10
 DEFAULT_PRESENCE_BOOST_OFFSET = 1.0
 DEFAULT_WINDOW_DELAY_MIN = 5
@@ -110,10 +121,13 @@ DEFAULT_NIGHT_END_TIME = "07:00:00"
 DEFAULT_NIGHT_OFFSET = 0.0
 DEFAULT_NIGHT_TURN_ON_OFFSET = 1.5
 DEFAULT_NIGHT_AC_ENABLED = False
+DEFAULT_NIGHT_SHUTOFF_ENABLED = False
+DEFAULT_NIGHT_SHUTOFF_DELTA = 0.3
+DEFAULT_NIGHT_SHUTOFF_MIN = 30
 DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED = True
 DEFAULT_DOOR_ALERT_ENABLED = False
-DEFAULT_DOOR_ALERT_TTS = True      # se avviso porta abilitato, default voce ON
-DEFAULT_DOOR_ALERT_NOTIFY = True   # se avviso porta abilitato, default notify ON
+DEFAULT_DOOR_ALERT_TTS = True
+DEFAULT_DOOR_ALERT_NOTIFY = True
 
 DEFAULT_TTS_MESSAGE_OPEN = (
     "Finestra aperta, chiudila o spengo il climatizzatore tra {{ delay }} minuti"
@@ -128,9 +142,6 @@ DEFAULT_DOOR_ALERT_MESSAGE = "{{ name }}: porta aperta"
 # Limite volontario: il climatizzatore va pilotato solo su questi fan_mode
 FAN_MODES_ALLOWED = ["low", "medium", "high"]
 
-# Valori applicati automaticamente quando si sceglie un profilo preconfigurato
-# (i campi non elencati qui - notte, boost presenza, timing - restano sui
-# rispettivi DEFAULT_* indipendentemente dal profilo scelto).
 PRESET_VALUES: dict[str, dict[str, float]] = {
     PRESET_BILANCIATO: {
         CONF_EXTREME_OFFSET: 2.0,
