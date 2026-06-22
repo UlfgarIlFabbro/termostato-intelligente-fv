@@ -18,6 +18,8 @@ from .const import (
     CONF_CONSUMPTION_SENSOR,
     CONF_DOOR_ALERT_ENABLED,
     CONF_DOOR_ALERT_MESSAGE,
+    CONF_DOOR_ALERT_NOTIFY,
+    CONF_DOOR_ALERT_TTS,
     CONF_DOOR_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
@@ -30,9 +32,11 @@ from .const import (
     CONF_HOT_OFFSET,
     CONF_MIN_BELOW_INTERNAL,
     CONF_NAME,
+    CONF_NIGHT_AC_ENABLED,
     CONF_NIGHT_END_TIME,
     CONF_NIGHT_OFFSET,
     CONF_NIGHT_START_TIME,
+    CONF_NIGHT_TURN_ON_OFFSET,
     CONF_NOTIFY_CHAT_IDS,
     CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_TARGETS,
@@ -58,6 +62,8 @@ from .const import (
     DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_DOOR_ALERT_ENABLED,
     DEFAULT_DOOR_ALERT_MESSAGE,
+    DEFAULT_DOOR_ALERT_NOTIFY,
+    DEFAULT_DOOR_ALERT_TTS,
     DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
@@ -69,9 +75,11 @@ from .const import (
     DEFAULT_HOT_OFFSET,
     DEFAULT_MIN_BELOW_INTERNAL,
     DEFAULT_NAME,
+    DEFAULT_NIGHT_AC_ENABLED,
     DEFAULT_NIGHT_END_TIME,
     DEFAULT_NIGHT_OFFSET,
     DEFAULT_NIGHT_START_TIME,
+    DEFAULT_NIGHT_TURN_ON_OFFSET,
     DEFAULT_NOTIFY_MESSAGE,
     DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
     DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
@@ -319,6 +327,20 @@ def _schema_soglie_avanzate(defaults: dict) -> vol.Schema:
                     min=0, max=5, step=0.5, unit_of_measurement="°C", mode="box"
                 )
             ),
+            # --- Accensione automatica notturna ---
+            _f(
+                vol.Optional, CONF_NIGHT_AC_ENABLED, defaults, DEFAULT_NIGHT_AC_ENABLED
+            ): selector.BooleanSelector(),
+            _f(
+                vol.Optional,
+                CONF_NIGHT_TURN_ON_OFFSET,
+                defaults,
+                DEFAULT_NIGHT_TURN_ON_OFFSET,
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=6, step=0.5, unit_of_measurement="°C", mode="box"
+                )
+            ),
             _f(
                 vol.Optional,
                 CONF_PRESENCE_BOOST_ENABLED,
@@ -397,11 +419,24 @@ def _schema_notifiche(defaults: dict) -> vol.Schema:
                 defaults,
                 DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
             ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+            # --- Avviso porta: abilitazione generale + canali separati ---
             _f(
                 vol.Optional,
                 CONF_DOOR_ALERT_ENABLED,
                 defaults,
                 DEFAULT_DOOR_ALERT_ENABLED,
+            ): selector.BooleanSelector(),
+            _f(
+                vol.Optional,
+                CONF_DOOR_ALERT_TTS,
+                defaults,
+                DEFAULT_DOOR_ALERT_TTS,
+            ): selector.BooleanSelector(),
+            _f(
+                vol.Optional,
+                CONF_DOOR_ALERT_NOTIFY,
+                defaults,
+                DEFAULT_DOOR_ALERT_NOTIFY,
             ): selector.BooleanSelector(),
             _f(
                 vol.Optional,
