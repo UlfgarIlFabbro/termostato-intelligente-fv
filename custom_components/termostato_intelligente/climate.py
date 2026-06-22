@@ -33,6 +33,8 @@ from .const import (
     CONF_CONSUMPTION_SENSOR,
     CONF_DOOR_ALERT_ENABLED,
     CONF_DOOR_ALERT_MESSAGE,
+    CONF_DOOR_ALERT_NOTIFY,
+    CONF_DOOR_ALERT_TTS,
     CONF_DOOR_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
@@ -49,9 +51,11 @@ from .const import (
     CONF_HOT_OFFSET,
     CONF_MIN_BELOW_INTERNAL,
     CONF_NAME,
+    CONF_NIGHT_AC_ENABLED,
     CONF_NIGHT_END_TIME,
     CONF_NIGHT_OFFSET,
     CONF_NIGHT_START_TIME,
+    CONF_NIGHT_TURN_ON_OFFSET,
     CONF_NOTIFY_CHAT_IDS,
     CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_TARGETS,
@@ -76,6 +80,8 @@ from .const import (
     DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_DOOR_ALERT_ENABLED,
     DEFAULT_DOOR_ALERT_MESSAGE,
+    DEFAULT_DOOR_ALERT_NOTIFY,
+    DEFAULT_DOOR_ALERT_TTS,
     DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
@@ -87,9 +93,11 @@ from .const import (
     DEFAULT_HOT_OFFSET,
     DEFAULT_MIN_BELOW_INTERNAL,
     DEFAULT_NAME,
+    DEFAULT_NIGHT_AC_ENABLED,
     DEFAULT_NIGHT_END_TIME,
     DEFAULT_NIGHT_OFFSET,
     DEFAULT_NIGHT_START_TIME,
+    DEFAULT_NIGHT_TURN_ON_OFFSET,
     DEFAULT_NOTIFY_MESSAGE,
     DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
     DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
@@ -110,7 +118,6 @@ from .util import get_conf
 
 _LOGGER = logging.getLogger(__name__)
 
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -127,6 +134,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     - blocco totale se la finestra è aperta o se il master è spento
     - accensione solo con surplus FV (fascia oraria + switch dedicato +
       coordinamento priorità/distacco tra più istanze)
+    - accensione notturna autonoma se temp > target_notte + night_turn_on_offset
+      (opzionale, indipendente dalla logica FV)
     - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte /
       caldo / vicino target / sotto target), attiva ogni volta che il
       climatizzatore è acceso, indipendentemente dalla fascia oraria FV
@@ -143,8 +152,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
       accettano decimali): decimale <= 0,5 per difetto, > 0,5 per eccesso
     - snapshot/restore + avviso TTS + notifica alla finestra + notifica ad
       ogni cambio di temperatura inviato al climatizzatore (solo a clima
-      acceso) + avviso opzionale se la porta si apre (nessuna azione sul
-      clima, solo avviso)
+      acceso) + avviso opzionale se la porta si apre (solo avviso, canali
+      TTS e notify attivabili separatamente, nessuna azione sul clima)
     - bypass automatico se finestra/presenza/porta non sono configurati o
       non disponibili
     """
@@ -229,6 +238,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
             "modalita_notturna_attiva": self._is_night_mode_active(),
             "target_effettivo": self._effective_target(),
+            "accensione_notturna_abilitata": bool(
+                get_conf(self.entry, CONF_NIGHT_AC_ENABLED, DEFAULT_NIGHT_AC_ENABLED)
+            ),
         }
 
     # ------------------------------------------------------------------
@@ -343,7 +355,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
     # ------------------------------------------------------------------
-    # Logica periodica (FV + termica + presenza)
+    # Logica periodica (FV + notturna + termica + presenza)
     # ------------------------------------------------------------------
 
     async def _async_periodic_update(self, now: datetime | None = None) -> None:
@@ -361,10 +373,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # dentro e fuori dalla fascia FV.
         await self._async_handle_thermal(temp, target)
 
-        # L'accensione automatica da FV scatta solo se lo switch dedicato è
-        # acceso e siamo dentro la fascia oraria configurata.
+        # Accensione automatica da FV: solo se lo switch dedicato è acceso
+        # e siamo dentro la fascia oraria configurata.
         if self._switch_state(SWITCH_KEY_FV, True) and self._within_active_window():
             await self._async_handle_fv_turn_on(temp, target)
+
+        # Accensione notturna autonoma: solo se siamo in modalità notturna
+        # e l'opzione è abilitata.
+        if self._is_night_mode_active() and bool(
+            get_conf(self.entry, CONF_NIGHT_AC_ENABLED, DEFAULT_NIGHT_AC_ENABLED)
+        ):
+            await self._async_handle_night_turn_on(temp, target)
 
         await self._async_handle_presence_boost(temp, target)
         self.async_write_ha_state()
@@ -527,6 +546,37 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         )
         return fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset
 
+    async def _async_handle_night_turn_on(self, temp: float, target: float) -> None:
+        """Accende il climatizzatore di notte se la temperatura supera la soglia.
+
+        Funziona in modo simile alla logica FV ma:
+        - non richiede surplus fotovoltaico né SOC batteria
+        - il confronto avviene rispetto al target_effettivo (già incluso l'offset
+          notturno) più CONF_NIGHT_TURN_ON_OFFSET
+        - si attiva solo se il clima è attualmente spento
+        """
+        if self.hvac_mode != HVACMode.OFF:
+            return
+        if temp is None:
+            return
+
+        night_turn_on_offset = float(
+            get_conf(self.entry, CONF_NIGHT_TURN_ON_OFFSET, DEFAULT_NIGHT_TURN_ON_OFFSET)
+        )
+
+        if temp <= target + night_turn_on_offset:
+            return
+
+        _LOGGER.debug(
+            "%s: accensione notturna (temp=%.1f > target_notte+offset=%.1f)",
+            self._attr_name,
+            temp,
+            target + night_turn_on_offset,
+        )
+        await self.hass.services.async_call(
+            "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
+        )
+
     async def _async_handle_thermal(self, temp: float, target: float) -> None:
         # Se il climatizzatore è spento non ha senso ricalcolare/inviare un
         # setpoint (e generare notifiche): la regolazione riprende
@@ -551,11 +601,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         )
 
         # 5 fasce, in ordine dalla più calda alla più fredda:
-        #   > extreme_offset       -> caldo estremo: target-extreme_delta, ventola alta
-        #   > hot_offset           -> caldo forte:   target-delta,         ventola media
-        #   > range_offset         -> caldo:         target-delta,         ventola bassa
-        #   > -below_offset        -> vicino target: target,               ventola bassa
-        #   altrimenti             -> sotto target:  target+delta,         ventola bassa
+        # > extreme_offset -> caldo estremo: target-extreme_delta, ventola alta
+        # > hot_offset     -> caldo forte:   target-delta, ventola media
+        # > range_offset   -> caldo:         target-delta, ventola bassa
+        # > -below_offset  -> vicino target: target, ventola bassa
+        # altrimenti       -> sotto target:  target+delta, ventola bassa
         if temp > target + extreme_offset:
             new_temp, fan_mode = target - extreme_delta, "high"
         elif temp > target + hot_offset:
@@ -769,7 +819,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
 
     # ------------------------------------------------------------------
-    # Gestione porta: solo avviso opzionale, nessuna azione sul clima
+    # Gestione porta: avviso opzionale su canali selettivi, nessuna azione
     # ------------------------------------------------------------------
 
     async def _async_handle_door(
@@ -788,8 +838,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self.entry, CONF_DOOR_ALERT_MESSAGE, DEFAULT_DOOR_ALERT_MESSAGE
         )
         message = await self._async_render(message_tpl, {"name": self._attr_name})
-        await self._async_speak(message)
-        await self._async_send_notification(message)
+
+        # Canali selettivi: TTS (Google Home) e/o notify (Telegram) possono
+        # essere attivati indipendentemente l'uno dall'altro.
+        door_tts = bool(
+            get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)
+        )
+        door_notify = bool(
+            get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)
+        )
+
+        if door_tts:
+            await self._async_speak(message)
+        if door_notify:
+            await self._async_send_notification(message)
 
     # ------------------------------------------------------------------
     # Notifiche: TTS su dispositivi Google + notify/Telegram, personalizzabili
