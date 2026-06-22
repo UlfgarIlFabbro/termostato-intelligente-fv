@@ -21,109 +21,150 @@
           "window_sensor": "Window/opening sensor",
           "presence_sensor": "Presence sensor (optional)",
           "door_sensor": "Door sensor (optional)"
+        },
+        "data_description": {
+          "name": "Display name shown in Home Assistant. E.g. 'Master bedroom', 'Living room upstairs'.",
+          "climate_entity": "The physical AC unit this thermostat will control. Do not choose another smart thermostat.",
+          "temp_sensor": "Room temperature probe, ideally placed away from the AC. E.g. a Zigbee sensor.",
+          "window_sensor": "Binary sensor that turns 'on' when the window is open. If left open, the AC turns off after a configurable delay.",
+          "presence_sensor": "If set and presence is detected continuously, the thermostat can boost the fan after X minutes. Leave empty to disable.",
+          "door_sensor": "If set, sends an alert (voice and/or Telegram) when the door opens. Never acts on the AC. Leave empty to disable."
         }
       },
       "energia": {
         "title": "Solar and battery",
-        "description": "All fields are optional: leave them empty to disable automatic surplus-solar turn-on.",
+        "description": "Configure FV sensors and automatic turn-on/off parameters. All sensors are optional: leaving them empty disables the solar logic.",
         "data": {
           "fv_sensor": "Solar production sensor (W)",
           "consumption_sensor": "Grid consumption sensor (W)",
           "battery_sensor": "Battery SOC sensor (%)",
-          "fv_margin_w": "Required solar surplus margin (turn-on)",
-          "soc_min": "Minimum battery SOC to turn on",
-          "fv_start_time": "Active window start",
-          "fv_end_time": "Active window end",
-          "fv_priority": "Turn-on priority (lower = first on, last off)",
-          "fv_stagger_minutes": "Minimum gap between FV turn-ons / turn-offs",
-          "fv_shutoff_enabled": "Enable automatic solar turn-off",
-          "fv_shutoff_delay_min": "Minutes below threshold before turning off",
-          "fv_shutoff_extra_hours": "Extra hours after active window end for turn-off"
+          "fv_margin_w": "Solar surplus margin required to turn on (W)",
+          "soc_min": "Minimum battery SOC to turn on (%)",
+          "fv_start_time": "Automatic turn-on window start",
+          "fv_end_time": "Automatic turn-on window end",
+          "fv_priority": "Turn-on priority (lower number = higher priority)",
+          "fv_stagger_minutes": "Minimum gap between cascade turn-ons / turn-offs (min)",
+          "fv_shutoff_enabled": "▶ Automatic turn-off when solar is insufficient (on/off)",
+          "fv_shutoff_delay_min": "Minutes of insufficient solar before turning off",
+          "fv_shutoff_extra_hours": "Extra hours after window end where turn-off stays active"
         },
         "data_description": {
-          "fv_start_time": "Outside this window the thermostat won't turn on automatically from solar.",
-          "fv_end_time": "Outside this window the thermostat won't turn on automatically from solar.",
-          "fv_shutoff_enabled": "When enabled, if solar production drops below current consumption for the configured delay, the AC is turned off. Turn-off follows reverse priority order (highest priority number = first to be turned off).",
-          "fv_shutoff_extra_hours": "Extends the turn-off window beyond the active window end. E.g. active window ends at 16:00, extra 1h → turn-off active until 17:00.",
-          "fv_priority": "Lower number = higher priority: turned on first, turned off last. Higher number = lower priority: turned on last, turned off first."
+          "fv_sensor": "Instantaneous power from the panels. E.g. sensor.solar_production.",
+          "consumption_sensor": "Instantaneous grid consumption. E.g. sensor.grid_consumption.",
+          "battery_sensor": "Battery state of charge in percent. The AC turns on only if SOC exceeds the minimum threshold.",
+          "fv_margin_w": "Minimum surplus required to turn on: solar must exceed (consumption + margin). E.g. 1200 W → turns on only if solar > consumption + 1200 W.",
+          "soc_min": "The AC won't turn on from solar if the battery is below this percentage. E.g. 70 → turns on only with battery ≥ 70%.",
+          "fv_start_time": "The AC won't turn on automatically from solar before this time. E.g. 10:00.",
+          "fv_end_time": "The AC won't turn on automatically from solar after this time. E.g. 16:00. Automatic turn-off can continue beyond this (see extra hours).",
+          "fv_priority": "With multiple thermostats, lower numbers turn on first and turn off last. E.g. bedroom = 10, living = 20, game room = 30 → living turns on first, game room turns off first.",
+          "fv_stagger_minutes": "How many minutes to wait between one cascade turn-on (or turn-off) and the next. E.g. 5 minutes.",
+          "fv_shutoff_enabled": "If enabled: when solar drops below current consumption for the configured delay, the AC turns off. With multiple thermostats the turn-off cascade is the reverse of turn-on (highest priority number = first to turn off).",
+          "fv_shutoff_delay_min": "How many minutes solar must stay insufficient before turning off. Avoids shutdowns for passing clouds. E.g. 5 minutes.",
+          "fv_shutoff_extra_hours": "After the solar window ends, the AC can still be turned off automatically for this many hours. E.g. window ends at 16:00, extra 1h → turn-off active until 17:00."
         }
       },
       "profilo": {
         "title": "Regulation profile",
-        "description": "Choose a preconfigured profile, or pick Custom to set every parameter manually.",
+        "description": "Choose a preconfigured profile to apply optimal thermal thresholds automatically, or pick Custom to set them manually.",
         "data": {
           "profile": "Profile"
+        },
+        "data_description": {
+          "profile": "Balanced: gradual regulation, recommended for normal use. Aggressive: cools faster, higher fan. Gentle: minimal changes, quiet. Custom: set every threshold manually in the next step."
         }
       },
       "soglie_termiche": {
         "title": "Thermal thresholds",
+        "description": "Define how the thermostat reacts to different room temperatures relative to the target.",
         "data": {
-          "target_temp_default": "Initial target temperature",
-          "extreme_offset": "'Extreme heat' threshold",
-          "hot_offset": "'Strong heat' offset",
-          "range_offset": "'Warm' band start threshold",
-          "below_offset": "Margin below target (low fan)",
-          "turn_on_offset": "Minimum offset to turn on from solar",
-          "temp_delta": "Regulation offset (±) applied to the AC",
-          "extreme_delta": "Extreme offset (target minus this value)"
+          "target_temp_default": "Initial target temperature (°C)",
+          "extreme_offset": "'Extreme heat' threshold above target (°C)",
+          "hot_offset": "'Strong heat' threshold above target (°C)",
+          "range_offset": "'Mild heat' threshold above target (°C)",
+          "below_offset": "Margin below target for low fan (°C)",
+          "turn_on_offset": "Minimum offset above target to turn on from solar (°C)",
+          "temp_delta": "Regulation delta applied to the setpoint (°C)",
+          "extreme_delta": "Delta applied in extreme heat (°C)"
+        },
+        "data_description": {
+          "target_temp_default": "Comfort temperature the thermostat aims for. E.g. 25°C. Can be changed anytime from the climate card.",
+          "extreme_offset": "Above target + this value: high fan, very low setpoint. E.g. offset 2°C, target 25°C → extreme above 27°C.",
+          "hot_offset": "Above target + this value (but below extreme): medium fan, low setpoint. E.g. offset 1.5°C, target 25°C → strong above 26.5°C.",
+          "range_offset": "Above target + this value (but below strong): low fan, reduced setpoint. E.g. offset 0.2°C, target 25°C → mild above 25.2°C.",
+          "below_offset": "Between target and target - this value: low fan, setpoint = target. E.g. offset 0.1°C → band 24.9–25°C.",
+          "turn_on_offset": "The AC turns on from solar only if room temp > target + this. E.g. 0.8°C, target 25°C → turns on only above 25.8°C.",
+          "temp_delta": "How much the setpoint sent to the AC is lowered in warm/strong bands. E.g. delta 1°C, target 25°C → sends 24°C to the AC.",
+          "extreme_delta": "Like temp_delta but for the extreme band. E.g. delta 2°C, target 25°C → sends 23°C in extreme heat."
         }
       },
       "soglie_avanzate": {
         "title": "Advanced functions",
+        "description": "Internal sensor calibration, night mode, night turn-off, presence boost and timing.",
         "data": {
-          "calibration_max_offset": "Max internal-sensor calibration offset",
-          "min_below_internal": "Min. margin below internal sensor",
+          "calibration_max_offset": "Maximum internal sensor calibration correction (°C)",
+          "min_below_internal": "Minimum setpoint margin below AC internal sensor (°C)",
           "night_start_time": "Night mode start",
           "night_end_time": "Night mode end",
-          "night_offset": "Night mode target offset (+°C)",
-          "night_ac_enabled": "Enable automatic night turn-on",
-          "night_turn_on_offset": "Night turn-on offset above night target",
-          "night_shutoff_enabled": "Enable automatic night turn-off",
-          "night_shutoff_delta": "Temperature tolerance above night target to consider 'in range'",
-          "night_shutoff_min": "Minutes in range before turning off at night",
-          "presence_boost_enabled": "Enable presence boost",
-          "presence_boost_minutes": "Continuous presence minutes before boost",
-          "presence_boost_offset": "Minimum offset for presence boost",
-          "window_delay_minutes": "Minutes to wait with window open before turning off",
-          "update_interval_minutes": "Check interval (minutes)"
+          "night_offset": "Night target offset: effective target = target + this value (°C)",
+          "night_ac_enabled": "▶ Automatic night turn-on when too hot (on/off)",
+          "night_turn_on_offset": "Night turn-on threshold: turns on if temp > night target + this value (°C)",
+          "night_shutoff_enabled": "▶ Automatic night turn-off when room is at target temperature (on/off)",
+          "night_shutoff_delta": "Tolerance above night target to consider the room 'at temperature' (°C)",
+          "night_shutoff_min": "Consecutive minutes at temperature before night turn-off",
+          "presence_boost_enabled": "▶ Fan boost if continuous presence detected and still warm (on/off)",
+          "presence_boost_minutes": "Continuous presence minutes before fan boost",
+          "presence_boost_offset": "Minimum offset above target to trigger presence boost (°C)",
+          "window_delay_minutes": "Minutes with window open before turning off the AC",
+          "update_interval_minutes": "Thermostat update frequency (minutes)"
         },
         "data_description": {
-          "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's internal sensor reading cooler than the room sensor.",
-          "min_below_internal": "While in an active heat band, the setpoint sent to the AC will always stay at least this much below what the AC itself is reading, so the compressor keeps cooling.",
-          "night_offset": "Degrees added to the target during the night window. The displayed target is unchanged; only internal regulation uses target + offset. Set 0 to disable.",
-          "night_ac_enabled": "When enabled, the AC turns on during the night window if room temp exceeds night target + turn-on offset. Independent of solar logic.",
-          "night_turn_on_offset": "AC turns on at night only when room temp > night target + this value. E.g. night target 27°C, offset 1.5°C → turns on above 28.5°C.",
-          "night_shutoff_enabled": "When enabled, the AC turns off during the night window if the room stays within the target range for the configured minutes. Applies regardless of how the AC was turned on.",
-          "night_shutoff_delta": "The room is considered 'in range' when temp ≤ night target + this value. E.g. night target 26°C, delta 0.3°C → in range when temp ≤ 26.3°C.",
-          "night_shutoff_min": "The AC turns off only after the room has stayed in range continuously for this many minutes."
+          "calibration_max_offset": "The AC's internal sensor often reads differently from the room. The thermostat lowers the setpoint to compensate, but by at most this many degrees. E.g. 3°C → corrects at most 3°C even if the difference is larger.",
+          "min_below_internal": "In active heat bands, the setpoint always stays at least this far below what the AC's own sensor reads, ensuring the compressor doesn't stop prematurely. E.g. 1°C → if AC reads 24°C, setpoint never exceeds 23°C.",
+          "night_start_time": "Night mode starts at this time. The window can span midnight. E.g. 23:00.",
+          "night_end_time": "Night mode ends at this time. E.g. 07:00.",
+          "night_offset": "At night the effective target becomes target + this value. E.g. target 25°C, offset 1°C → night target 26°C. Set 0 to keep the same target.",
+          "night_ac_enabled": "If enabled: at night, if the room exceeds night target + the turn-on threshold, the AC turns on automatically without needing solar surplus.",
+          "night_turn_on_offset": "Night automatic turn-on threshold. E.g. target 25°C, night offset 1°C → night target 26°C. With turn-on offset 1.5°C → turns on automatically only above 27.5°C.",
+          "night_shutoff_enabled": "If enabled: at night, if the room stays at temperature for the configured minutes, the AC turns off automatically. Works with any turn-on method (manual, solar or night auto).",
+          "night_shutoff_delta": "Tolerance above night target. E.g. night target 26°C, delta 0.3°C → 'at temperature' when temp ≤ 26.3°C. If temp rises above 26.3°C the timer resets.",
+          "night_shutoff_min": "Consecutive minutes at temperature before shutting off. E.g. 30 min → if temp rises during those 30 minutes, the count resets to zero.",
+          "presence_boost_enabled": "If enabled: when presence is detected continuously for the configured minutes and the room is still above target + offset, the fan is raised to medium.",
+          "presence_boost_minutes": "Continuous presence minutes before the fan boost. E.g. 10 minutes.",
+          "presence_boost_offset": "Boost only if temp > target + this. E.g. 1°C → boost only if still above 26°C with target 25°C.",
+          "window_delay_minutes": "How many minutes to wait after the window opens before turning off. Useful for brief openings. E.g. 5 minutes.",
+          "update_interval_minutes": "How often the thermostat recalculates and updates the AC. E.g. 5 minutes."
         }
       },
       "notifiche": {
         "title": "Voice and Telegram alerts",
-        "description": "Choose the Google devices to announce alerts on and where to send Telegram notifications.",
+        "description": "Configure Google devices for voice announcements and Telegram messages. Messages support Jinja2 template variables.",
         "data": {
-          "tts_media_players": "Google devices for the voice announcement",
-          "tts_engine_entity": "TTS engine (optional, auto if empty)",
-          "tts_message_open": "Window open voice message",
-          "notify_targets": "Notify/Telegram entities to send alerts to",
-          "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
-          "notify_message": "'AC turned off' notification message",
-          "notify_temp_change_enabled": "Notify on every AC temperature change",
-          "notify_temp_change_message": "AC temperature change message",
-          "door_alert_enabled": "Enable door-open alert",
-          "door_alert_tts": "Door alert via Google Home (voice)",
-          "door_alert_notify": "Door alert via Telegram / notify",
-          "door_alert_message": "Door-open alert message"
+          "tts_media_players": "Google / media_player devices for voice announcements",
+          "tts_engine_entity": "TTS engine (optional, auto-detected if empty)",
+          "tts_message_open": "Voice message when window is open",
+          "notify_targets": "Notify entities to send messages to",
+          "notify_chat_ids": "Telegram chat IDs (only if no notify entity selected)",
+          "notify_message": "Message sent when AC is turned off due to open window",
+          "notify_temp_change_enabled": "▶ Send Telegram notification on every AC temperature change (on/off)",
+          "notify_temp_change_message": "Message sent on each AC temperature change",
+          "door_alert_enabled": "▶ Door open alert enabled (on/off)",
+          "door_alert_tts": "▶ Door alert via Google Home voice (on/off)",
+          "door_alert_notify": "▶ Door alert via Telegram message (on/off)",
+          "door_alert_message": "Message sent when the door opens"
         },
         "data_description": {
-          "tts_message_open": "Available variables: delay (wait minutes), name (thermostat name), target (target temperature).",
-          "notify_message": "Available variables: name, target.",
-          "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
-          "notify_temp_change_message": "Available variables: name, old_temp, new_temp, fan_mode, room_temp, target.",
-          "door_alert_enabled": "Master switch for the door alert. When disabled the two channel toggles below are ignored.",
-          "door_alert_tts": "If enabled, plays the door alert on the configured Google/media_player devices.",
-          "door_alert_notify": "If enabled, sends the door alert via Telegram / notify entities.",
-          "door_alert_message": "Available variable: name. This only sends an alert - it never turns off the AC."
+          "tts_media_players": "Select one or more Google Home / Nest or media_player devices for voice announcements. E.g. media_player.google_bedroom.",
+          "tts_engine_entity": "TTS engine to use. Leave empty to use the first one available in Home Assistant.",
+          "tts_message_open": "Variables: {{ delay }} wait minutes, {{ name }} thermostat name, {{ target }} target temp. E.g. 'Window open! Turning off AC in {{ delay }} minutes.'",
+          "notify_targets": "Select configured notify entities in HA (e.g. notify.telegram_me). These receive all thermostat messages.",
+          "notify_chat_ids": "Alternative to notify entities: enter Telegram chat IDs separated by commas. Used only if no notify entity is selected above.",
+          "notify_message": "Message when AC is turned off due to open window. Variables: {{ name }}, {{ target }}.",
+          "notify_temp_change_enabled": "If enabled: every time the thermostat sends a new setpoint to the AC, a Telegram message arrives with details. Useful for monitoring but can be verbose.",
+          "notify_temp_change_message": "Variables: {{ name }}, {{ old_temp }}, {{ new_temp }}, {{ fan_mode }}, {{ room_temp }}, {{ target }}.",
+          "door_alert_enabled": "Master switch for door alerts. If disabled, the voice and Telegram toggles below are ignored.",
+          "door_alert_tts": "If enabled: plays the door alert message on the configured Google devices when the door opens. Requires door alert to be enabled.",
+          "door_alert_notify": "If enabled: sends the door alert message on Telegram when the door opens. Requires door alert to be enabled. Voice and Telegram are independent.",
+          "door_alert_message": "Variable: {{ name }}. Informational only: never turns off the AC or changes its settings."
         }
       }
     },
@@ -135,111 +176,156 @@
     "step": {
       "sensori": {
         "title": "Entities and sensors",
+        "description": "Update the controlled AC and connected sensors.",
         "data": {
           "name": "Thermostat name",
           "temp_sensor": "Room temperature sensor",
           "window_sensor": "Window/opening sensor",
           "presence_sensor": "Presence sensor (optional)",
           "door_sensor": "Door sensor (optional)"
+        },
+        "data_description": {
+          "name": "Display name shown in Home Assistant. E.g. 'Master bedroom', 'Living room upstairs'.",
+          "temp_sensor": "Room temperature probe, ideally placed away from the AC.",
+          "window_sensor": "Binary sensor that turns 'on' when the window is open. If left open, the AC turns off after a delay.",
+          "presence_sensor": "If set and presence is detected continuously, the thermostat can boost the fan after X minutes. Leave empty to disable.",
+          "door_sensor": "If set, sends an alert when the door opens. Never acts on the AC. Leave empty to disable."
         }
       },
       "energia": {
         "title": "Solar and battery",
+        "description": "Configure FV sensors and automatic turn-on/off parameters.",
         "data": {
           "fv_sensor": "Solar production sensor (W)",
           "consumption_sensor": "Grid consumption sensor (W)",
           "battery_sensor": "Battery SOC sensor (%)",
-          "fv_margin_w": "Required solar surplus margin (turn-on)",
-          "soc_min": "Minimum battery SOC to turn on",
-          "fv_start_time": "Active window start",
-          "fv_end_time": "Active window end",
-          "fv_priority": "Turn-on priority (lower = first on, last off)",
-          "fv_stagger_minutes": "Minimum gap between FV turn-ons / turn-offs",
-          "fv_shutoff_enabled": "Enable automatic solar turn-off",
-          "fv_shutoff_delay_min": "Minutes below threshold before turning off",
-          "fv_shutoff_extra_hours": "Extra hours after active window end for turn-off"
+          "fv_margin_w": "Solar surplus margin required to turn on (W)",
+          "soc_min": "Minimum battery SOC to turn on (%)",
+          "fv_start_time": "Automatic turn-on window start",
+          "fv_end_time": "Automatic turn-on window end",
+          "fv_priority": "Turn-on priority (lower number = higher priority)",
+          "fv_stagger_minutes": "Minimum gap between cascade turn-ons / turn-offs (min)",
+          "fv_shutoff_enabled": "▶ Automatic turn-off when solar is insufficient (on/off)",
+          "fv_shutoff_delay_min": "Minutes of insufficient solar before turning off",
+          "fv_shutoff_extra_hours": "Extra hours after window end where turn-off stays active"
         },
         "data_description": {
-          "fv_shutoff_enabled": "When enabled, if solar production drops below current consumption for the configured delay, the AC is turned off. Turn-off follows reverse priority order (highest priority number = first to be turned off).",
-          "fv_shutoff_extra_hours": "Extends the turn-off window beyond the active window end. E.g. active window ends at 16:00, extra 1h → turn-off active until 17:00.",
-          "fv_priority": "Lower number = higher priority: turned on first, turned off last. Higher number = lower priority: turned on last, turned off first."
+          "fv_sensor": "Instantaneous power from the panels. E.g. sensor.solar_production.",
+          "consumption_sensor": "Instantaneous grid consumption. E.g. sensor.grid_consumption.",
+          "battery_sensor": "Battery state of charge in percent. The AC turns on only if SOC exceeds the minimum threshold.",
+          "fv_margin_w": "Minimum surplus required to turn on: solar must exceed (consumption + margin). E.g. 1200 W → turns on only if solar > consumption + 1200 W.",
+          "soc_min": "The AC won't turn on from solar if the battery is below this percentage. E.g. 70 → turns on only with battery ≥ 70%.",
+          "fv_start_time": "The AC won't turn on automatically from solar before this time. E.g. 10:00.",
+          "fv_end_time": "The AC won't turn on automatically from solar after this time. Turn-off can continue beyond this (see extra hours).",
+          "fv_priority": "Lower numbers turn on first and turn off last. E.g. bedroom = 10, living = 30 → bedroom turns on first, living turns off first.",
+          "fv_stagger_minutes": "How many minutes to wait between one cascade turn-on (or turn-off) and the next. E.g. 5 minutes.",
+          "fv_shutoff_enabled": "If enabled: when solar drops below current consumption for the configured delay, the AC turns off. Cascade is the reverse of turn-on (highest priority number = first to turn off).",
+          "fv_shutoff_delay_min": "How many minutes solar must stay insufficient before turning off. Avoids shutdowns for passing clouds. E.g. 5 minutes.",
+          "fv_shutoff_extra_hours": "After the solar window ends, the AC can still be turned off for this many hours. E.g. window ends at 16:00, extra 1h → turn-off active until 17:00."
         }
       },
       "profilo": {
         "title": "Regulation profile",
-        "description": "Choose a preconfigured profile, or pick Custom to set every parameter manually.",
+        "description": "Choose a preconfigured profile or Custom to modify thresholds manually.",
         "data": {
           "profile": "Profile"
+        },
+        "data_description": {
+          "profile": "Balanced: gradual regulation, recommended for normal use. Aggressive: cools faster. Gentle: minimal changes, quiet. Custom: set every threshold manually in the next step."
         }
       },
       "soglie_termiche": {
         "title": "Thermal thresholds",
+        "description": "Define how the thermostat reacts to different room temperatures relative to the target.",
         "data": {
-          "target_temp_default": "Initial target temperature",
-          "extreme_offset": "'Extreme heat' threshold",
-          "hot_offset": "'Strong heat' offset",
-          "range_offset": "'Warm' band start threshold",
-          "below_offset": "Margin below target (low fan)",
-          "turn_on_offset": "Minimum offset to turn on from solar",
-          "temp_delta": "Regulation offset (±) applied to the AC",
-          "extreme_delta": "Extreme offset (target minus this value)"
+          "target_temp_default": "Initial target temperature (°C)",
+          "extreme_offset": "'Extreme heat' threshold above target (°C)",
+          "hot_offset": "'Strong heat' threshold above target (°C)",
+          "range_offset": "'Mild heat' threshold above target (°C)",
+          "below_offset": "Margin below target for low fan (°C)",
+          "turn_on_offset": "Minimum offset above target to turn on from solar (°C)",
+          "temp_delta": "Regulation delta applied to the setpoint (°C)",
+          "extreme_delta": "Delta applied in extreme heat (°C)"
+        },
+        "data_description": {
+          "target_temp_default": "Comfort temperature. E.g. 25°C. Changeable anytime from the climate card.",
+          "extreme_offset": "Above target + this: high fan, very low setpoint. E.g. offset 2°C, target 25°C → extreme above 27°C.",
+          "hot_offset": "Above target + this (but below extreme): medium fan, low setpoint. E.g. offset 1.5°C, target 25°C → strong above 26.5°C.",
+          "range_offset": "Above target + this (but below strong): low fan, reduced setpoint. E.g. offset 0.2°C, target 25°C → mild above 25.2°C.",
+          "below_offset": "Between target and target - this: low fan, setpoint = target. E.g. offset 0.1°C → band 24.9–25°C.",
+          "turn_on_offset": "Turns on from solar only if room > target + this. E.g. 0.8°C, target 25°C → turns on only above 25.8°C.",
+          "temp_delta": "How much the setpoint is lowered in warm/strong bands. E.g. delta 1°C, target 25°C → sends 24°C to AC.",
+          "extreme_delta": "Like temp_delta but for extreme band. E.g. delta 2°C, target 25°C → sends 23°C in extreme heat."
         }
       },
       "soglie_avanzate": {
         "title": "Advanced functions",
+        "description": "Calibration, night mode, night turn-off, presence boost and timing.",
         "data": {
-          "calibration_max_offset": "Max internal-sensor calibration offset",
-          "min_below_internal": "Min. margin below internal sensor",
+          "calibration_max_offset": "Maximum internal sensor calibration correction (°C)",
+          "min_below_internal": "Minimum setpoint margin below AC internal sensor (°C)",
           "night_start_time": "Night mode start",
           "night_end_time": "Night mode end",
-          "night_offset": "Night mode target offset (+°C)",
-          "night_ac_enabled": "Enable automatic night turn-on",
-          "night_turn_on_offset": "Night turn-on offset above night target",
-          "night_shutoff_enabled": "Enable automatic night turn-off",
-          "night_shutoff_delta": "Temperature tolerance above night target to consider 'in range'",
-          "night_shutoff_min": "Minutes in range before turning off at night",
-          "presence_boost_enabled": "Enable presence boost",
-          "presence_boost_minutes": "Continuous presence minutes before boost",
-          "presence_boost_offset": "Minimum offset for presence boost",
-          "window_delay_minutes": "Minutes to wait with window open before turning off",
-          "update_interval_minutes": "Check interval (minutes)"
+          "night_offset": "Night target offset: effective target = target + this value (°C)",
+          "night_ac_enabled": "▶ Automatic night turn-on when too hot (on/off)",
+          "night_turn_on_offset": "Night turn-on threshold: turns on if temp > night target + this value (°C)",
+          "night_shutoff_enabled": "▶ Automatic night turn-off when room is at target temperature (on/off)",
+          "night_shutoff_delta": "Tolerance above night target to consider room 'at temperature' (°C)",
+          "night_shutoff_min": "Consecutive minutes at temperature before night turn-off",
+          "presence_boost_enabled": "▶ Fan boost if continuous presence and still warm (on/off)",
+          "presence_boost_minutes": "Continuous presence minutes before fan boost",
+          "presence_boost_offset": "Minimum offset above target to trigger presence boost (°C)",
+          "window_delay_minutes": "Minutes with window open before turning off the AC",
+          "update_interval_minutes": "Thermostat update frequency (minutes)"
         },
         "data_description": {
-          "calibration_max_offset": "Limits how much the setpoint sent to the AC can be lowered to compensate for the AC's internal sensor reading cooler than the room sensor.",
-          "min_below_internal": "While in an active heat band, the setpoint sent to the AC will always stay at least this much below what the AC itself is reading, so the compressor keeps cooling.",
-          "night_offset": "Degrees added to the target during the night window. The displayed target is unchanged; only internal regulation uses target + offset. Set 0 to disable.",
-          "night_ac_enabled": "When enabled, the AC turns on during the night window if room temp exceeds night target + turn-on offset. Independent of solar logic.",
-          "night_turn_on_offset": "AC turns on at night only when room temp > night target + this value. E.g. night target 27°C, offset 1.5°C → turns on above 28.5°C.",
-          "night_shutoff_enabled": "When enabled, the AC turns off during the night window if the room stays within the target range for the configured minutes. Applies regardless of how the AC was turned on.",
-          "night_shutoff_delta": "The room is considered 'in range' when temp ≤ night target + this value. E.g. night target 26°C, delta 0.3°C → in range when temp ≤ 26.3°C.",
-          "night_shutoff_min": "The AC turns off only after the room has stayed in range continuously for this many minutes."
+          "calibration_max_offset": "The AC's internal sensor often reads differently from the room. The thermostat lowers the setpoint to compensate, but by at most this many degrees. E.g. 3°C.",
+          "min_below_internal": "In active heat bands, the setpoint always stays at least this far below the AC's own reading. Ensures the compressor doesn't stop prematurely. E.g. 1°C → if AC reads 24°C, setpoint never exceeds 23°C.",
+          "night_start_time": "Night mode starts at this time. Can span midnight. E.g. 23:00.",
+          "night_end_time": "Night mode ends at this time. E.g. 07:00.",
+          "night_offset": "At night the effective target becomes target + this. E.g. target 25°C, offset 1°C → night target 26°C. Set 0 to keep the same target.",
+          "night_ac_enabled": "If enabled: at night, if the room exceeds night target + the turn-on threshold, the AC turns on automatically without solar surplus.",
+          "night_turn_on_offset": "E.g. target 25°C, night offset 1°C → night target 26°C. Turn-on offset 1.5°C → turns on only above 27.5°C.",
+          "night_shutoff_enabled": "If enabled: at night, if the room stays at temperature for the configured minutes, the AC turns off automatically. Works with any turn-on method.",
+          "night_shutoff_delta": "E.g. night target 26°C, delta 0.3°C → 'at temperature' when temp ≤ 26.3°C. If temp rises above 26.3°C the timer resets.",
+          "night_shutoff_min": "E.g. 30 min → if temp rises during those 30 minutes, the count resets to zero.",
+          "presence_boost_enabled": "If enabled: when presence is detected continuously for the configured minutes and room is still above target + offset, fan is raised to medium.",
+          "presence_boost_minutes": "E.g. 10 minutes of continuous presence before boost.",
+          "presence_boost_offset": "Boost only if temp > target + this. E.g. 1°C → boost only if still above 26°C with target 25°C.",
+          "window_delay_minutes": "How many minutes to wait after the window opens before turning off. E.g. 5 minutes.",
+          "update_interval_minutes": "How often the thermostat recalculates and updates the AC. E.g. 5 minutes."
         }
       },
       "notifiche": {
         "title": "Voice and Telegram alerts",
+        "description": "Configure Google devices and Telegram messages. Messages support template variables.",
         "data": {
-          "tts_media_players": "Google devices for the voice announcement",
-          "tts_engine_entity": "TTS engine (optional, auto if empty)",
-          "tts_message_open": "Window open voice message",
-          "notify_targets": "Notify/Telegram entities to send alerts to",
-          "notify_chat_ids": "Telegram chat IDs (only if you have no notify entities)",
-          "notify_message": "'AC turned off' notification message",
-          "notify_temp_change_enabled": "Notify on every AC temperature change",
-          "notify_temp_change_message": "AC temperature change message",
-          "door_alert_enabled": "Enable door-open alert",
-          "door_alert_tts": "Door alert via Google Home (voice)",
-          "door_alert_notify": "Door alert via Telegram / notify",
-          "door_alert_message": "Door-open alert message"
+          "tts_media_players": "Google / media_player devices for voice announcements",
+          "tts_engine_entity": "TTS engine (optional, auto-detected if empty)",
+          "tts_message_open": "Voice message when window is open",
+          "notify_targets": "Notify entities to send messages to",
+          "notify_chat_ids": "Telegram chat IDs (only if no notify entity selected)",
+          "notify_message": "Message sent when AC is turned off due to open window",
+          "notify_temp_change_enabled": "▶ Send Telegram notification on every AC temperature change (on/off)",
+          "notify_temp_change_message": "Message sent on each AC temperature change",
+          "door_alert_enabled": "▶ Door open alert enabled (on/off)",
+          "door_alert_tts": "▶ Door alert via Google Home voice (on/off)",
+          "door_alert_notify": "▶ Door alert via Telegram message (on/off)",
+          "door_alert_message": "Message sent when the door opens"
         },
         "data_description": {
-          "tts_message_open": "Available variables: delay (wait minutes), name (thermostat name), target (target temperature).",
-          "notify_message": "Available variables: name, target.",
-          "notify_chat_ids": "One or more chat IDs separated by commas, used only if no notify entity is selected.",
-          "notify_temp_change_message": "Available variables: name, old_temp, new_temp, fan_mode, room_temp, target.",
-          "door_alert_enabled": "Master switch for the door alert. When disabled the two channel toggles below are ignored.",
-          "door_alert_tts": "If enabled, plays the door alert on the configured Google/media_player devices.",
-          "door_alert_notify": "If enabled, sends the door alert via Telegram / notify entities.",
-          "door_alert_message": "Available variable: name. This only sends an alert - it never turns off the AC."
+          "tts_media_players": "Select Google Home / Nest or media_player devices for voice. E.g. media_player.google_bedroom.",
+          "tts_engine_entity": "TTS engine to use. Leave empty for auto-detection.",
+          "tts_message_open": "Variables: {{ delay }}, {{ name }}, {{ target }}. E.g. 'Window open! Turning off in {{ delay }} minutes.'",
+          "notify_targets": "Configured notify entities in HA. Receive all thermostat messages.",
+          "notify_chat_ids": "Telegram chat IDs separated by commas. Used only if no notify entity selected above.",
+          "notify_message": "Variables: {{ name }}, {{ target }}.",
+          "notify_temp_change_enabled": "If enabled: every new setpoint sent to the AC generates a Telegram message. Useful for monitoring but can be verbose.",
+          "notify_temp_change_message": "Variables: {{ name }}, {{ old_temp }}, {{ new_temp }}, {{ fan_mode }}, {{ room_temp }}, {{ target }}.",
+          "door_alert_enabled": "Master switch. If disabled, voice and Telegram toggles below are ignored.",
+          "door_alert_tts": "If enabled: plays the door alert on Google devices when door opens. Requires door alert enabled.",
+          "door_alert_notify": "If enabled: sends door alert on Telegram when door opens. Requires door alert enabled. Voice and Telegram are independent.",
+          "door_alert_message": "Variable: {{ name }}. Informational only: never turns off the AC."
         }
       }
     }
