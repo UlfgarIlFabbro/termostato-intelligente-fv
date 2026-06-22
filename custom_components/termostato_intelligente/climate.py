@@ -38,14 +38,13 @@ from .const import (
     CONF_DOOR_SENSOR,
     CONF_EXTREME_DELTA,
     CONF_EXTREME_OFFSET,
-    DOMAIN,
-    SWITCH_KEY_FV,
-    SWITCH_KEY_MASTER,
-    SWITCH_KEY_QUICK,
     CONF_FV_END_TIME,
     CONF_FV_MARGIN_W,
     CONF_FV_PRIORITY,
     CONF_FV_SENSOR,
+    CONF_FV_SHUTOFF_DELAY_MIN,
+    CONF_FV_SHUTOFF_ENABLED,
+    CONF_FV_SHUTOFF_EXTRA_HOURS,
     CONF_FV_STAGGER_MIN,
     CONF_FV_START_TIME,
     CONF_HOT_OFFSET,
@@ -54,6 +53,9 @@ from .const import (
     CONF_NIGHT_AC_ENABLED,
     CONF_NIGHT_END_TIME,
     CONF_NIGHT_OFFSET,
+    CONF_NIGHT_SHUTOFF_DELTA,
+    CONF_NIGHT_SHUTOFF_ENABLED,
+    CONF_NIGHT_SHUTOFF_MIN,
     CONF_NIGHT_START_TIME,
     CONF_NIGHT_TURN_ON_OFFSET,
     CONF_NOTIFY_CHAT_IDS,
@@ -77,25 +79,31 @@ from .const import (
     CONF_UPDATE_INTERVAL_MIN,
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
+    DEFAULT_BELOW_OFFSET,
     DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_DOOR_ALERT_ENABLED,
     DEFAULT_DOOR_ALERT_MESSAGE,
     DEFAULT_DOOR_ALERT_NOTIFY,
     DEFAULT_DOOR_ALERT_TTS,
-    DEFAULT_FV_END_TIME,
     DEFAULT_EXTREME_DELTA,
     DEFAULT_EXTREME_OFFSET,
+    DEFAULT_FV_END_TIME,
     DEFAULT_FV_MARGIN_W,
     DEFAULT_FV_PRIORITY,
+    DEFAULT_FV_SHUTOFF_DELAY_MIN,
+    DEFAULT_FV_SHUTOFF_ENABLED,
+    DEFAULT_FV_SHUTOFF_EXTRA_HOURS,
     DEFAULT_FV_STAGGER_MIN,
     DEFAULT_FV_START_TIME,
-    DEFAULT_BELOW_OFFSET,
     DEFAULT_HOT_OFFSET,
     DEFAULT_MIN_BELOW_INTERNAL,
     DEFAULT_NAME,
     DEFAULT_NIGHT_AC_ENABLED,
     DEFAULT_NIGHT_END_TIME,
     DEFAULT_NIGHT_OFFSET,
+    DEFAULT_NIGHT_SHUTOFF_DELTA,
+    DEFAULT_NIGHT_SHUTOFF_ENABLED,
+    DEFAULT_NIGHT_SHUTOFF_MIN,
     DEFAULT_NIGHT_START_TIME,
     DEFAULT_NIGHT_TURN_ON_OFFSET,
     DEFAULT_NOTIFY_MESSAGE,
@@ -112,11 +120,16 @@ from .const import (
     DEFAULT_TURN_ON_OFFSET,
     DEFAULT_UPDATE_INTERVAL_MIN,
     DEFAULT_WINDOW_DELAY_MIN,
+    DOMAIN,
     FAN_MODES_ALLOWED,
+    SWITCH_KEY_FV,
+    SWITCH_KEY_MASTER,
+    SWITCH_KEY_QUICK,
 )
 from .util import get_conf
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -130,32 +143,19 @@ async def async_setup_entry(
 class SmartFvClimate(ClimateEntity, RestoreEntity):
     """Termostato intelligente: pilota un climatizzatore reale.
 
-    Logica:
-    - blocco totale se la finestra è aperta o se il master è spento
-    - accensione solo con surplus FV (fascia oraria + switch dedicato +
-      coordinamento priorità/distacco tra più istanze)
-    - accensione notturna autonoma se temp > target_notte + night_turn_on_offset
-      (opzionale, indipendente dalla logica FV)
-    - regolazione temperatura/fan a 5 livelli (caldo estremo / caldo forte /
-      caldo / vicino target / sotto target), attiva ogni volta che il
-      climatizzatore è acceso, indipendentemente dalla fascia oraria FV
-    - calibrazione proporzionale sullo scostamento tra la sonda ambiente e la
-      sonda interna del climatizzatore reale: più siamo vicini al target,
-      meno la correzione viene applicata
-    - vincolo di sicurezza: nelle fasce calde attive, il setpoint resta
-      sempre almeno un margine minimo sotto la sonda interna del clima, per
-      garantire che continui davvero a raffreddare
-    - modalità notturna (target più alto in una fascia oraria configurabile)
-    - raffreddamento rapido opzionale (ventola alta + ulteriore grado)
-    - boost presenza dopo N minuti continuativi (solo a clima acceso)
-    - arrotondamento del setpoint a numero intero (molti climatizzatori non
-      accettano decimali): decimale <= 0,5 per difetto, > 0,5 per eccesso
-    - snapshot/restore + avviso TTS + notifica alla finestra + notifica ad
-      ogni cambio di temperatura inviato al climatizzatore (solo a clima
-      acceso) + avviso opzionale se la porta si apre (solo avviso, canali
-      TTS e notify attivabili separatamente, nessuna azione sul clima)
-    - bypass automatico se finestra/presenza/porta non sono configurati o
-      non disponibili
+    Logica di accensione:
+    - Surplus FV (fascia oraria diurna, switch FV acceso, surplus + SOC ok)
+    - Notturna autonoma (fascia notturna, night_ac_enabled, temp > target_notte + offset)
+
+    Logica di spegnimento:
+    - Diurno FV: se fv < consumo per N minuti nella finestra
+      fv_start_time → fv_end_time + extra_hours, cascata a priorità inversa
+      rispetto all'accensione, coordinata via hass.data
+    - Notturno: se temp ≤ target_notte + shutoff_delta per shutoff_min minuti
+      continui, si spegne autonomamente (qualunque sia la causa dell'accensione)
+
+    Regolazione termica, calibrazione, presenza, finestra, porta, notifiche:
+    invariate rispetto alla versione precedente.
     """
 
     _attr_should_poll = False
@@ -193,12 +193,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._window_cancel_timer = None
         self._presence_since: datetime | None = None
 
-        # Si registra in hass.data per essere visibile alle altre istanze
-        # (coordinamento priorità/distacco nell'accensione da FV).
+        # --- Timer spegnimento diurno FV ---
+        # Momento in cui questa istanza ha rilevato per la prima volta la
+        # condizione "fv < consumo" nell'attuale ciclo di monitoraggio.
+        self._fv_low_since: datetime | None = None
+
+        # --- Timer spegnimento notturno ---
+        # Momento in cui la temperatura è scesa sotto target_notte + shutoff_delta
+        # e vi è rimasta. None = condizione non attiva o clima spento.
+        self._night_below_since: datetime | None = None
+
         hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})["climate"] = self
 
     # ------------------------------------------------------------------
-    # Proprietà esposte (mirror del climatizzatore reale dove sensato)
+    # Proprietà
     # ------------------------------------------------------------------
 
     @property
@@ -229,9 +237,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "finestra_aperta": self._is_window_open(),
             "porta_aperta": self._is_door_open(),
             "snapshot_attivo": self._snapshot is not None,
-            "presenza_da": self._presence_since.isoformat()
-            if self._presence_since
-            else None,
+            "presenza_da": (
+                self._presence_since.isoformat() if self._presence_since else None
+            ),
             "climatizzatore_reale": self._climate_entity,
             "termostato_abilitato": self._switch_state(SWITCH_KEY_MASTER, True),
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
@@ -240,6 +248,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "target_effettivo": self._effective_target(),
             "accensione_notturna_abilitata": bool(
                 get_conf(self.entry, CONF_NIGHT_AC_ENABLED, DEFAULT_NIGHT_AC_ENABLED)
+            ),
+            "spegnimento_fv_abilitato": bool(
+                get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)
+            ),
+            "spegnimento_notturno_abilitato": bool(
+                get_conf(self.entry, CONF_NIGHT_SHUTOFF_ENABLED, DEFAULT_NIGHT_SHUTOFF_ENABLED)
+            ),
+            "fv_basso_da": (
+                self._fv_low_since.isoformat() if self._fv_low_since else None
+            ),
+            "notte_sotto_target_da": (
+                self._night_below_since.isoformat() if self._night_below_since else None
             ),
         }
 
@@ -306,11 +326,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._presence_since = new_state.last_changed
             else:
                 self._presence_since = None
+        elif entity_id == self._climate_entity:
+            # Se il clima si spegne per qualsiasi causa, azzera entrambi i timer
+            if new_state and new_state.state in ("off", "unknown", "unavailable"):
+                self._fv_low_since = None
+                self._night_below_since = None
 
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Annulla un eventuale timer finestra pendente e si deregistra da hass.data."""
         if self._window_cancel_timer is not None:
             self._window_cancel_timer()
             self._window_cancel_timer = None
@@ -319,7 +343,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             data.pop("climate", None)
 
     # ------------------------------------------------------------------
-    # Comandi utente sull'entità "termostato intelligente"
+    # Comandi utente
     # ------------------------------------------------------------------
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -333,15 +357,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if fan_mode not in FAN_MODES_ALLOWED:
             _LOGGER.warning(
                 "%s: fan_mode '%s' non consentito (solo %s), uso '%s'",
-                self._attr_name,
-                fan_mode,
-                FAN_MODES_ALLOWED,
-                FAN_MODES_ALLOWED[0],
+                self._attr_name, fan_mode, FAN_MODES_ALLOWED, FAN_MODES_ALLOWED[0],
             )
             fan_mode = FAN_MODES_ALLOWED[0]
         await self.hass.services.async_call(
-            "climate",
-            "set_fan_mode",
+            "climate", "set_fan_mode",
             {"entity_id": self._climate_entity, "fan_mode": fan_mode},
             blocking=True,
         )
@@ -355,7 +375,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
     # ------------------------------------------------------------------
-    # Logica periodica (FV + notturna + termica + presenza)
+    # Loop periodico principale
     # ------------------------------------------------------------------
 
     async def _async_periodic_update(self, now: datetime | None = None) -> None:
@@ -369,27 +389,37 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         target = self._effective_target()
 
-        # La regolazione termica gira sempre (quando il clima è acceso),
-        # dentro e fuori dalla fascia FV.
+        # Regolazione termica (solo se clima acceso)
         await self._async_handle_thermal(temp, target)
 
-        # Accensione automatica da FV: solo se lo switch dedicato è acceso
-        # e siamo dentro la fascia oraria configurata.
-        if self._switch_state(SWITCH_KEY_FV, True) and self._within_active_window():
+        # Accensione da FV (fascia diurna)
+        if self._switch_state(SWITCH_KEY_FV, True) and self._within_fv_window():
             await self._async_handle_fv_turn_on(temp, target)
 
-        # Accensione notturna autonoma: solo se siamo in modalità notturna
-        # e l'opzione è abilitata.
+        # Accensione notturna autonoma
         if self._is_night_mode_active() and bool(
             get_conf(self.entry, CONF_NIGHT_AC_ENABLED, DEFAULT_NIGHT_AC_ENABLED)
         ):
             await self._async_handle_night_turn_on(temp, target)
 
+        # Spegnimento diurno FV a cascata
+        if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
+            await self._async_handle_fv_shutoff(temp, target)
+
+        # Spegnimento notturno per raggiungimento target
+        if self._is_night_mode_active() and bool(
+            get_conf(self.entry, CONF_NIGHT_SHUTOFF_ENABLED, DEFAULT_NIGHT_SHUTOFF_ENABLED)
+        ):
+            await self._async_handle_night_shutoff(temp, target)
+
         await self._async_handle_presence_boost(temp, target)
         self.async_write_ha_state()
 
+    # ------------------------------------------------------------------
+    # Helpers orari / stato
+    # ------------------------------------------------------------------
+
     def _effective_target(self) -> float:
-        """Target base impostato dall'utente, più l'eventuale scostamento notturno."""
         target = self._target_temperature
         if self._is_night_mode_active():
             night_offset = float(
@@ -413,7 +443,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return start <= now_t <= end
         return now_t >= start or now_t <= end
 
-    def _within_active_window(self) -> bool:
+    def _within_fv_window(self) -> bool:
+        """Fascia oraria di accensione FV (fv_start → fv_end)."""
         start_str = get_conf(self.entry, CONF_FV_START_TIME, DEFAULT_FV_START_TIME)
         end_str = get_conf(self.entry, CONF_FV_END_TIME, DEFAULT_FV_END_TIME)
         try:
@@ -426,10 +457,34 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return start <= now_t <= end
         return now_t >= start or now_t <= end
 
+    def _within_fv_shutoff_window(self) -> bool:
+        """Fascia oraria di spegnimento FV: fv_start → fv_end + extra_hours."""
+        start_str = get_conf(self.entry, CONF_FV_START_TIME, DEFAULT_FV_START_TIME)
+        end_str = get_conf(self.entry, CONF_FV_END_TIME, DEFAULT_FV_END_TIME)
+        extra_h = float(
+            get_conf(self.entry, CONF_FV_SHUTOFF_EXTRA_HOURS, DEFAULT_FV_SHUTOFF_EXTRA_HOURS)
+        )
+        try:
+            start = dt_time.fromisoformat(str(start_str))
+            end_base = dt_time.fromisoformat(str(end_str))
+        except ValueError:
+            return True
+
+        # Calcola fv_end + extra_hours usando datetime dummy
+        dummy_date = datetime(2000, 1, 1)
+        end_dt = datetime.combine(dummy_date, end_base) + timedelta(hours=extra_h)
+        # Se sfora la mezzanotte, tronca a 23:59:59
+        if end_dt.date() > dummy_date.date():
+            end_extended = dt_time(23, 59, 59)
+        else:
+            end_extended = end_dt.time()
+
+        now_t = dt_util.now().time()
+        if start <= end_extended:
+            return start <= now_t <= end_extended
+        return now_t >= start or now_t <= end_extended
+
     def _is_window_open(self) -> bool:
-        # Bypass: nessun sensore configurato, oppure sensore presente ma con
-        # stato non valido (unavailable/unknown) -> trattiamo come "chiusa"
-        # per non bloccare la regolazione.
         if not self._window_sensor:
             return False
         state = self.hass.states.get(self._window_sensor)
@@ -446,11 +501,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         return state.state == "on"
 
     def _switch_state(self, key: str, default: bool) -> bool:
-        """Legge lo stato di uno switch ausiliario (master/FV/quick).
-
-        Se lo switch non è ancora pronto (es. ordine di avvio piattaforme)
-        restituisce il default, per non bloccare il termostato.
-        """
         data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
         switch = data.get(key)
         if switch is None:
@@ -470,25 +520,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     @staticmethod
     def _round_setpoint(value: float) -> int:
-        """Arrotonda a intero per i climatizzatori che non accettano decimali.
-
-        Regola: decimale <= 0,5 arrotonda per difetto, > 0,5 per eccesso
-        (es. 22,4 -> 22, 22,5 -> 22, 22,6 -> 23). Diverso dall'arrotondamento
-        matematico standard di Python sui valori .5.
-        """
         floor_val = math.floor(value)
         decimal = value - floor_val
         if decimal <= 0.5:
             return int(floor_val)
         return int(floor_val) + 1
 
+    # ------------------------------------------------------------------
+    # Accensione da FV
+    # ------------------------------------------------------------------
+
     async def _async_handle_fv_turn_on(self, temp: float, target: float) -> None:
         if not self._fv_basic_eligible(temp, target):
             return
 
-        # Coordinamento tra le istanze: rispetta un distacco minimo
-        # dall'ultima accensione FV (di qualunque termostato) e, a parità di
-        # tempo, lascia precedenza a chi ha priorità migliore (numero più basso).
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
         stagger_min = float(
             get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN)
@@ -514,9 +559,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if not sibling._fv_basic_eligible(sib_temp, sib_target):
                 continue
             sib_priority = (
-                float(
-                    get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)
-                ),
+                float(get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)),
                 sibling.entry.entry_id,
             )
             if sib_priority < my_priority:
@@ -546,66 +589,194 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         )
         return fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset
 
-    async def _async_handle_night_turn_on(self, temp: float, target: float) -> None:
-        """Accende il climatizzatore di notte se la temperatura supera la soglia.
+    # ------------------------------------------------------------------
+    # Accensione notturna
+    # ------------------------------------------------------------------
 
-        Funziona in modo simile alla logica FV ma:
-        - non richiede surplus fotovoltaico né SOC batteria
-        - il confronto avviene rispetto al target_effettivo (già incluso l'offset
-          notturno) più CONF_NIGHT_TURN_ON_OFFSET
-        - si attiva solo se il clima è attualmente spento
-        """
+    async def _async_handle_night_turn_on(self, temp: float, target: float) -> None:
         if self.hvac_mode != HVACMode.OFF:
             return
         if temp is None:
             return
-
         night_turn_on_offset = float(
             get_conf(self.entry, CONF_NIGHT_TURN_ON_OFFSET, DEFAULT_NIGHT_TURN_ON_OFFSET)
         )
-
         if temp <= target + night_turn_on_offset:
             return
-
         _LOGGER.debug(
             "%s: accensione notturna (temp=%.1f > target_notte+offset=%.1f)",
-            self._attr_name,
-            temp,
-            target + night_turn_on_offset,
+            self._attr_name, temp, target + night_turn_on_offset,
         )
         await self.hass.services.async_call(
             "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
         )
 
+    # ------------------------------------------------------------------
+    # Spegnimento diurno FV a cascata (priorità inversa)
+    # ------------------------------------------------------------------
+
+    async def _async_handle_fv_shutoff(self, temp: float, target: float) -> None:
+        """Spegne il clima se il FV è insufficiente da N minuti.
+
+        Cascata a priorità inversa: chi ha priorità numerica più ALTA (cioè
+        è stato acceso per ultimo) viene spento per PRIMO.
+        Il coordinamento avviene in hass.data[DOMAIN]["_coordination"] per
+        evitare che più istanze si spengano nello stesso ciclo.
+        """
+        # Solo nella finestra di spegnimento
+        if not self._within_fv_shutoff_window():
+            self._fv_low_since = None
+            return
+
+        # Serve il sensore FV e consumo
+        if not (self._fv_sensor and self._consumption_sensor):
+            return
+
+        # Se il clima è spento non c'è nulla da fare; azzera il timer
+        if self.hvac_mode == HVACMode.OFF:
+            self._fv_low_since = None
+            return
+
+        fv = self._read_float(self._fv_sensor)
+        consumo = self._read_float(self._consumption_sensor)
+        if fv is None or consumo is None:
+            return
+
+        fv_ok = fv >= consumo  # condizione: FV copre almeno il consumo attuale
+
+        if fv_ok:
+            # FV sufficiente: azzera il timer
+            self._fv_low_since = None
+            return
+
+        # FV insufficiente: avvia o mantieni il timer
+        now = dt_util.utcnow()
+        if self._fv_low_since is None:
+            self._fv_low_since = now
+            return
+
+        delay_min = int(
+            get_conf(self.entry, CONF_FV_SHUTOFF_DELAY_MIN, DEFAULT_FV_SHUTOFF_DELAY_MIN)
+        )
+        if (now - self._fv_low_since) < timedelta(minutes=delay_min):
+            return  # non ancora abbastanza tempo
+
+        # Condizione confermata: valuta se tocca a questa istanza spegnersi.
+        # Tocca a noi se siamo il clima acceso con priorità numerica PIÙ ALTA
+        # (= acceso per ultimo = primo da spegnere).
+        coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+
+        # Rispetta lo stagger: se un'altra istanza si è appena spenta, aspetta
+        stagger_min = float(
+            get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN)
+        )
+        last_off = coord.get("last_fv_shutoff")
+        if last_off is not None and (now - last_off) < timedelta(minutes=stagger_min):
+            return
+
+        my_priority = (
+            float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)),
+            self.entry.entry_id,
+        )
+
+        # Se esiste un'altra istanza accesa con priorità numerica più alta,
+        # tocca a lei spegnersi prima (non a noi)
+        for entry_data in self.hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            sibling = entry_data.get("climate")
+            if sibling is None or sibling is self:
+                continue
+            if sibling.hvac_mode == HVACMode.OFF:
+                continue
+            sib_priority = (
+                float(get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)),
+                sibling.entry.entry_id,
+            )
+            # priorità più alta (numero maggiore) = spegne prima
+            if sib_priority > my_priority:
+                return
+
+        # Tocca a noi
+        _LOGGER.info(
+            "%s: spegnimento FV (fv=%.0f W < consumo=%.0f W da %d min)",
+            self._attr_name, fv, consumo, delay_min,
+        )
+        await self.hass.services.async_call(
+            "climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True
+        )
+        coord["last_fv_shutoff"] = now
+        self._fv_low_since = None
+        await self._async_send_notification(
+            f"{self._attr_name}: spento automaticamente (FV insufficiente)"
+        )
+
+    # ------------------------------------------------------------------
+    # Spegnimento notturno per raggiungimento target
+    # ------------------------------------------------------------------
+
+    async def _async_handle_night_shutoff(self, temp: float, target: float) -> None:
+        """Spegne il clima di notte se la stanza è rimasta in target per N minuti.
+
+        Condizione: temp <= target_notte + shutoff_delta per shutoff_min minuti.
+        Si applica a qualsiasi accensione (manuale, FV, notturna).
+        Il timer si azzera se la temperatura risale sopra la soglia o il clima
+        si spegne (gestito in _async_on_state_change).
+        """
+        if self.hvac_mode == HVACMode.OFF:
+            self._night_below_since = None
+            return
+
+        shutoff_delta = float(
+            get_conf(self.entry, CONF_NIGHT_SHUTOFF_DELTA, DEFAULT_NIGHT_SHUTOFF_DELTA)
+        )
+        shutoff_min = int(
+            get_conf(self.entry, CONF_NIGHT_SHUTOFF_MIN, DEFAULT_NIGHT_SHUTOFF_MIN)
+        )
+        threshold = target + shutoff_delta
+
+        if temp > threshold:
+            # Temperatura ancora sopra soglia: azzera il timer
+            self._night_below_since = None
+            return
+
+        # Temperatura sotto soglia: avvia o mantieni il timer
+        now = dt_util.utcnow()
+        if self._night_below_since is None:
+            self._night_below_since = now
+            return
+
+        if (now - self._night_below_since) < timedelta(minutes=shutoff_min):
+            return  # non ancora abbastanza tempo
+
+        # Condizione confermata: spegni
+        _LOGGER.info(
+            "%s: spegnimento notturno (temp=%.1f ≤ target_notte+delta=%.1f da %d min)",
+            self._attr_name, temp, threshold, shutoff_min,
+        )
+        await self.hass.services.async_call(
+            "climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True
+        )
+        self._night_below_since = None
+        await self._async_send_notification(
+            f"{self._attr_name}: spento (temperatura notturna in target)"
+        )
+
+    # ------------------------------------------------------------------
+    # Regolazione termica
+    # ------------------------------------------------------------------
+
     async def _async_handle_thermal(self, temp: float, target: float) -> None:
-        # Se il climatizzatore è spento non ha senso ricalcolare/inviare un
-        # setpoint (e generare notifiche): la regolazione riprende
-        # automaticamente non appena viene riacceso (manualmente, da FV, o
-        # al ripristino dopo la finestra).
         if self.hvac_mode == HVACMode.OFF:
             return
 
-        extreme_offset = float(
-            get_conf(self.entry, CONF_EXTREME_OFFSET, DEFAULT_EXTREME_OFFSET)
-        )
+        extreme_offset = float(get_conf(self.entry, CONF_EXTREME_OFFSET, DEFAULT_EXTREME_OFFSET))
         hot_offset = float(get_conf(self.entry, CONF_HOT_OFFSET, DEFAULT_HOT_OFFSET))
-        range_offset = float(
-            get_conf(self.entry, CONF_RANGE_OFFSET, DEFAULT_RANGE_OFFSET)
-        )
-        below_offset = float(
-            get_conf(self.entry, CONF_BELOW_OFFSET, DEFAULT_BELOW_OFFSET)
-        )
+        range_offset = float(get_conf(self.entry, CONF_RANGE_OFFSET, DEFAULT_RANGE_OFFSET))
+        below_offset = float(get_conf(self.entry, CONF_BELOW_OFFSET, DEFAULT_BELOW_OFFSET))
         delta = float(get_conf(self.entry, CONF_TEMP_DELTA, DEFAULT_TEMP_DELTA))
-        extreme_delta = float(
-            get_conf(self.entry, CONF_EXTREME_DELTA, DEFAULT_EXTREME_DELTA)
-        )
+        extreme_delta = float(get_conf(self.entry, CONF_EXTREME_DELTA, DEFAULT_EXTREME_DELTA))
 
-        # 5 fasce, in ordine dalla più calda alla più fredda:
-        # > extreme_offset -> caldo estremo: target-extreme_delta, ventola alta
-        # > hot_offset     -> caldo forte:   target-delta, ventola media
-        # > range_offset   -> caldo:         target-delta, ventola bassa
-        # > -below_offset  -> vicino target: target, ventola bassa
-        # altrimenti       -> sotto target:  target+delta, ventola bassa
         if temp > target + extreme_offset:
             new_temp, fan_mode = target - extreme_delta, "high"
         elif temp > target + hot_offset:
@@ -617,11 +788,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         else:
             new_temp, fan_mode = target + delta, "low"
 
-        # Raffreddamento rapido: nelle 3 fasce calde (estremo/forte/caldo)
-        # forza la ventola al massimo e scende di un altro grado.
-        if self._switch_state(SWITCH_KEY_QUICK, False) and (
-            temp > target + range_offset
-        ):
+        if self._switch_state(SWITCH_KEY_QUICK, False) and temp > target + range_offset:
             new_temp -= 1.0
             fan_mode = "high"
 
@@ -639,13 +806,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             except (TypeError, ValueError):
                 internal_temp_value = None
 
-        # Calibrazione proporzionale: la sonda interna del climatizzatore
-        # reale spesso legge una temperatura diversa da quella della stanza.
-        # Se il clima "vede" più fresco di quanto sia realmente in stanza, il
-        # setpoint che gli mandiamo viene abbassato per compensare - ma in
-        # proporzione a quanto siamo lontani dal target, non per intero:
-        # quasi 0% di correzione appena sopra il target, fino al 100% quando
-        # si è alla soglia di "caldo estremo" (o oltre).
         if internal_temp_value is not None:
             calib_raw = temp - internal_temp_value
             if calib_raw > 0:
@@ -656,24 +816,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     fraction = 1.0 if gap > 0 else 0.0
                 calib_scaled = calib_raw * fraction
                 max_calib = float(
-                    get_conf(
-                        self.entry,
-                        CONF_CALIBRATION_MAX_OFFSET,
-                        DEFAULT_CALIBRATION_MAX_OFFSET,
-                    )
+                    get_conf(self.entry, CONF_CALIBRATION_MAX_OFFSET, DEFAULT_CALIBRATION_MAX_OFFSET)
                 )
                 calib_scaled = min(calib_scaled, max_calib)
                 new_temp -= calib_scaled
 
-        # I climatizzatori in genere accettano solo temperature intere.
         new_temp_rounded = self._round_setpoint(new_temp)
 
-        # Vincolo di sicurezza: nelle fasce calde attive, il setpoint deve
-        # restare sotto la sonda interna del clima di almeno un margine
-        # minimo, altrimenti il compressore si considera già soddisfatto e
-        # smette di raffreddare anche se la stanza è ancora calda. Non si
-        # applica nella fascia "vicino al target", dove è normale che il
-        # clima non spinga oltre.
         if internal_temp_value is not None and temp > target + range_offset:
             min_gap = float(
                 get_conf(self.entry, CONF_MIN_BELOW_INTERNAL, DEFAULT_MIN_BELOW_INTERNAL)
@@ -689,14 +838,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             except (TypeError, ValueError):
                 current_temp_rounded = None
 
-        temp_changed = (
-            current_temp_rounded is None or current_temp_rounded != new_temp_rounded
-        )
+        temp_changed = current_temp_rounded is None or current_temp_rounded != new_temp_rounded
 
         if temp_changed:
             await self.hass.services.async_call(
-                "climate",
-                "set_temperature",
+                "climate", "set_temperature",
                 {"entity_id": self._climate_entity, "temperature": new_temp_rounded},
                 blocking=True,
             )
@@ -705,28 +851,24 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
         if current_fan != fan_mode:
             await self.hass.services.async_call(
-                "climate",
-                "set_fan_mode",
+                "climate", "set_fan_mode",
                 {"entity_id": self._climate_entity, "fan_mode": fan_mode},
                 blocking=True,
             )
+
+    # ------------------------------------------------------------------
+    # Boost presenza
+    # ------------------------------------------------------------------
 
     async def _async_handle_presence_boost(self, temp: float, target: float) -> None:
         if self.hvac_mode != HVACMode.COOL:
             return
         if not self._presence_sensor or self._presence_since is None:
             return
-        if not bool(
-            get_conf(self.entry, CONF_PRESENCE_BOOST_ENABLED, DEFAULT_PRESENCE_BOOST_ENABLED)
-        ):
+        if not bool(get_conf(self.entry, CONF_PRESENCE_BOOST_ENABLED, DEFAULT_PRESENCE_BOOST_ENABLED)):
             return
-
-        boost_minutes = int(
-            get_conf(self.entry, CONF_PRESENCE_BOOST_MIN, DEFAULT_PRESENCE_BOOST_MIN)
-        )
-        boost_offset = float(
-            get_conf(self.entry, CONF_PRESENCE_BOOST_OFFSET, DEFAULT_PRESENCE_BOOST_OFFSET)
-        )
+        boost_minutes = int(get_conf(self.entry, CONF_PRESENCE_BOOST_MIN, DEFAULT_PRESENCE_BOOST_MIN))
+        boost_offset = float(get_conf(self.entry, CONF_PRESENCE_BOOST_OFFSET, DEFAULT_PRESENCE_BOOST_OFFSET))
         elapsed = dt_util.utcnow() - self._presence_since
         if (
             elapsed >= timedelta(minutes=boost_minutes)
@@ -734,14 +876,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             and self.fan_mode != "medium"
         ):
             await self.hass.services.async_call(
-                "climate",
-                "set_fan_mode",
+                "climate", "set_fan_mode",
                 {"entity_id": self._climate_entity, "fan_mode": "medium"},
                 blocking=True,
             )
 
     # ------------------------------------------------------------------
-    # Gestione finestra: snapshot, avviso TTS, spegnimento ritardato, restore
+    # Gestione finestra
     # ------------------------------------------------------------------
 
     async def _async_handle_window(
@@ -749,11 +890,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     ) -> None:
         if new_state is None:
             return
-
         if self._window_cancel_timer is not None:
             self._window_cancel_timer()
             self._window_cancel_timer = None
-
         if new_state.state == "on":
             await self._async_window_opened()
         else:
@@ -762,22 +901,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_window_opened(self) -> None:
         if self.hvac_mode != HVACMode.COOL:
             return
-
         real_state = self.hass.states.get(self._climate_entity)
         if real_state is None:
             return
-
         self._snapshot = {
             "hvac_mode": real_state.state,
             "temperature": real_state.attributes.get("temperature"),
             "fan_mode": real_state.attributes.get("fan_mode"),
         }
-
-        delay_min = int(
-            get_conf(self.entry, CONF_WINDOW_DELAY_MIN, DEFAULT_WINDOW_DELAY_MIN)
-        )
+        delay_min = int(get_conf(self.entry, CONF_WINDOW_DELAY_MIN, DEFAULT_WINDOW_DELAY_MIN))
         await self._async_notify_window_open_tts(delay_min)
-
         self._window_cancel_timer = async_call_later(
             self.hass, timedelta(minutes=delay_min), self._async_window_timeout
         )
@@ -796,30 +929,26 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if self._snapshot is None:
             return
         snap, self._snapshot = self._snapshot, None
-
         if snap["hvac_mode"] == "off":
             return
-
         await self.hass.services.async_call(
             "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
         )
         if snap.get("temperature") is not None:
             await self.hass.services.async_call(
-                "climate",
-                "set_temperature",
+                "climate", "set_temperature",
                 {"entity_id": self._climate_entity, "temperature": snap["temperature"]},
                 blocking=True,
             )
         if snap.get("fan_mode") is not None:
             await self.hass.services.async_call(
-                "climate",
-                "set_fan_mode",
+                "climate", "set_fan_mode",
                 {"entity_id": self._climate_entity, "fan_mode": snap["fan_mode"]},
                 blocking=True,
             )
 
     # ------------------------------------------------------------------
-    # Gestione porta: avviso opzionale su canali selettivi, nessuna azione
+    # Gestione porta
     # ------------------------------------------------------------------
 
     async def _async_handle_door(
@@ -829,32 +958,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         if old_state is not None and old_state.state == "on":
             return
-        if not bool(
-            get_conf(self.entry, CONF_DOOR_ALERT_ENABLED, DEFAULT_DOOR_ALERT_ENABLED)
-        ):
+        if not bool(get_conf(self.entry, CONF_DOOR_ALERT_ENABLED, DEFAULT_DOOR_ALERT_ENABLED)):
             return
-
-        message_tpl = get_conf(
-            self.entry, CONF_DOOR_ALERT_MESSAGE, DEFAULT_DOOR_ALERT_MESSAGE
-        )
+        message_tpl = get_conf(self.entry, CONF_DOOR_ALERT_MESSAGE, DEFAULT_DOOR_ALERT_MESSAGE)
         message = await self._async_render(message_tpl, {"name": self._attr_name})
-
-        # Canali selettivi: TTS (Google Home) e/o notify (Telegram) possono
-        # essere attivati indipendentemente l'uno dall'altro.
-        door_tts = bool(
-            get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)
-        )
-        door_notify = bool(
-            get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)
-        )
-
+        door_tts = bool(get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS))
+        door_notify = bool(get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY))
         if door_tts:
             await self._async_speak(message)
         if door_notify:
             await self._async_send_notification(message)
 
     # ------------------------------------------------------------------
-    # Notifiche: TTS su dispositivi Google + notify/Telegram, personalizzabili
+    # Notifiche
     # ------------------------------------------------------------------
 
     async def _async_render(self, template_str: str, variables: dict[str, Any]) -> str:
@@ -863,39 +979,26 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return tpl.async_render(variables=variables, parse_result=False)
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
-                "%s: errore nel rendering del messaggio ('%s'): %s",
-                self._attr_name,
-                template_str,
-                err,
+                "%s: errore rendering messaggio ('%s'): %s",
+                self._attr_name, template_str, err,
             )
             return template_str
 
     async def _async_speak(self, message: str) -> None:
-        """Pronuncia un messaggio sui dispositivi Google configurati."""
         players = get_conf(self.entry, CONF_TTS_PLAYERS, [])
         if not players:
             return
-
         engine = get_conf(self.entry, CONF_TTS_ENGINE)
         if not engine:
             tts_states = self.hass.states.async_all("tts")
             if not tts_states:
-                _LOGGER.warning(
-                    "%s: nessun motore TTS disponibile per l'avviso vocale",
-                    self._attr_name,
-                )
+                _LOGGER.warning("%s: nessun motore TTS disponibile", self._attr_name)
                 return
             engine = tts_states[0].entity_id
-
         await self.hass.services.async_call(
-            "tts",
-            "speak",
-            {
-                "entity_id": engine,
-                "media_player_entity_id": players,
-                "message": message,
-                "cache": True,
-            },
+            "tts", "speak",
+            {"entity_id": engine, "media_player_entity_id": players,
+             "message": message, "cache": True},
             blocking=True,
         )
 
@@ -903,33 +1006,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         message_tpl = get_conf(self.entry, CONF_TTS_MESSAGE_OPEN, DEFAULT_TTS_MESSAGE_OPEN)
         message = await self._async_render(
             message_tpl,
-            {
-                "delay": delay_min,
-                "name": self._attr_name,
-                "target": self._target_temperature,
-            },
+            {"delay": delay_min, "name": self._attr_name, "target": self._target_temperature},
         )
         await self._async_speak(message)
 
     async def _async_send_notification(self, message: str) -> None:
-        """Invia un messaggio sugli stessi canali notify/Telegram configurati."""
         targets = get_conf(self.entry, CONF_NOTIFY_TARGETS, [])
         chat_ids = get_conf(self.entry, CONF_NOTIFY_CHAT_IDS)
         if not targets and not chat_ids:
             return
-
         if targets:
             await self.hass.services.async_call(
-                "notify",
-                "send_message",
+                "notify", "send_message",
                 {"entity_id": targets, "message": message},
                 blocking=True,
             )
         elif chat_ids:
             ids = [c.strip() for c in str(chat_ids).split(",") if c.strip()]
             await self.hass.services.async_call(
-                "telegram_bot",
-                "send_message",
+                "telegram_bot", "send_message",
                 {"target": ids, "message": message},
                 blocking=True,
             )
@@ -949,22 +1044,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         room_temp: float,
         target: float,
     ) -> None:
-        """Avvisa su Telegram/notify ogni volta che il setpoint inviato al
-        climatizzatore reale cambia (per qualunque motivo: fasce termiche,
-        raffreddamento rapido, calibrazione, modalità notturna). Mai via TTS."""
         if not bool(
-            get_conf(
-                self.entry,
-                CONF_NOTIFY_TEMP_CHANGE_ENABLED,
-                DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
-            )
+            get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_ENABLED, DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED)
         ):
             return
-
         message_tpl = get_conf(
-            self.entry,
-            CONF_NOTIFY_TEMP_CHANGE_MESSAGE,
-            DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
+            self.entry, CONF_NOTIFY_TEMP_CHANGE_MESSAGE, DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE
         )
         message = await self._async_render(
             message_tpl,
