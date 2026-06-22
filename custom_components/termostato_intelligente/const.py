@@ -52,6 +52,11 @@ CONF_MIN_BELOW_INTERNAL = "min_below_internal"
 CONF_NIGHT_START_TIME = "night_start_time"
 CONF_NIGHT_END_TIME = "night_end_time"
 CONF_NIGHT_OFFSET = "night_offset"
+# Offset oltre il target notturno che abilita l'accensione automatica del
+# condizionatore (simile a CONF_TURN_ON_OFFSET ma attivo solo di notte e
+# indipendente dalla logica FV).
+CONF_NIGHT_TURN_ON_OFFSET = "night_turn_on_offset"
+CONF_NIGHT_AC_ENABLED = "night_ac_enabled"
 
 # --- Notifiche TTS (Google / media_player) ---
 CONF_TTS_PLAYERS = "tts_media_players"
@@ -64,8 +69,13 @@ CONF_NOTIFY_CHAT_IDS = "notify_chat_ids"
 CONF_NOTIFY_MESSAGE = "notify_message"
 CONF_NOTIFY_TEMP_CHANGE_ENABLED = "notify_temp_change_enabled"
 CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
+
+# --- Avviso porta (selettivo per canale) ---
 CONF_DOOR_ALERT_ENABLED = "door_alert_enabled"
 CONF_DOOR_ALERT_MESSAGE = "door_alert_message"
+# Controlla separatamente i canali di notifica per l'avviso porta:
+CONF_DOOR_ALERT_TTS = "door_alert_tts"       # voce su Google Home / media_player
+CONF_DOOR_ALERT_NOTIFY = "door_alert_notify"  # Telegram / notify
 
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"
@@ -98,8 +108,12 @@ DEFAULT_MIN_BELOW_INTERNAL = 1.0
 DEFAULT_NIGHT_START_TIME = "23:00:00"
 DEFAULT_NIGHT_END_TIME = "07:00:00"
 DEFAULT_NIGHT_OFFSET = 0.0
+DEFAULT_NIGHT_TURN_ON_OFFSET = 1.5
+DEFAULT_NIGHT_AC_ENABLED = False
 DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED = True
 DEFAULT_DOOR_ALERT_ENABLED = False
+DEFAULT_DOOR_ALERT_TTS = True      # se avviso porta abilitato, default voce ON
+DEFAULT_DOOR_ALERT_NOTIFY = True   # se avviso porta abilitato, default notify ON
 
 DEFAULT_TTS_MESSAGE_OPEN = (
     "Finestra aperta, chiudila o spengo il climatizzatore tra {{ delay }} minuti"
