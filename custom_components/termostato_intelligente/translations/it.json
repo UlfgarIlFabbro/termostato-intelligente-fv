@@ -38,8 +38,8 @@
           "fv_stagger_minutes": "Distacco minimo tra le accensioni FV"
         },
         "data_description": {
-          "fv_start_time": "Fuori da questa fascia oraria il termostato non accende né regola nulla.",
-          "fv_end_time": "Fuori da questa fascia oraria il termostato non accende né regola nulla."
+          "fv_start_time": "Fuori da questa fascia oraria il termostato non accende automaticamente da surplus FV.",
+          "fv_end_time": "Fuori da questa fascia oraria il termostato non accende automaticamente da surplus FV."
         }
       },
       "profilo": {
@@ -70,6 +70,8 @@
           "night_start_time": "Inizio modalità notturna",
           "night_end_time": "Fine modalità notturna",
           "night_offset": "Scostamento target notturno (+°C)",
+          "night_ac_enabled": "Abilita accensione automatica notturna",
+          "night_turn_on_offset": "Soglia di accensione notturna sopra il target notte",
           "presence_boost_enabled": "Attiva il boost da presenza",
           "presence_boost_minutes": "Minuti di presenza continua prima del boost",
           "presence_boost_offset": "Scostamento minimo per il boost presenza",
@@ -79,7 +81,9 @@
         "data_description": {
           "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
           "min_below_internal": "Quando si è in una fascia di caldo attiva, il setpoint inviato al climatizzatore resterà sempre almeno questo margine sotto la temperatura che il climatizzatore stesso sta rilevando, per garantire che continui davvero a raffreddare.",
-          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target più scostamento. Imposta 0 per disattivare."
+          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target più scostamento. Imposta 0 per disattivare.",
+          "night_ac_enabled": "Se abilitato, il climatizzatore si accende automaticamente durante la fascia notturna se la temperatura della stanza supera il target notturno più la soglia sotto. Indipendente dalla logica FV.",
+          "night_turn_on_offset": "Di notte il climatizzatore si accende solo se la temperatura supera target_notte + questo valore. Esempio: target notte 27°C, soglia 1,5°C → accende sopra 28,5°C."
         }
       },
       "notifiche": {
@@ -95,6 +99,8 @@
           "notify_temp_change_enabled": "Notifica ad ogni cambio temperatura climatizzatore",
           "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore",
           "door_alert_enabled": "Abilita avviso porta aperta",
+          "door_alert_tts": "Avviso porta tramite Google Home (voce)",
+          "door_alert_notify": "Avviso porta tramite Telegram / notify",
           "door_alert_message": "Messaggio avviso porta aperta"
         },
         "data_description": {
@@ -102,6 +108,9 @@
           "notify_message": "Variabili disponibili: name (nome del termostato), target (temperatura target).",
           "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
           "notify_temp_change_message": "Variabili disponibili: name (nome del termostato), old_temp (temperatura precedente), new_temp (nuova temperatura), fan_mode (modalità ventola), room_temp (temperatura stanza), target (temperatura target).",
+          "door_alert_enabled": "Interruttore principale dell'avviso porta. Se disabilitato, i due toggle dei canali sottostanti vengono ignorati.",
+          "door_alert_tts": "Se abilitato, riproduce il messaggio di avviso porta sui dispositivi Google/media_player configurati.",
+          "door_alert_notify": "Se abilitato, invia il messaggio di avviso porta tramite le entità Telegram/notify configurate.",
           "door_alert_message": "Variabile disponibile: name (nome del termostato). Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
         }
       }
@@ -164,6 +173,8 @@
           "night_start_time": "Inizio modalità notturna",
           "night_end_time": "Fine modalità notturna",
           "night_offset": "Scostamento target notturno (+°C)",
+          "night_ac_enabled": "Abilita accensione automatica notturna",
+          "night_turn_on_offset": "Soglia di accensione notturna sopra il target notte",
           "presence_boost_enabled": "Attiva il boost da presenza",
           "presence_boost_minutes": "Minuti di presenza continua prima del boost",
           "presence_boost_offset": "Scostamento minimo per il boost presenza",
@@ -173,7 +184,9 @@
         "data_description": {
           "calibration_max_offset": "Limita di quanto il setpoint inviato al climatizzatore può essere abbassato per compensare il fatto che la sonda interna del climatizzatore legge più fresco della sonda ambiente.",
           "min_below_internal": "Quando si è in una fascia di caldo attiva, il setpoint inviato al climatizzatore resterà sempre almeno questo margine sotto la temperatura che il climatizzatore stesso sta rilevando, per garantire che continui davvero a raffreddare.",
-          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target più scostamento. Imposta 0 per disattivare."
+          "night_offset": "Gradi aggiunti al target durante la fascia notturna. Il target mostrato sul termostato resta invariato: solo la regolazione interna usa target più scostamento. Imposta 0 per disattivare.",
+          "night_ac_enabled": "Se abilitato, il climatizzatore si accende automaticamente durante la fascia notturna se la temperatura della stanza supera il target notturno più la soglia sotto. Indipendente dalla logica FV.",
+          "night_turn_on_offset": "Di notte il climatizzatore si accende solo se la temperatura supera target_notte + questo valore. Esempio: target notte 27°C, soglia 1,5°C → accende sopra 28,5°C."
         }
       },
       "notifiche": {
@@ -188,6 +201,8 @@
           "notify_temp_change_enabled": "Notifica ad ogni cambio temperatura climatizzatore",
           "notify_temp_change_message": "Messaggio cambio temperatura climatizzatore",
           "door_alert_enabled": "Abilita avviso porta aperta",
+          "door_alert_tts": "Avviso porta tramite Google Home (voce)",
+          "door_alert_notify": "Avviso porta tramite Telegram / notify",
           "door_alert_message": "Messaggio avviso porta aperta"
         },
         "data_description": {
@@ -195,6 +210,9 @@
           "notify_message": "Variabili disponibili: name (nome del termostato), target (temperatura target).",
           "notify_chat_ids": "Uno o più chat ID separati da virgola, usati solo se non selezioni nessuna entità notify.",
           "notify_temp_change_message": "Variabili disponibili: name (nome del termostato), old_temp (temperatura precedente), new_temp (nuova temperatura), fan_mode (modalità ventola), room_temp (temperatura stanza), target (temperatura target).",
+          "door_alert_enabled": "Interruttore principale dell'avviso porta. Se disabilitato, i due toggle dei canali sottostanti vengono ignorati.",
+          "door_alert_tts": "Se abilitato, riproduce il messaggio di avviso porta sui dispositivi Google/media_player configurati.",
+          "door_alert_notify": "Se abilitato, invia il messaggio di avviso porta tramite le entità Telegram/notify configurate.",
           "door_alert_message": "Variabile disponibile: name (nome del termostato). Invia solo un avviso: non spegne mai il climatizzatore né ne cambia temperatura/ventola."
         }
       }
