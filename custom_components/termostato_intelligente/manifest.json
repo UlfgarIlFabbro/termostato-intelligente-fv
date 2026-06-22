@@ -1,7 +1,7 @@
 {
   "domain": "termostato_intelligente",
   "name": "Termostato Intelligente FV",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "documentation": "https://github.com/UlfgarIlFabbro/termostato-intelligente-fv",
   "issue_tracker": "https://github.com/UlfgarIlFabbro/termostato-intelligente-fv/issues",
   "codeowners": ["@UlfgarIlFabbro"],
