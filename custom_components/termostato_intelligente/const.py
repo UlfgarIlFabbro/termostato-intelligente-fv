@@ -22,8 +22,6 @@ CONF_FV_PRIORITY = "fv_priority"
 CONF_FV_STAGGER_MIN = "fv_stagger_minutes"
 
 # --- Spegnimento diurno da FV ---
-# La finestra di spegnimento è fv_start_time → fv_end_time + fv_shutoff_extra_hours.
-# La cascata usa la priorità invertita rispetto all'accensione.
 CONF_FV_SHUTOFF_ENABLED = "fv_shutoff_enabled"
 CONF_FV_SHUTOFF_DELAY_MIN = "fv_shutoff_delay_min"
 CONF_FV_SHUTOFF_EXTRA_HOURS = "fv_shutoff_extra_hours"
@@ -79,6 +77,19 @@ CONF_NOTIFY_MESSAGE = "notify_message"
 CONF_NOTIFY_TEMP_CHANGE_ENABLED = "notify_temp_change_enabled"
 CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
 
+# --- Avvisi accensione/spegnimento automatico ---
+# Abilitazione per canale
+CONF_NOTIFY_POWER_TTS = "notify_power_tts"      # voce Google Home
+CONF_NOTIFY_POWER_NOTIFY = "notify_power_notify"  # Telegram / notify
+
+# --- Fascia di silenzio (nessun avviso in queste ore) ---
+# I due canali (TTS e notify) possono essere silenziati indipendentemente.
+CONF_QUIET_ENABLED = "quiet_enabled"
+CONF_QUIET_START_TIME = "quiet_start_time"
+CONF_QUIET_END_TIME = "quiet_end_time"
+CONF_QUIET_TTS = "quiet_tts"       # silenzia la voce nella fascia
+CONF_QUIET_NOTIFY = "quiet_notify"  # silenzia Telegram nella fascia
+
 # --- Avviso porta (selettivo per canale) ---
 CONF_DOOR_ALERT_ENABLED = "door_alert_enabled"
 CONF_DOOR_ALERT_MESSAGE = "door_alert_message"
@@ -89,6 +100,13 @@ CONF_DOOR_ALERT_NOTIFY = "door_alert_notify"
 SWITCH_KEY_MASTER = "switch_master"
 SWITCH_KEY_FV = "switch_fv"
 SWITCH_KEY_QUICK = "switch_quick"
+
+# --- Motivi di accensione/spegnimento (usati nei messaggi) ---
+REASON_FV = "fv"
+REASON_NIGHT = "night"
+REASON_NIGHT_SHUTOFF = "night_shutoff"
+REASON_FV_SHUTOFF = "fv_shutoff"
+REASON_WINDOW = "window"
 
 # --- Default ---
 DEFAULT_NAME = "Termostato Intelligente"
@@ -128,6 +146,13 @@ DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED = True
 DEFAULT_DOOR_ALERT_ENABLED = False
 DEFAULT_DOOR_ALERT_TTS = True
 DEFAULT_DOOR_ALERT_NOTIFY = True
+DEFAULT_NOTIFY_POWER_TTS = False
+DEFAULT_NOTIFY_POWER_NOTIFY = True
+DEFAULT_QUIET_ENABLED = False
+DEFAULT_QUIET_START_TIME = "23:00:00"
+DEFAULT_QUIET_END_TIME = "07:00:00"
+DEFAULT_QUIET_TTS = True
+DEFAULT_QUIET_NOTIFY = False
 
 DEFAULT_TTS_MESSAGE_OPEN = (
     "Finestra aperta, chiudila o spengo il climatizzatore tra {{ delay }} minuti"
@@ -138,6 +163,25 @@ DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE = (
     "(ventola {{ fan_mode }}) - stanza {{ room_temp }}°C, target {{ target }}°C"
 )
 DEFAULT_DOOR_ALERT_MESSAGE = "{{ name }}: porta aperta"
+
+# Messaggi accensione automatica (per motivo)
+DEFAULT_POWER_ON_FV_MESSAGE = (
+    "{{ name }}: ho acceso il climatizzatore perché stai producendo "
+    "{{ fv }}W di fotovoltaico e la temperatura della stanza è {{ temp }}°C "
+    "(target {{ target }}°C)"
+)
+DEFAULT_POWER_ON_NIGHT_MESSAGE = (
+    "{{ name }}: ho acceso il climatizzatore in modalità notturna perché "
+    "la stanza è a {{ temp }}°C (target notte {{ target }}°C)"
+)
+DEFAULT_POWER_OFF_FV_MESSAGE = (
+    "{{ name }}: ho spento il climatizzatore perché la produzione fotovoltaica "
+    "è scesa sotto il consumo attuale ({{ fv }}W vs {{ consumo }}W)"
+)
+DEFAULT_POWER_OFF_NIGHT_MESSAGE = (
+    "{{ name }}: ho spento il climatizzatore perché la stanza "
+    "ha raggiunto la temperatura target notturna ({{ temp }}°C ≤ {{ target }}°C)"
+)
 
 # Limite volontario: il climatizzatore va pilotato solo su questi fan_mode
 FAN_MODES_ALLOWED = ["low", "medium", "high"]
