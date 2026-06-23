@@ -247,16 +247,6 @@ def _schema_notifiche(defaults: dict) -> vol.Schema:
     })
 
 
-def _schema_silenzio(defaults: dict) -> vol.Schema:
-    return vol.Schema({
-        _f(vol.Optional, CONF_QUIET_ENABLED, defaults, DEFAULT_QUIET_ENABLED): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_QUIET_START_TIME, defaults, DEFAULT_QUIET_START_TIME): selector.TimeSelector(),
-        _f(vol.Optional, CONF_QUIET_END_TIME, defaults, DEFAULT_QUIET_END_TIME): selector.TimeSelector(),
-        _f(vol.Optional, CONF_QUIET_TTS, defaults, DEFAULT_QUIET_TTS): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_QUIET_NOTIFY, defaults, DEFAULT_QUIET_NOTIFY): selector.BooleanSelector(),
-    })
-
-
 class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
