@@ -1,7 +1,5 @@
 {
   "name": "Termostato Intelligente FV",
   "content_in_root": false,
-  "filename": "termostato_intelligente",
-  "homeassistant": "2023.1.0",
-  "country": ["IT"]
+  "homeassistant": "2023.1.0"
 }
