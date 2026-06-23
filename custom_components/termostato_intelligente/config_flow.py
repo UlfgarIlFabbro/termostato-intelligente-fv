@@ -44,7 +44,6 @@ from .const import (
     CONF_NIGHT_START_TIME,
     CONF_NIGHT_TURN_ON_OFFSET,
     CONF_NOTIFY_CHAT_IDS,
-    CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_POWER_NOTIFY,
     CONF_NOTIFY_POWER_TTS,
     CONF_NOTIFY_TARGETS,
@@ -99,7 +98,6 @@ from .const import (
     DEFAULT_NIGHT_SHUTOFF_MIN,
     DEFAULT_NIGHT_START_TIME,
     DEFAULT_NIGHT_TURN_ON_OFFSET,
-    DEFAULT_NOTIFY_MESSAGE,
     DEFAULT_NOTIFY_POWER_NOTIFY,
     DEFAULT_NOTIFY_POWER_TTS,
     DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
@@ -201,7 +199,7 @@ def _schema_soglie_termiche(defaults: dict) -> vol.Schema:
     })
 
 
-def _schema_soglie_avanzate(defaults: dict) -> vol.Schema:
+def _schema_modalita_notturna(defaults: dict) -> vol.Schema:
     return vol.Schema({
         _f(vol.Optional, CONF_CALIBRATION_MAX_OFFSET, defaults, DEFAULT_CALIBRATION_MAX_OFFSET): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=8, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_MIN_BELOW_INTERNAL, defaults, DEFAULT_MIN_BELOW_INTERNAL): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=5, step=0.5, unit_of_measurement="°C", mode="box")),
@@ -223,22 +221,29 @@ def _schema_soglie_avanzate(defaults: dict) -> vol.Schema:
 
 def _schema_notifiche(defaults: dict) -> vol.Schema:
     return vol.Schema({
+        # --- Google Home / TTS ---
         _f(vol.Optional, CONF_TTS_PLAYERS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="media_player", multiple=True)),
         _f(vol.Optional, CONF_TTS_ENGINE, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="tts")),
         _f(vol.Optional, CONF_TTS_MESSAGE_OPEN, defaults, DEFAULT_TTS_MESSAGE_OPEN): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+        # --- Telegram / notify ---
         _f(vol.Optional, CONF_NOTIFY_TARGETS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="notify", multiple=True)),
         _f(vol.Optional, CONF_NOTIFY_CHAT_IDS, defaults): selector.TextSelector(),
-        _f(vol.Optional, CONF_NOTIFY_MESSAGE, defaults, DEFAULT_NOTIFY_MESSAGE): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
         _f(vol.Optional, CONF_NOTIFY_TEMP_CHANGE_ENABLED, defaults, DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_NOTIFY_TEMP_CHANGE_MESSAGE, defaults, DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
-        # --- Avvisi accensione/spegnimento ---
+        # --- Avvisi accensione/spegnimento automatico ---
         _f(vol.Optional, CONF_NOTIFY_POWER_TTS, defaults, DEFAULT_NOTIFY_POWER_TTS): selector.BooleanSelector(),
         _f(vol.Optional, CONF_NOTIFY_POWER_NOTIFY, defaults, DEFAULT_NOTIFY_POWER_NOTIFY): selector.BooleanSelector(),
-        # --- Avviso porta ---
+        # --- Avviso porta (apertura e chiusura) ---
         _f(vol.Optional, CONF_DOOR_ALERT_ENABLED, defaults, DEFAULT_DOOR_ALERT_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_DOOR_ALERT_TTS, defaults, DEFAULT_DOOR_ALERT_TTS): selector.BooleanSelector(),
         _f(vol.Optional, CONF_DOOR_ALERT_NOTIFY, defaults, DEFAULT_DOOR_ALERT_NOTIFY): selector.BooleanSelector(),
         _f(vol.Optional, CONF_DOOR_ALERT_MESSAGE, defaults, DEFAULT_DOOR_ALERT_MESSAGE): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+        # --- Fascia di silenzio (integrata in notifiche) ---
+        _f(vol.Optional, CONF_QUIET_ENABLED, defaults, DEFAULT_QUIET_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_QUIET_START_TIME, defaults, DEFAULT_QUIET_START_TIME): selector.TimeSelector(),
+        _f(vol.Optional, CONF_QUIET_END_TIME, defaults, DEFAULT_QUIET_END_TIME): selector.TimeSelector(),
+        _f(vol.Optional, CONF_QUIET_TTS, defaults, DEFAULT_QUIET_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_QUIET_NOTIFY, defaults, DEFAULT_QUIET_NOTIFY): selector.BooleanSelector(),
     })
 
 
@@ -286,26 +291,20 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_soglie_termiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_soglie_avanzate()
+            return await self.async_step_modalita_notturna()
         return self.async_show_form(step_id="soglie_termiche", data_schema=_schema_soglie_termiche(self._data))
 
-    async def async_step_soglie_avanzate(self, user_input=None):
+    async def async_step_modalita_notturna(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
             return await self.async_step_notifiche()
-        return self.async_show_form(step_id="soglie_avanzate", data_schema=_schema_soglie_avanzate(self._data))
+        return self.async_show_form(step_id="modalita_notturna", data_schema=_schema_modalita_notturna(self._data))
 
     async def async_step_notifiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_silenzio()
-        return self.async_show_form(step_id="notifiche", data_schema=_schema_notifiche(self._data))
-
-    async def async_step_silenzio(self, user_input=None):
-        if user_input is not None:
-            self._data.update(user_input)
             return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
-        return self.async_show_form(step_id="silenzio", data_schema=_schema_silenzio(self._data))
+        return self.async_show_form(step_id="notifiche", data_schema=_schema_notifiche(self._data))
 
     @staticmethod
     @callback
@@ -349,23 +348,17 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     async def async_step_soglie_termiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_soglie_avanzate()
+            return await self.async_step_modalita_notturna()
         return self.async_show_form(step_id="soglie_termiche", data_schema=_schema_soglie_termiche(self._data))
 
-    async def async_step_soglie_avanzate(self, user_input=None):
+    async def async_step_modalita_notturna(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
             return await self.async_step_notifiche()
-        return self.async_show_form(step_id="soglie_avanzate", data_schema=_schema_soglie_avanzate(self._data))
+        return self.async_show_form(step_id="modalita_notturna", data_schema=_schema_modalita_notturna(self._data))
 
     async def async_step_notifiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_silenzio()
-        return self.async_show_form(step_id="notifiche", data_schema=_schema_notifiche(self._data))
-
-    async def async_step_silenzio(self, user_input=None):
-        if user_input is not None:
-            self._data.update(user_input)
             return self.async_create_entry(data=self._data)
-        return self.async_show_form(step_id="silenzio", data_schema=_schema_silenzio(self._data))
+        return self.async_show_form(step_id="notifiche", data_schema=_schema_notifiche(self._data))
