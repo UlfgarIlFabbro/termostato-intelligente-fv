@@ -59,7 +59,6 @@ from .const import (
     CONF_NIGHT_START_TIME,
     CONF_NIGHT_TURN_ON_OFFSET,
     CONF_NOTIFY_CHAT_IDS,
-    CONF_NOTIFY_MESSAGE,
     CONF_NOTIFY_POWER_NOTIFY,
     CONF_NOTIFY_POWER_TTS,
     CONF_NOTIFY_TARGETS,
@@ -113,7 +112,10 @@ from .const import (
     DEFAULT_NIGHT_SHUTOFF_MIN,
     DEFAULT_NIGHT_START_TIME,
     DEFAULT_NIGHT_TURN_ON_OFFSET,
-    DEFAULT_NOTIFY_MESSAGE,
+    DEFAULT_DOOR_ALERT_CLOSED_MESSAGE,
+    DEFAULT_DOOR_ALERT_OPEN_MESSAGE,
+    DEFAULT_NOTIFY_MESSAGE_CLOSED,
+    DEFAULT_NOTIFY_MESSAGE_OPEN,
     DEFAULT_NOTIFY_POWER_NOTIFY,
     DEFAULT_NOTIFY_POWER_TTS,
     DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
@@ -134,6 +136,7 @@ from .const import (
     DEFAULT_SOC_MIN,
     DEFAULT_TARGET_TEMP,
     DEFAULT_TEMP_DELTA,
+    DEFAULT_TTS_MESSAGE_CLOSED,
     DEFAULT_TTS_MESSAGE_OPEN,
     DEFAULT_TURN_ON_OFFSET,
     DEFAULT_UPDATE_INTERVAL_MIN,
@@ -707,6 +710,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def _async_window_closed(self) -> None:
+        # Notifica chiusura finestra (sempre, indipendentemente dallo snapshot)
+        await self._async_notify_window_closed()
         if self._snapshot is None:
             return
         snap, self._snapshot = self._snapshot, None
@@ -723,18 +728,26 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     # ------------------------------------------------------------------
 
     async def _async_handle_door(self, new_state: State | None, old_state: State | None) -> None:
-        if new_state is None or new_state.state != "on":
-            return
-        if old_state is not None and old_state.state == "on":
+        if new_state is None:
             return
         if not bool(get_conf(self.entry, CONF_DOOR_ALERT_ENABLED, DEFAULT_DOOR_ALERT_ENABLED)):
             return
-        message_tpl = get_conf(self.entry, CONF_DOOR_ALERT_MESSAGE, DEFAULT_DOOR_ALERT_MESSAGE)
-        message = await self._async_render(message_tpl, {"name": self._attr_name})
-        if bool(get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)):
-            await self._async_speak(message, bypass_quiet=False)  # porta
-        if bool(get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)):
-            await self._async_send_notification(message, bypass_quiet=False)
+        is_open = new_state.state == "on"
+        was_open = old_state is not None and old_state.state == "on"
+        if is_open and not was_open:
+            # Porta appena aperta
+            message = await self._async_render(DEFAULT_DOOR_ALERT_OPEN_MESSAGE, {"name": self._attr_name})
+            if bool(get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)):
+                await self._async_speak(message, bypass_quiet=False)
+            if bool(get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)):
+                await self._async_send_notification(message, bypass_quiet=False)
+        elif not is_open and was_open:
+            # Porta appena chiusa
+            message = await self._async_render(DEFAULT_DOOR_ALERT_CLOSED_MESSAGE, {"name": self._attr_name})
+            if bool(get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)):
+                await self._async_speak(message, bypass_quiet=False)
+            if bool(get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)):
+                await self._async_send_notification(message, bypass_quiet=False)
 
     # ------------------------------------------------------------------
     # Avvisi accensione / spegnimento automatico
@@ -837,14 +850,38 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self.hass.services.async_call("telegram_bot", "send_message", {"target": ids, "message": message}, blocking=True)
 
     async def _async_notify_window_open_tts(self, delay_min: int) -> None:
-        message_tpl = get_conf(self.entry, CONF_TTS_MESSAGE_OPEN, DEFAULT_TTS_MESSAGE_OPEN)
-        message = await self._async_render(message_tpl, {"delay": delay_min, "name": self._attr_name, "target": self._target_temperature})
-        await self._async_speak(message, bypass_quiet=False)  # finestra
+        variables = {"delay": delay_min, "name": self._attr_name, "target": self._target_temperature}
+        # Avviso vocale apertura finestra
+        tts_tpl = get_conf(self.entry, CONF_TTS_MESSAGE_OPEN, DEFAULT_TTS_MESSAGE_OPEN)
+        tts_msg = await self._async_render(tts_tpl, variables)
+        await self._async_speak(tts_msg, bypass_quiet=False)
+        # Avviso Telegram apertura finestra
+        notify_msg = await self._async_render(DEFAULT_NOTIFY_MESSAGE_OPEN, variables)
+        await self._async_send_notification(notify_msg, bypass_quiet=False)
+
+    async def _async_notify_window_closed(self) -> None:
+        variables = {"name": self._attr_name}
+        # Avviso vocale chiusura finestra
+        tts_msg = await self._async_render(DEFAULT_TTS_MESSAGE_CLOSED, variables)
+        await self._async_speak(tts_msg, bypass_quiet=False)
+        # Avviso Telegram chiusura finestra
+        notify_msg = await self._async_render(DEFAULT_NOTIFY_MESSAGE_CLOSED, variables)
+        await self._async_send_notification(notify_msg, bypass_quiet=False)  # finestra
 
     async def _async_notify_window_closed_off(self) -> None:
-        message_tpl = get_conf(self.entry, CONF_NOTIFY_MESSAGE, DEFAULT_NOTIFY_MESSAGE)
-        message = await self._async_render(message_tpl, {"name": self._attr_name, "target": self._target_temperature})
-        await self._async_send_notification(message, bypass_quiet=False)
+        """Avviso inviato quando il clima viene spento per finestra rimasta aperta troppo a lungo."""
+        variables = {"name": self._attr_name, "target": self._target_temperature}
+        tts_msg = await self._async_render(
+            f"Attenzione: il climatizzatore della {{{{ name }}}} è stato spento "
+            f"perché la finestra è rimasta aperta troppo a lungo.",
+            variables,
+        )
+        await self._async_speak(tts_msg, bypass_quiet=False)
+        notify_msg = await self._async_render(
+            "⚠️ {{ name }}: finestra rimasta aperta, climatizzatore spento.",
+            variables,
+        )
+        await self._async_send_notification(notify_msg, bypass_quiet=False)
 
     async def _async_notify_temp_change(self, old_temp, new_temp, fan_mode, room_temp, target) -> None:
         if not bool(get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_ENABLED, DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED)):
