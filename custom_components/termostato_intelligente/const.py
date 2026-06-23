@@ -78,17 +78,15 @@ CONF_NOTIFY_TEMP_CHANGE_ENABLED = "notify_temp_change_enabled"
 CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
 
 # --- Avvisi accensione/spegnimento automatico ---
-# Abilitazione per canale
-CONF_NOTIFY_POWER_TTS = "notify_power_tts"      # voce Google Home
-CONF_NOTIFY_POWER_NOTIFY = "notify_power_notify"  # Telegram / notify
+CONF_NOTIFY_POWER_TTS = "notify_power_tts"
+CONF_NOTIFY_POWER_NOTIFY = "notify_power_notify"
 
-# --- Fascia di silenzio (nessun avviso in queste ore) ---
-# I due canali (TTS e notify) possono essere silenziati indipendentemente.
+# --- Fascia di silenzio ---
 CONF_QUIET_ENABLED = "quiet_enabled"
 CONF_QUIET_START_TIME = "quiet_start_time"
 CONF_QUIET_END_TIME = "quiet_end_time"
-CONF_QUIET_TTS = "quiet_tts"       # silenzia la voce nella fascia
-CONF_QUIET_NOTIFY = "quiet_notify"  # silenzia Telegram nella fascia
+CONF_QUIET_TTS = "quiet_tts"
+CONF_QUIET_NOTIFY = "quiet_notify"
 
 # --- Avviso porta (selettivo per canale) ---
 CONF_DOOR_ALERT_ENABLED = "door_alert_enabled"
@@ -101,7 +99,7 @@ SWITCH_KEY_MASTER = "switch_master"
 SWITCH_KEY_FV = "switch_fv"
 SWITCH_KEY_QUICK = "switch_quick"
 
-# --- Motivi di accensione/spegnimento (usati nei messaggi) ---
+# --- Motivi di accensione/spegnimento ---
 REASON_FV = "fv"
 REASON_NIGHT = "night"
 REASON_NIGHT_SHUTOFF = "night_shutoff"
@@ -115,10 +113,10 @@ DEFAULT_EXTREME_OFFSET = 2.0
 DEFAULT_HOT_OFFSET = 1.5
 DEFAULT_RANGE_OFFSET = 0.2
 DEFAULT_BELOW_OFFSET = 0.1
-DEFAULT_TURN_ON_OFFSET = 0.8
+DEFAULT_TURN_ON_OFFSET = 1.5
 DEFAULT_TEMP_DELTA = 1.0
 DEFAULT_EXTREME_DELTA = 2.0
-DEFAULT_PRESENCE_BOOST_ENABLED = True
+DEFAULT_PRESENCE_BOOST_ENABLED = False
 DEFAULT_FV_MARGIN_W = 1200
 DEFAULT_SOC_MIN = 70
 DEFAULT_FV_START_TIME = "10:00:00"
@@ -155,69 +153,93 @@ DEFAULT_QUIET_TTS = True
 DEFAULT_QUIET_NOTIFY = False
 
 DEFAULT_TTS_MESSAGE_OPEN = (
-    "Finestra aperta, chiudila o spengo il climatizzatore tra {{ delay }} minuti"
+    "Attenzione: la finestra della {{ name }} è aperta. "
+    "Il climatizzatore si spegnerà tra {{ delay }} minuti se non viene chiusa."
 )
-DEFAULT_NOTIFY_MESSAGE = "{{ name }}: finestra aperta, clima spento"
+DEFAULT_TTS_MESSAGE_CLOSED = (
+    "La finestra della {{ name }} è stata chiusa. "
+    "Il climatizzatore è stato riacceso."
+)
+DEFAULT_NOTIFY_MESSAGE_OPEN = (
+    "🪟 {{ name }}: finestra aperta. "
+    "Il clima si spegnerà tra {{ delay }} minuti se non viene chiusa."
+)
+DEFAULT_NOTIFY_MESSAGE_CLOSED = (
+    "✅ {{ name }}: finestra chiusa, climatizzatore riacceso."
+)
+DEFAULT_DOOR_ALERT_OPEN_MESSAGE = "🚪 {{ name }}: porta aperta."
+DEFAULT_DOOR_ALERT_CLOSED_MESSAGE = "✅ {{ name }}: porta chiusa."
 DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE = (
-    "{{ name }}: climatizzatore impostato a {{ new_temp }}°C "
-    "(ventola {{ fan_mode }}) - stanza {{ room_temp }}°C, target {{ target }}°C"
+    "🌡 {{ name }}: setpoint → {{ new_temp }}°C "
+    "(ventola {{ fan_mode }}) — stanza {{ room_temp }}°C, target {{ target }}°C"
 )
-DEFAULT_DOOR_ALERT_MESSAGE = "{{ name }}: porta aperta"
-
-# Messaggi accensione automatica (per motivo)
 DEFAULT_POWER_ON_FV_MESSAGE = (
-    "{{ name }}: ho acceso il climatizzatore perché stai producendo "
-    "{{ fv }}W di fotovoltaico e la temperatura della stanza è {{ temp }}°C "
-    "(target {{ target }}°C)"
+    "☀️ {{ name }}: ho acceso il climatizzatore perché stai producendo "
+    "{{ fv }}W di fotovoltaico e la stanza è a {{ temp }}°C "
+    "(target {{ target }}°C)."
 )
 DEFAULT_POWER_ON_NIGHT_MESSAGE = (
-    "{{ name }}: ho acceso il climatizzatore in modalità notturna perché "
-    "la stanza è a {{ temp }}°C (target notte {{ target }}°C)"
+    "🌙 {{ name }}: ho acceso il climatizzatore in modalità notturna perché "
+    "la stanza è a {{ temp }}°C (target notte {{ target }}°C)."
 )
 DEFAULT_POWER_OFF_FV_MESSAGE = (
-    "{{ name }}: ho spento il climatizzatore perché la produzione fotovoltaica "
-    "è scesa sotto il consumo attuale ({{ fv }}W vs {{ consumo }}W)"
+    "☀️ {{ name }}: ho spento il climatizzatore perché la produzione "
+    "fotovoltaica ({{ fv }}W) è scesa sotto il consumo attuale ({{ consumo }}W)."
 )
 DEFAULT_POWER_OFF_NIGHT_MESSAGE = (
-    "{{ name }}: ho spento il climatizzatore perché la stanza "
-    "ha raggiunto la temperatura target notturna ({{ temp }}°C ≤ {{ target }}°C)"
+    "🌙 {{ name }}: ho spento il climatizzatore perché la stanza "
+    "ha raggiunto la temperatura target notturna ({{ temp }}°C ≤ {{ target }}°C)."
 )
 
-# Limite volontario: il climatizzatore va pilotato solo su questi fan_mode
+# Limite ventola
 FAN_MODES_ALLOWED = ["low", "medium", "high"]
 
-PRESET_VALUES: dict[str, dict[str, float]] = {
+# -----------------------------------------------------------------------
+# Valori preimpostati per ogni profilo
+# -----------------------------------------------------------------------
+# Bilanciato: regolazione graduale, buono per uso quotidiano.
+#   Accende quando la stanza supera il target di 1.5°C. Ventola alta da +2.0°C.
+#
+# Aggressivo: raffredda velocemente, interviene prima.
+#   Accende quando la stanza supera il target di 1.2°C. Ventola alta da +1.6°C.
+#   Setpoint più basso inviato al clima → più freddo più velocemente.
+#
+# Delicato: silenzioso e discreto, ideale per dormire.
+#   Accende quando la stanza supera il target di 1.8°C. Ventola alta da +2.4°C.
+#   Variazioni minime di setpoint → meno sbalzi, più silenzioso.
+
+PRESET_VALUES: dict[str, dict] = {
     PRESET_BILANCIATO: {
         CONF_EXTREME_OFFSET: 2.0,
         CONF_HOT_OFFSET: 1.5,
         CONF_RANGE_OFFSET: 0.2,
         CONF_BELOW_OFFSET: 0.1,
+        CONF_TURN_ON_OFFSET: 1.5,
         CONF_TEMP_DELTA: 1.0,
         CONF_EXTREME_DELTA: 2.0,
         CONF_CALIBRATION_MAX_OFFSET: 3.0,
         CONF_MIN_BELOW_INTERNAL: 1.0,
-        CONF_TURN_ON_OFFSET: 0.8,
     },
     PRESET_AGGRESSIVO: {
-        CONF_EXTREME_OFFSET: 1.5,
-        CONF_HOT_OFFSET: 1.0,
-        CONF_RANGE_OFFSET: 0.1,
+        CONF_EXTREME_OFFSET: 1.6,
+        CONF_HOT_OFFSET: 1.2,
+        CONF_RANGE_OFFSET: 0.2,
         CONF_BELOW_OFFSET: 0.1,
-        CONF_TEMP_DELTA: 1.5,
-        CONF_EXTREME_DELTA: 3.0,
-        CONF_CALIBRATION_MAX_OFFSET: 4.0,
-        CONF_MIN_BELOW_INTERNAL: 1.5,
-        CONF_TURN_ON_OFFSET: 0.5,
+        CONF_TURN_ON_OFFSET: 1.2,
+        CONF_TEMP_DELTA: 1.2,
+        CONF_EXTREME_DELTA: 2.4,
+        CONF_CALIBRATION_MAX_OFFSET: 3.0,
+        CONF_MIN_BELOW_INTERNAL: 1.2,
     },
     PRESET_DELICATO: {
-        CONF_EXTREME_OFFSET: 3.0,
-        CONF_HOT_OFFSET: 2.0,
-        CONF_RANGE_OFFSET: 0.4,
-        CONF_BELOW_OFFSET: 0.2,
-        CONF_TEMP_DELTA: 0.5,
-        CONF_EXTREME_DELTA: 1.5,
-        CONF_CALIBRATION_MAX_OFFSET: 2.0,
-        CONF_MIN_BELOW_INTERNAL: 0.5,
-        CONF_TURN_ON_OFFSET: 1.2,
+        CONF_EXTREME_OFFSET: 2.4,
+        CONF_HOT_OFFSET: 1.8,
+        CONF_RANGE_OFFSET: 0.2,
+        CONF_BELOW_OFFSET: 0.1,
+        CONF_TURN_ON_OFFSET: 1.8,
+        CONF_TEMP_DELTA: 0.8,
+        CONF_EXTREME_DELTA: 1.6,
+        CONF_CALIBRATION_MAX_OFFSET: 3.5,
+        CONF_MIN_BELOW_INTERNAL: 0.8,
     },
 }
