@@ -73,7 +73,6 @@ CONF_TTS_MESSAGE_OPEN = "tts_message_open"
 # --- Notifiche Telegram / notify ---
 CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_NOTIFY_CHAT_IDS = "notify_chat_ids"
-CONF_NOTIFY_MESSAGE = "notify_message"
 CONF_NOTIFY_TEMP_CHANGE_ENABLED = "notify_temp_change_enabled"
 CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
 
@@ -144,6 +143,7 @@ DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED = True
 DEFAULT_DOOR_ALERT_ENABLED = False
 DEFAULT_DOOR_ALERT_TTS = True
 DEFAULT_DOOR_ALERT_NOTIFY = True
+DEFAULT_DOOR_ALERT_MESSAGE = "\U0001f6aa {{ name }}: porta aperta."
 DEFAULT_NOTIFY_POWER_TTS = False
 DEFAULT_NOTIFY_POWER_NOTIFY = True
 DEFAULT_QUIET_ENABLED = False
@@ -153,60 +153,46 @@ DEFAULT_QUIET_TTS = True
 DEFAULT_QUIET_NOTIFY = False
 
 DEFAULT_TTS_MESSAGE_OPEN = (
-    "Attenzione: la finestra della {{ name }} è aperta. "
-    "Il climatizzatore si spegnerà tra {{ delay }} minuti se non viene chiusa."
+    "Attenzione: la finestra della {{ name }} \u00e8 aperta. "
+    "Il climatizzatore si spegner\u00e0 tra {{ delay }} minuti se non viene chiusa."
 )
 DEFAULT_TTS_MESSAGE_CLOSED = (
-    "La finestra della {{ name }} è stata chiusa. "
-    "Il climatizzatore è stato riacceso."
+    "La finestra della {{ name }} \u00e8 stata chiusa. "
+    "Il climatizzatore \u00e8 stato riacceso."
 )
 DEFAULT_NOTIFY_MESSAGE_OPEN = (
-    "🪟 {{ name }}: finestra aperta. "
-    "Il clima si spegnerà tra {{ delay }} minuti se non viene chiusa."
+    "\U0001fa9f {{ name }}: finestra aperta. "
+    "Il clima si spegner\u00e0 tra {{ delay }} minuti se non viene chiusa."
 )
 DEFAULT_NOTIFY_MESSAGE_CLOSED = (
-    "✅ {{ name }}: finestra chiusa, climatizzatore riacceso."
+    "\u2705 {{ name }}: finestra chiusa, climatizzatore riacceso."
 )
-DEFAULT_DOOR_ALERT_OPEN_MESSAGE = "🚪 {{ name }}: porta aperta."
-DEFAULT_DOOR_ALERT_CLOSED_MESSAGE = "✅ {{ name }}: porta chiusa."
+DEFAULT_DOOR_ALERT_OPEN_MESSAGE = "\U0001f6aa {{ name }}: porta aperta."
+DEFAULT_DOOR_ALERT_CLOSED_MESSAGE = "\u2705 {{ name }}: porta chiusa."
 DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE = (
-    "🌡 {{ name }}: setpoint → {{ new_temp }}°C "
-    "(ventola {{ fan_mode }}) — stanza {{ room_temp }}°C, target {{ target }}°C"
+    "\U0001f321 {{ name }}: setpoint \u2192 {{ new_temp }}\u00b0C "
+    "(ventola {{ fan_mode }}) \u2014 stanza {{ room_temp }}\u00b0C, target {{ target }}\u00b0C"
 )
 DEFAULT_POWER_ON_FV_MESSAGE = (
-    "☀️ {{ name }}: ho acceso il climatizzatore perché stai producendo "
-    "{{ fv }}W di fotovoltaico e la stanza è a {{ temp }}°C "
-    "(target {{ target }}°C)."
+    "\u2600\ufe0f {{ name }}: ho acceso il climatizzatore perch\u00e9 stai producendo "
+    "{{ fv }}W di fotovoltaico e la stanza \u00e8 a {{ temp }}\u00b0C "
+    "(target {{ target }}\u00b0C)."
 )
 DEFAULT_POWER_ON_NIGHT_MESSAGE = (
-    "🌙 {{ name }}: ho acceso il climatizzatore in modalità notturna perché "
-    "la stanza è a {{ temp }}°C (target notte {{ target }}°C)."
+    "\U0001f319 {{ name }}: ho acceso il climatizzatore in modalit\u00e0 notturna perch\u00e9 "
+    "la stanza \u00e8 a {{ temp }}\u00b0C (target notte {{ target }}\u00b0C)."
 )
 DEFAULT_POWER_OFF_FV_MESSAGE = (
-    "☀️ {{ name }}: ho spento il climatizzatore perché la produzione "
-    "fotovoltaica ({{ fv }}W) è scesa sotto il consumo attuale ({{ consumo }}W)."
+    "\u2600\ufe0f {{ name }}: ho spento il climatizzatore perch\u00e9 la produzione "
+    "fotovoltaica ({{ fv }}W) \u00e8 scesa sotto il consumo attuale ({{ consumo }}W)."
 )
 DEFAULT_POWER_OFF_NIGHT_MESSAGE = (
-    "🌙 {{ name }}: ho spento il climatizzatore perché la stanza "
-    "ha raggiunto la temperatura target notturna ({{ temp }}°C ≤ {{ target }}°C)."
+    "\U0001f319 {{ name }}: ho spento il climatizzatore perch\u00e9 la stanza "
+    "ha raggiunto la temperatura target notturna ({{ temp }}\u00b0C \u2264 {{ target }}\u00b0C)."
 )
 
 # Limite ventola
 FAN_MODES_ALLOWED = ["low", "medium", "high"]
-
-# -----------------------------------------------------------------------
-# Valori preimpostati per ogni profilo
-# -----------------------------------------------------------------------
-# Bilanciato: regolazione graduale, buono per uso quotidiano.
-#   Accende quando la stanza supera il target di 1.5°C. Ventola alta da +2.0°C.
-#
-# Aggressivo: raffredda velocemente, interviene prima.
-#   Accende quando la stanza supera il target di 1.2°C. Ventola alta da +1.6°C.
-#   Setpoint più basso inviato al clima → più freddo più velocemente.
-#
-# Delicato: silenzioso e discreto, ideale per dormire.
-#   Accende quando la stanza supera il target di 1.8°C. Ventola alta da +2.4°C.
-#   Variazioni minime di setpoint → meno sbalzi, più silenzioso.
 
 PRESET_VALUES: dict[str, dict] = {
     PRESET_BILANCIATO: {
