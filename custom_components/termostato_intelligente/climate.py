@@ -68,6 +68,8 @@ from .const import (
     CONF_NOTIFY_POWER_TTS,
     CONF_NOTIFY_TARGETS,
     CONF_NOTIFY_TEMP_CHANGE_ENABLED,
+    CONF_NOTIFY_TEMP_CHANGE_LIMIT_ENABLED,
+    CONF_NOTIFY_TEMP_CHANGE_LIMIT_MIN,
     CONF_NOTIFY_TEMP_CHANGE_MESSAGE,
     CONF_PRESENCE_BOOST_ENABLED,
     CONF_PRESENCE_BOOST_MIN,
@@ -129,6 +131,8 @@ from .const import (
     DEFAULT_NOTIFY_POWER_NOTIFY,
     DEFAULT_NOTIFY_POWER_TTS,
     DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED,
+    DEFAULT_NOTIFY_TEMP_CHANGE_LIMIT_ENABLED,
+    DEFAULT_NOTIFY_TEMP_CHANGE_LIMIT_MIN,
     DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE,
     DEFAULT_POWER_OFF_FV_MESSAGE,
     DEFAULT_POWER_OFF_NIGHT_END_MESSAGE,
@@ -224,6 +228,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._was_night_mode: bool = False
         # Traccia se il clima è stato acceso automaticamente dalla modalità notturna
         self._night_auto_on: bool = False
+
+        # --- Limite notifiche cambio temperatura ---
+        self._last_temp_notify: datetime | None = None
 
         hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})["climate"] = self
 
@@ -986,6 +993,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_notify_temp_change(self, old_temp, new_temp, fan_mode, room_temp, target) -> None:
         if not bool(get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_ENABLED, DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED)):
             return
+        # Limite frequenza notifiche cambio temperatura
+        if bool(get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_LIMIT_ENABLED, DEFAULT_NOTIFY_TEMP_CHANGE_LIMIT_ENABLED)):
+            limit_min = int(get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_LIMIT_MIN, DEFAULT_NOTIFY_TEMP_CHANGE_LIMIT_MIN))
+            now = dt_util.utcnow()
+            if self._last_temp_notify is not None and (now - self._last_temp_notify) < timedelta(minutes=limit_min):
+                _LOGGER.debug(
+                    "%s: notifica cambio temp soppressa (limite %d min, ultima %s)",
+                    self._attr_name, limit_min, self._last_temp_notify.isoformat(),
+                )
+                return
+            self._last_temp_notify = now
         message_tpl = get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_MESSAGE, DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE)
         message = await self._async_render(message_tpl, {
             "name": self._attr_name,
