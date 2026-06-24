@@ -25,6 +25,7 @@ CONF_FV_STAGGER_MIN = "fv_stagger_minutes"
 CONF_FV_SHUTOFF_ENABLED = "fv_shutoff_enabled"
 CONF_FV_SHUTOFF_DELAY_MIN = "fv_shutoff_delay_min"
 CONF_FV_SHUTOFF_EXTRA_HOURS = "fv_shutoff_extra_hours"
+CONF_FV_SHUTOFF_THRESHOLD = "fv_shutoff_threshold"
 
 # --- Profilo di regolazione ---
 CONF_PROFILE = "profile"
@@ -65,6 +66,10 @@ CONF_NIGHT_SHUTOFF_ENABLED = "night_shutoff_enabled"
 CONF_NIGHT_SHUTOFF_DELTA = "night_shutoff_delta"
 CONF_NIGHT_SHUTOFF_MIN = "night_shutoff_min"
 
+# --- Spegnimento a fine modalità notturna ---
+CONF_NIGHT_END_SHUTOFF_ENABLED = "night_end_shutoff_enabled"       # spegne sempre
+CONF_NIGHT_END_SHUTOFF_AUTO_ONLY = "night_end_shutoff_auto_only"   # spegne solo se acceso automaticamente
+
 # --- Notifiche TTS (Google / media_player) ---
 CONF_TTS_PLAYERS = "tts_media_players"
 CONF_TTS_ENGINE = "tts_engine_entity"
@@ -79,6 +84,10 @@ CONF_NOTIFY_TEMP_CHANGE_MESSAGE = "notify_temp_change_message"
 # --- Avvisi accensione/spegnimento automatico ---
 CONF_NOTIFY_POWER_TTS = "notify_power_tts"
 CONF_NOTIFY_POWER_NOTIFY = "notify_power_notify"
+
+# --- Avviso spegnimento fine notte ---
+CONF_NOTIFY_NIGHT_END_TTS = "notify_night_end_tts"
+CONF_NOTIFY_NIGHT_END_NOTIFY = "notify_night_end_notify"
 
 # --- Fascia di silenzio ---
 CONF_QUIET_ENABLED = "quiet_enabled"
@@ -102,6 +111,7 @@ SWITCH_KEY_QUICK = "switch_quick"
 REASON_FV = "fv"
 REASON_NIGHT = "night"
 REASON_NIGHT_SHUTOFF = "night_shutoff"
+REASON_NIGHT_END = "night_end"
 REASON_FV_SHUTOFF = "fv_shutoff"
 REASON_WINDOW = "window"
 
@@ -125,6 +135,7 @@ DEFAULT_FV_STAGGER_MIN = 5
 DEFAULT_FV_SHUTOFF_ENABLED = False
 DEFAULT_FV_SHUTOFF_DELAY_MIN = 5
 DEFAULT_FV_SHUTOFF_EXTRA_HOURS = 1.0
+DEFAULT_FV_SHUTOFF_THRESHOLD = 0
 DEFAULT_PRESENCE_BOOST_MIN = 10
 DEFAULT_PRESENCE_BOOST_OFFSET = 1.0
 DEFAULT_WINDOW_DELAY_MIN = 5
@@ -139,6 +150,8 @@ DEFAULT_NIGHT_AC_ENABLED = False
 DEFAULT_NIGHT_SHUTOFF_ENABLED = False
 DEFAULT_NIGHT_SHUTOFF_DELTA = 0.3
 DEFAULT_NIGHT_SHUTOFF_MIN = 30
+DEFAULT_NIGHT_END_SHUTOFF_ENABLED = False
+DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY = False
 DEFAULT_NOTIFY_TEMP_CHANGE_ENABLED = True
 DEFAULT_DOOR_ALERT_ENABLED = False
 DEFAULT_DOOR_ALERT_TTS = True
@@ -146,6 +159,8 @@ DEFAULT_DOOR_ALERT_NOTIFY = True
 DEFAULT_DOOR_ALERT_MESSAGE = "\U0001f6aa {{ name }}: porta aperta."
 DEFAULT_NOTIFY_POWER_TTS = False
 DEFAULT_NOTIFY_POWER_NOTIFY = True
+DEFAULT_NOTIFY_NIGHT_END_TTS = False
+DEFAULT_NOTIFY_NIGHT_END_NOTIFY = True
 DEFAULT_QUIET_ENABLED = False
 DEFAULT_QUIET_START_TIME = "23:00:00"
 DEFAULT_QUIET_END_TIME = "07:00:00"
@@ -189,6 +204,9 @@ DEFAULT_POWER_OFF_FV_MESSAGE = (
 DEFAULT_POWER_OFF_NIGHT_MESSAGE = (
     "\U0001f319 {{ name }}: ho spento il climatizzatore perch\u00e9 la stanza "
     "ha raggiunto la temperatura target notturna ({{ temp }}\u00b0C \u2264 {{ target }}\u00b0C)."
+)
+DEFAULT_POWER_OFF_NIGHT_END_MESSAGE = (
+    "\U0001f305 {{ name }}: fine modalit\u00e0 notturna, climatizzatore spento."
 )
 
 # Limite ventola
