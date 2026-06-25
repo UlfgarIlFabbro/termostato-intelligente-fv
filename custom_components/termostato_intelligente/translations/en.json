@@ -7,28 +7,25 @@
         "delicato": "Gentle",
         "personalizzato": "Custom"
       }
+    },
+    "config_mode": {
+      "options": {
+        "semplificato": "🟢 Simple",
+        "semplificato_fv": "🔵 Simple with solar",
+        "completo": "⚙️ Full"
+      }
     }
   },
   "config": {
     "step": {
       "user": {
-        "title": "Smart Thermostat — Main entities",
-        "description": "Connect the air conditioner and room sensors. These are the essential settings without which the thermostat cannot work.",
+        "title": "Smart Thermostat — Choose mode",
+        "description": "Choose how you want to configure the thermostat. You can change the mode at any time from options.",
         "data": {
-          "name": "Thermostat name",
-          "climate_entity": "Air conditioner to control",
-          "temp_sensor": "Room temperature sensor",
-          "window_sensor": "Window sensor",
-          "presence_sensor": "Presence sensor (optional)",
-          "door_sensor": "Door sensor (optional)"
+          "config_mode": "Configuration mode"
         },
         "data_description": {
-          "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom', 'Living room', 'Game room'.",
-          "climate_entity": "The physical air conditioner this thermostat will control. Example: climate.ac_bedroom.",
-          "temp_sensor": "Sensor measuring the real room temperature, placed away from the AC. Example: sensor.temperature_bedroom.",
-          "window_sensor": "Binary sensor that turns 'on' when the window is open. Example: binary_sensor.window_bedroom.",
-          "presence_sensor": "Optional presence sensor for fan boost. Leave empty to disable.",
-          "door_sensor": "Optional door sensor. Sends open/close alerts, never acts on the AC. Leave empty to disable."
+          "config_mode": "🟢 SIMPLE — Just a few essential fields. Set the AC, the desired temperature for day and night, and which alerts to receive. The system handles everything automatically. Ideal for those who want simplicity without giving up intelligent temperature control.\n\n🔵 SIMPLE WITH SOLAR — Like Simple, but adds solar management: the AC turns on when you are producing enough solar energy and turns off when production drops.\n\n⚙️ FULL — Access to all advanced parameters: thermal profiles, sensor calibration, presence boost, separate quiet hours for Google and Telegram, notification limits, and much more. For those who want maximum control over the thermostat behaviour."
         }
       },
       "profilo": {
@@ -191,6 +188,142 @@
           "quiet_end_time": "Quiet period ends at this time. Example: 07:00.",
           "quiet_tts": "If enabled: Google Home does not speak during quiet hours for automatic turn-on/off alerts.",
           "quiet_notify": "If enabled: Telegram suspends automatic turn-on/off messages during quiet hours."
+        }
+      },
+      "entita_completo": {
+        "title": "Smart Thermostat — Main entities",
+        "description": "Connect the air conditioner and room sensors.",
+        "data": {
+          "name": "Thermostat name",
+          "climate_entity": "Air conditioner to control",
+          "temp_sensor": "Room temperature sensor",
+          "window_sensor": "Window sensor",
+          "presence_sensor": "Presence sensor (optional)",
+          "door_sensor": "Door sensor (optional)"
+        },
+        "data_description": {
+          "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom', 'Living room'.",
+          "climate_entity": "The physical AC this thermostat will control. Example: climate.ac_bedroom.",
+          "temp_sensor": "Sensor measuring the real room temperature, placed away from the AC.",
+          "window_sensor": "Binary sensor 'on' when window is open. Example: binary_sensor.window_bedroom.",
+          "presence_sensor": "Optional. Enables fan boost for continuous presence.",
+          "door_sensor": "Optional. Sends open/close alerts, never acts on AC."
+        }
+      },
+      "simple_entita": {
+        "title": "Thermostat — Devices",
+        "description": "Select the AC and sensors to connect. Only the AC is required.",
+        "data": {
+          "name": "Thermostat name",
+          "climate_entity": "Air conditioner to control",
+          "temp_sensor": "Room temperature sensor (optional)",
+          "window_sensor": "Window sensor (optional)",
+          "door_sensor": "Door sensor (optional)"
+        },
+        "data_description": {
+          "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom'.",
+          "climate_entity": "The physical AC to control. Example: climate.ac_bedroom.",
+          "temp_sensor": "External room temperature sensor (e.g. Zigbee probe). If left empty, the thermostat uses the AC's internal sensor. ⚠️ The AC internal sensor reads only integer values (e.g. 25°C, not 25.3°C) so turn-on and turn-off thresholds adapt automatically. Example: sensor.temperature_bedroom. Leave empty to use the AC internal sensor.",
+          "window_sensor": "Binary sensor 'on' when window is open. If set: alerts on opening and turns off AC after 5 minutes if still open, then turns it back on when closed. Leave empty to disable.",
+          "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable."
+        }
+      },
+      "simple_temperature": {
+        "title": "Thermostat — Temperatures and schedules",
+        "description": "Set the desired temperature for daytime and nighttime, with their respective schedules.",
+        "data": {
+          "simple_target_day": "Daytime target temperature (°C)",
+          "simple_day_start": "Daytime period start",
+          "simple_day_end": "Daytime period end",
+          "simple_target_night": "Nighttime target temperature (°C)",
+          "simple_night_start": "Nighttime period start",
+          "simple_night_end": "Nighttime period end",
+          "night_end_shutoff_enabled": "▶ Turn off AC at the end of night mode (always)",
+          "night_end_shutoff_auto_only": "▶ Turn off at end of night only if turned on automatically",
+          "simple_dry_enabled": "▶ Use dehumidifier before cooling",
+          "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)"
+        },
+        "data_description": {
+          "simple_target_day": "The temperature you want to maintain in the room during the day. The AC turns on when the room exceeds this temperature and turns off when it reaches it. Example: 25°C → AC starts above 26.5°C (external sensor) or 27°C (internal sensor).",
+          "simple_day_start": "Daytime mode is active from this time. Example: 07:00.",
+          "simple_day_end": "Daytime mode is active until this time. Example: 23:00.",
+          "simple_target_night": "Desired temperature at night. Usually a couple of degrees higher than daytime to avoid over-cooling while sleeping. Example: 26°C.",
+          "simple_night_start": "Nighttime mode is active from this time. Example: 23:00.",
+          "simple_night_end": "Nighttime mode is active until this time. Example: 07:00.",
+          "night_end_shutoff_enabled": "If enabled: when night mode ends (e.g. at 07:00), the AC is turned off ALWAYS, regardless of why it was on.",
+          "night_end_shutoff_auto_only": "If enabled: turns off at end of night ONLY IF the AC was turned on automatically. If you turned it on manually, nothing happens.",
+          "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
+          "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings."
+        }
+      },
+      "energia_simple": {
+        "title": "Thermostat — Solar",
+        "description": "Configure solar sensors. The AC will turn on automatically when you are producing enough solar energy and turn off when production drops.",
+        "data": {
+          "fv_sensor": "Solar production sensor (W)",
+          "consumption_sensor": "Grid consumption sensor (W)",
+          "battery_sensor": "Battery state of charge sensor (%)",
+          "fv_margin_w": "Minimum surplus to turn on (W)",
+          "soc_min": "Minimum battery charge to turn on (%)",
+          "fv_start_time": "Automatic turn-on window start",
+          "fv_end_time": "Automatic turn-on window end",
+          "fv_priority": "Turn-on priority (lower number = first)",
+          "fv_stagger_minutes": "Minimum gap between turn-ons/offs (min)",
+          "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
+          "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
+          "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
+          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off"
+        },
+        "data_description": {
+          "fv_sensor": "Sensor measuring Watts produced by panels in real time. Example: sensor.solar_panels_total.",
+          "consumption_sensor": "Instantaneous grid consumption sensor. Example: sensor.grid_consumption.",
+          "battery_sensor": "Battery charge percentage sensor. Example: sensor.battery_soc.",
+          "fv_margin_w": "Surplus required above consumption to turn on. Example: 1200W → turns on only if producing 1200W more than consuming.",
+          "soc_min": "Minimum battery charge to enable turn-on. Protects the battery. Example: 70 → turns on only with battery ≥ 70%.",
+          "fv_start_time": "AC does not turn on automatically before this time. Example: 10:00.",
+          "fv_end_time": "AC does not turn on automatically after this time. Example: 16:00.",
+          "fv_priority": "With multiple ACs, lower number turns on first and off last. Example: bedroom=10, living=20.",
+          "fv_stagger_minutes": "Pause between successive turn-ons to avoid consumption peaks. Example: 5 minutes.",
+          "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
+          "fv_shutoff_delay_min": "Consecutive samples below threshold before turning off. Sliding window. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
+          "fv_shutoff_threshold": "Surplus must stay below this for all N samples. Value 0 = turns off when FV < consumption. Example: 500W.",
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends 16:00, extra 1h → can turn off until 17:00."
+        }
+      },
+      "simple_notifiche": {
+        "title": "Thermostat — Notifications",
+        "description": "Choose where to receive alerts and which events you care about.",
+        "data": {
+          "tts_media_players": "Google Home / media player devices for voice",
+          "tts_engine_entity": "TTS engine (leave empty for automatic)",
+          "notify_targets": "Notify entities for Telegram",
+          "notify_chat_ids": "Telegram chat IDs (alternative to notify entities)",
+          "simple_notify_ac_on": "▶ Alert when AC turns on",
+          "simple_notify_ac_off": "▶ Alert when AC turns off",
+          "simple_notify_window_open": "▶ Alert when window opens",
+          "simple_notify_window_close": "▶ Alert when window closes",
+          "simple_notify_door_open": "▶ Alert when door opens",
+          "simple_notify_door_close": "▶ Alert when door closes",
+          "simple_notify_night_start": "▶ Alert at start of night mode",
+          "simple_notify_night_end": "▶ Alert at end of night mode",
+          "simple_quiet_night_tts": "▶ Silence Google voice during night hours",
+          "simple_quiet_night_notify": "▶ Silence Telegram during night hours"
+        },
+        "data_description": {
+          "tts_media_players": "Google Home or Nest speakers for voice messages. Leave empty to disable voice. Example: media_player.google_bedroom.",
+          "tts_engine_entity": "TTS engine to use. Leave empty for the first available in Home Assistant.",
+          "notify_targets": "HA notify entities for Telegram. Example: notify.telegram_user.",
+          "notify_chat_ids": "Alternative to notify entities: Telegram chat IDs separated by comma.",
+          "simple_notify_ac_on": "Receive an alert (voice and/or Telegram) when the AC turns on automatically.",
+          "simple_notify_ac_off": "Receive an alert when the AC turns off automatically after reaching the target temperature.",
+          "simple_notify_window_open": "Receive an alert when the window opens (AC will turn off after 5 minutes if it stays open).",
+          "simple_notify_window_close": "Receive an alert when the window is closed and the AC turns back on.",
+          "simple_notify_door_open": "Receive an alert when the room door opens. Informational only, never acts on AC.",
+          "simple_notify_door_close": "Receive an alert when the door closes. Informational only.",
+          "simple_notify_night_start": "Receive an alert when night mode starts with the nighttime target temperature.",
+          "simple_notify_night_end": "Receive an alert when night mode ends (and AC turns off if you enabled end-of-night shutoff).",
+          "simple_quiet_night_tts": "If enabled: Google Home does not speak during night hours so you are not woken up. Window alerts remain active as they require immediate attention.",
+          "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours. Usually Telegram does not disturb sleep, so this is off by default."
         }
       }
     },
@@ -378,6 +511,122 @@
           "quiet_end_time": "Quiet period ends.",
           "quiet_tts": "If enabled: Google Home silent during quiet hours for automatic alerts.",
           "quiet_notify": "If enabled: Telegram suspends automatic messages during quiet hours."
+        }
+      },
+      "simple_entita": {
+        "title": "Thermostat — Devices",
+        "description": "Select the AC and sensors to connect. Only the AC is required.",
+        "data": {
+          "name": "Thermostat name",
+          "climate_entity": "Air conditioner to control",
+          "temp_sensor": "Room temperature sensor (optional)",
+          "window_sensor": "Window sensor (optional)",
+          "door_sensor": "Door sensor (optional)"
+        },
+        "data_description": {
+          "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom'.",
+          "climate_entity": "The physical AC to control. Example: climate.ac_bedroom.",
+          "temp_sensor": "External room temperature sensor (e.g. Zigbee probe). If left empty, the thermostat uses the AC's internal sensor. ⚠️ The AC internal sensor reads only integer values (e.g. 25°C, not 25.3°C) so turn-on and turn-off thresholds adapt automatically. Example: sensor.temperature_bedroom. Leave empty to use the AC internal sensor.",
+          "window_sensor": "Binary sensor 'on' when window is open. If set: alerts on opening and turns off AC after 5 minutes if still open, then turns it back on when closed. Leave empty to disable.",
+          "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable."
+        }
+      },
+      "simple_temperature": {
+        "title": "Thermostat — Temperatures and schedules",
+        "description": "Set the desired temperature for daytime and nighttime, with their respective schedules.",
+        "data": {
+          "simple_target_day": "Daytime target temperature (°C)",
+          "simple_day_start": "Daytime period start",
+          "simple_day_end": "Daytime period end",
+          "simple_target_night": "Nighttime target temperature (°C)",
+          "simple_night_start": "Nighttime period start",
+          "simple_night_end": "Nighttime period end",
+          "night_end_shutoff_enabled": "▶ Turn off AC at the end of night mode (always)",
+          "night_end_shutoff_auto_only": "▶ Turn off at end of night only if turned on automatically",
+          "simple_dry_enabled": "▶ Use dehumidifier before cooling",
+          "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)"
+        },
+        "data_description": {
+          "simple_target_day": "The temperature you want to maintain in the room during the day. The AC turns on when the room exceeds this temperature and turns off when it reaches it. Example: 25°C → AC starts above 26.5°C (external sensor) or 27°C (internal sensor).",
+          "simple_day_start": "Daytime mode is active from this time. Example: 07:00.",
+          "simple_day_end": "Daytime mode is active until this time. Example: 23:00.",
+          "simple_target_night": "Desired temperature at night. Usually a couple of degrees higher than daytime to avoid over-cooling while sleeping. Example: 26°C.",
+          "simple_night_start": "Nighttime mode is active from this time. Example: 23:00.",
+          "simple_night_end": "Nighttime mode is active until this time. Example: 07:00.",
+          "night_end_shutoff_enabled": "If enabled: when night mode ends (e.g. at 07:00), the AC is turned off ALWAYS, regardless of why it was on.",
+          "night_end_shutoff_auto_only": "If enabled: turns off at end of night ONLY IF the AC was turned on automatically. If you turned it on manually, nothing happens.",
+          "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
+          "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings."
+        }
+      },
+      "energia_simple": {
+        "title": "Thermostat — Solar",
+        "description": "Configure solar sensors. The AC will turn on automatically when you are producing enough solar energy and turn off when production drops.",
+        "data": {
+          "fv_sensor": "Solar production sensor (W)",
+          "consumption_sensor": "Grid consumption sensor (W)",
+          "battery_sensor": "Battery state of charge sensor (%)",
+          "fv_margin_w": "Minimum surplus to turn on (W)",
+          "soc_min": "Minimum battery charge to turn on (%)",
+          "fv_start_time": "Automatic turn-on window start",
+          "fv_end_time": "Automatic turn-on window end",
+          "fv_priority": "Turn-on priority (lower number = first)",
+          "fv_stagger_minutes": "Minimum gap between turn-ons/offs (min)",
+          "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
+          "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
+          "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
+          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off"
+        },
+        "data_description": {
+          "fv_sensor": "Sensor measuring Watts produced by panels in real time. Example: sensor.solar_panels_total.",
+          "consumption_sensor": "Instantaneous grid consumption sensor. Example: sensor.grid_consumption.",
+          "battery_sensor": "Battery charge percentage sensor. Example: sensor.battery_soc.",
+          "fv_margin_w": "Surplus required above consumption to turn on. Example: 1200W → turns on only if producing 1200W more than consuming.",
+          "soc_min": "Minimum battery charge to enable turn-on. Protects the battery. Example: 70 → turns on only with battery ≥ 70%.",
+          "fv_start_time": "AC does not turn on automatically before this time. Example: 10:00.",
+          "fv_end_time": "AC does not turn on automatically after this time. Example: 16:00.",
+          "fv_priority": "With multiple ACs, lower number turns on first and off last. Example: bedroom=10, living=20.",
+          "fv_stagger_minutes": "Pause between successive turn-ons to avoid consumption peaks. Example: 5 minutes.",
+          "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
+          "fv_shutoff_delay_min": "Consecutive samples below threshold before turning off. Sliding window. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
+          "fv_shutoff_threshold": "Surplus must stay below this for all N samples. Value 0 = turns off when FV < consumption. Example: 500W.",
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends 16:00, extra 1h → can turn off until 17:00."
+        }
+      },
+      "simple_notifiche": {
+        "title": "Thermostat — Notifications",
+        "description": "Choose where to receive alerts and which events you care about.",
+        "data": {
+          "tts_media_players": "Google Home / media player devices for voice",
+          "tts_engine_entity": "TTS engine (leave empty for automatic)",
+          "notify_targets": "Notify entities for Telegram",
+          "notify_chat_ids": "Telegram chat IDs (alternative to notify entities)",
+          "simple_notify_ac_on": "▶ Alert when AC turns on",
+          "simple_notify_ac_off": "▶ Alert when AC turns off",
+          "simple_notify_window_open": "▶ Alert when window opens",
+          "simple_notify_window_close": "▶ Alert when window closes",
+          "simple_notify_door_open": "▶ Alert when door opens",
+          "simple_notify_door_close": "▶ Alert when door closes",
+          "simple_notify_night_start": "▶ Alert at start of night mode",
+          "simple_notify_night_end": "▶ Alert at end of night mode",
+          "simple_quiet_night_tts": "▶ Silence Google voice during night hours",
+          "simple_quiet_night_notify": "▶ Silence Telegram during night hours"
+        },
+        "data_description": {
+          "tts_media_players": "Google Home or Nest speakers for voice messages. Leave empty to disable voice. Example: media_player.google_bedroom.",
+          "tts_engine_entity": "TTS engine to use. Leave empty for the first available in Home Assistant.",
+          "notify_targets": "HA notify entities for Telegram. Example: notify.telegram_user.",
+          "notify_chat_ids": "Alternative to notify entities: Telegram chat IDs separated by comma.",
+          "simple_notify_ac_on": "Receive an alert (voice and/or Telegram) when the AC turns on automatically.",
+          "simple_notify_ac_off": "Receive an alert when the AC turns off automatically after reaching the target temperature.",
+          "simple_notify_window_open": "Receive an alert when the window opens (AC will turn off after 5 minutes if it stays open).",
+          "simple_notify_window_close": "Receive an alert when the window is closed and the AC turns back on.",
+          "simple_notify_door_open": "Receive an alert when the room door opens. Informational only, never acts on AC.",
+          "simple_notify_door_close": "Receive an alert when the door closes. Informational only.",
+          "simple_notify_night_start": "Receive an alert when night mode starts with the nighttime target temperature.",
+          "simple_notify_night_end": "Receive an alert when night mode ends (and AC turns off if you enabled end-of-night shutoff).",
+          "simple_quiet_night_tts": "If enabled: Google Home does not speak during night hours so you are not woken up. Window alerts remain active as they require immediate attention.",
+          "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours. Usually Telegram does not disturb sleep, so this is off by default."
         }
       }
     }
