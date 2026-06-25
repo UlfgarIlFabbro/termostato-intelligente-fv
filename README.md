@@ -10,6 +10,7 @@ Sviluppata e mantenuta da [UlfgarIlFabbro](https://github.com/UlfgarIlFabbro).
 
 - **Tre modalità di configurazione**: Semplificato, Semplificato con Fotovoltaico, Completo
 - **Gestione fotovoltaico**: accensione e spegnimento automatico basati su surplus energetico con sliding window anti-oscillazione
+- **Controllo intelligente accensione manuale**: usa `sun.sun` per non intervenire sul clima acceso dall'utente dopo il tramonto
 - **Modalità notturna**: target separato, accensione/spegnimento automatico, spegnimento a fine notte
 - **Deumidificatore intelligente**: pre-trattamento in DRY prima del raffreddamento (modo semplificato)
 - **Calibrazione sonda interna**: compensazione automatica della differenza tra sonda stanza e sonda interna del clima
@@ -55,8 +56,9 @@ La modalità più accessibile. Pochi campi, tutto il resto è automatico.
 - Sensore porta (opzionale)
 
 **Step 2 — Temperature e orari**
-- Temperatura target di giorno + orari fascia diurna
-- Temperatura target di notte + orari fascia notturna
+- Temperatura target di giorno
+- Temperatura target di notte + inizio/fine fascia notturna
+- La fascia diurna viene ricavata automaticamente per differenza dalla notte
 - Opzione spegnimento a fine modalità notturna (sempre o solo se acceso automaticamente)
 - Opzione deumidificatore prima del raffreddamento
 
@@ -96,7 +98,7 @@ Se abilitato, prima di avviare il raffreddamento il termostato tenta la deumidif
 
 **Con sonda esterna:**
 - Stanza tra `target +0.3°C` e `target +1.5°C` → accende in **DRY** per max X minuti (configurabile, default 30)
-- Se durante il DRY la stanza scende sotto `target -0.3°C` → spegne (funzionato!)
+- Se durante il DRY la stanza scende sotto `target -0.3°C` → spegne (ha funzionato!)
 - Se sale sopra `target +1.5°C` o scadono i minuti → passa a **COOL**
 - Già sopra `target +1.5°C` → **COOL diretto** senza passare dal DRY
 
@@ -115,15 +117,34 @@ Se abilitato, prima di avviare il raffreddamento il termostato tenta la deumidif
 Identico al modo semplificato, con l'aggiunta di uno step per configurare l'uso del fotovoltaico.
 
 **Step aggiuntivo — Fotovoltaico**
+- Orario tramonto oggi (calcolato automaticamente, informativo)
+- Orario limite controllo manuale (calcolato automaticamente, informativo)
+- Ore di anticipo rispetto al tramonto (min 2h, default 2h)
 - Sensore produzione FV (W)
 - Sensore consumo rete (W)
 - Sensore stato di carica batteria (%)
-- Surplus minimo per accendere (W) — evita accensioni con produzione appena sufficiente
-- SOC minimo batteria (%) — protegge la batteria da scariche eccessive
+- Surplus minimo per accendere (W)
+- SOC minimo batteria (%)
 - Fascia oraria di accensione automatica
-- Priorità tra più climatizzatori
-- Stagger (distanza minima tra accensioni successive)
-- Spegnimento automatico con sliding window (vedi sotto)
+- Priorità e stagger tra più climatizzatori
+- Spegnimento automatico con sliding window
+
+#### Logica spegnimento intelligente — 4 casi
+
+Il termostato distingue **chi ha acceso il clima** e agisce di conseguenza:
+
+| Chi ha acceso | Spegnimento FV |
+|---|---|
+| Automazione FV | ✅ Spegne sempre quando FV insufficiente |
+| Automazione notturna | ❌ Mai — solo spegnimento fine notte o target raggiunto |
+| Utente manuale (prima di tramonto -2h) | ✅ Spegne se FV insufficiente |
+| Utente manuale (dopo tramonto -2h) | ❌ Mai — l'utente gestisce manualmente |
+
+> 💡 **Perché tramonto -2h?** Alle 17:40 (tramonto 19:40 - 2 ore) un impianto da 4kW produce già poco — probabilmente non abbastanza per giustificare il raffreddamento automatico. Dopo quell'ora l'automazione smette di intervenire sul clima acceso manualmente, lasciando libertà all'utente di usarlo per la serata. Il valore si adatta automaticamente alle stagioni grazie a `sun.sun` di Home Assistant.
+
+#### Spegnimento per target raggiunto
+
+Lo spegnimento per target raggiunto (stanza troppo fredda per 15 minuti) funziona **sempre**, indipendentemente da chi ha acceso il clima. Se la temperatura risale, il termostato verifica i criteri FV (surplus sufficiente, SOC batteria, fascia oraria) prima di riaccendere.
 
 #### Sliding window per lo spegnimento FV
 
@@ -133,8 +154,7 @@ Esempio con 5 campioni e soglia 0W:
 ```
 Buffer: [400, 450, 300, 600, 100] → max=600 > 0 → non spegne
 Buffer: [450, 300, 600, 100, 300] → max=600 > 0 → non spegne
-Buffer: [300, 100, 300, 200, 150] → tutti < 0? No → non spegne
-Buffer: [-50, -100, -200, -150, -80] → tutti < 0 → SPEGNE
+Buffer: [-50, -100, -200, -150, -80] → tutti < 0 → SPEGNE ✅
 ```
 
 #### Cascata multi-istanza
@@ -142,19 +162,19 @@ Buffer: [-50, -100, -200, -150, -80] → tutti < 0 → SPEGNE
 Con più climatizzatori gestiti da istanze separate:
 - **Priorità più bassa** (numero più piccolo) = si accende per **prima** e si spegne per **ultima**
 - **Priorità più alta** (numero più grande) = si accende per **ultima** e si spegne per **prima**
-- Lo **stagger** impone una pausa tra l'accensione/spegnimento di un clima e il successivo, evitando picchi di consumo
+- Lo **stagger** impone una pausa tra l'accensione/spegnimento di un clima e il successivo
 
 ---
 
 ### ⚙️ Modo Completo
 
-Accesso completo a tutti i parametri dell'integrazione. Consigliato per utenti avanzati che vogliono il massimo controllo.
+Accesso completo a tutti i parametri dell'integrazione. Consigliato per utenti avanzati.
 
 **Step 1 — Entità principali**
 Climatizzatore, sensore temperatura, sensore finestra, sensore presenza, sensore porta.
 
 **Step 2 — Fotovoltaico**
-Configurazione completa FV con tutti i parametri di accensione e spegnimento (sliding window, soglia, ore extra, stagger, priorità).
+Configurazione completa FV con tutti i parametri di accensione e spegnimento.
 
 **Step 3 — Profilo di regolazione**
 - 🔵 **Bilanciato** — accende a +1.5°C, ventola alta da +2°C. Per uso quotidiano.
@@ -163,31 +183,28 @@ Configurazione completa FV con tutti i parametri di accensione e spegnimento (sl
 - ⚙️ **Personalizzato** — imposta manualmente ogni soglia.
 
 **Step 4 — Soglie termiche personalizzate** *(solo con profilo Personalizzato)*
-Controllo granulare su ogni offset, delta setpoint e parametro di calibrazione.
 
 **Step 5 — Modalità notturna**
 - Fascia oraria notturna con target separato
 - Accensione automatica notturna (senza FV)
-- Spegnimento automatico per target raggiunto (con timer configurabile)
+- Spegnimento automatico per target raggiunto
 - Spegnimento a fine modalità notturna (sempre / solo se acceso automaticamente)
 - Calibrazione sonda interna, boost presenza, delay finestra, frequenza ciclo
 
 **Step 6 — Notifiche e fascia di silenzio**
 - Google Home (TTS) e Telegram configurabili separatamente
-- Avvisi accensione/spegnimento automatico con motivo contestuale
+- Avvisi contestuali con motivo di ogni accensione/spegnimento
 - Avviso dedicato per spegnimento fine notte
-- Avvisi porta (apertura e chiusura)
-- Notifica cambio setpoint (con limite di frequenza configurabile)
+- Limite frequenza notifiche cambio setpoint
 - Fascia di silenzio separata per Google e Telegram
-- Quiet hours con silenziamento selettivo per canale
 
 #### Calibrazione sonda interna
 
-Il climatizzatore ha una sonda interna che spesso legge temperature diverse dalla stanza reale. Il termostato calcola automaticamente la differenza e abbassa il setpoint per compensare, entro un massimo configurabile. Questo garantisce che il compressore continui a lavorare anche quando il clima "pensa" di essere già a temperatura.
+Il climatizzatore ha una sonda interna che spesso legge temperature diverse dalla stanza reale. Il termostato calcola automaticamente la differenza e abbassa il setpoint per compensare, entro un massimo configurabile.
 
 #### Fix transizioni sensori
 
-Gli avvisi di apertura/chiusura porta e finestra scattano **solo su transizioni reali** (`off→on` e `on→off`). Le transizioni da/verso stati `unavailable` o `unknown` vengono ignorate, eliminando le notifiche spurie quando un sensore torna online dopo un'interruzione di rete.
+Gli avvisi di apertura/chiusura porta e finestra scattano **solo su transizioni reali** (`off→on` e `on→off`). Le transizioni da/verso `unavailable` o `unknown` vengono ignorate, eliminando le notifiche spurie quando un sensore torna online.
 
 ---
 
@@ -202,12 +219,11 @@ Checkbox individuali per ogni evento:
 - Silenziamento Google e Telegram separati durante la notte
 
 ### Modo completo
-Sistema di notifiche avanzato con:
-- Messaggi contestuali che spiegano il **motivo** di ogni accensione/spegnimento (FV, notte, target raggiunto, fine notte)
+- Messaggi contestuali che spiegano il **motivo** di ogni accensione/spegnimento
 - Template personalizzabili per ogni tipo di messaggio
-- Limite di frequenza per notifiche cambio setpoint (evita spam)
+- Limite di frequenza per notifiche cambio setpoint
 - Fascia di silenzio configurabile separatamente per Google Home e Telegram
-- Bypass automatico della fascia di silenzio per eventi critici (finestra aperta)
+- Bypass automatico della fascia di silenzio per eventi critici
 
 ---
 
@@ -225,16 +241,16 @@ Ogni istanza espone tre switch in Home Assistant:
 
 ## 📊 Attributi esposti
 
-Il termostato espone attributi aggiuntivi utili per automazioni e dashboard:
-
-- `finestra_aperta` — stato corrente finestra
-- `porta_aperta` — stato corrente porta
-- `modalita_notturna_attiva` — se siamo nella fascia notturna
-- `target_effettivo` — target considerando l'offset notturno
-- `accensione_notturna_automatica` — se il clima è stato acceso automaticamente di notte
-- `spegnimento_fv_abilitato` — stato dello spegnimento FV
-- `fv_surplus_buffer` — buffer corrente della sliding window (utile per debug)
-- `fascia_silenzio_attiva` — se siamo nella fascia di silenzio
+| Attributo | Descrizione |
+|---|---|
+| `finestra_aperta` | Stato corrente finestra |
+| `porta_aperta` | Stato corrente porta |
+| `modalita_notturna_attiva` | Se siamo nella fascia notturna |
+| `target_effettivo` | Target considerando l'offset notturno |
+| `accensione_notturna_automatica` | Se il clima è stato acceso automaticamente di notte |
+| `spegnimento_fv_abilitato` | Stato dello spegnimento FV |
+| `fv_surplus_buffer` | Buffer corrente della sliding window (utile per debug) |
+| `fascia_silenzio_attiva` | Se siamo nella fascia di silenzio |
 
 ---
 
@@ -248,7 +264,7 @@ custom_components/termostato_intelligente/
 ├── const.py            # Costanti e valori di default
 ├── manifest.json       # Metadati integrazione
 ├── strings.json        # Stringhe UI (base inglese)
-├── switch.py           # Switch ausiliari (master, FV, rapid cool)
+├── switch.py           # Switch ausiliari
 ├── util.py             # Funzioni di utilità
 └── translations/
     ├── it.json         # Traduzione italiana
@@ -261,13 +277,16 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
-| v0.5.0 | Tre modalità di configurazione, modo semplificato con deumidificatore intelligente |
+| v0.5.0 | Tre modalità di configurazione, modo semplificato con deumidificatore intelligente, controllo tramonto con `sun.sun`, logica spegnimento 4 casi, rimozione orari giorno |
 | v0.4.1 | Limite frequenza notifiche cambio setpoint |
 | v0.4.0 | Sliding window FV, fix sensori porta/finestra, spegnimento fine notte |
 | v0.3.3 | Prima versione stabile pubblica |
 
 ---
 
+## 📄 Licenza
+
+MIT License — libero utilizzo, modifica e distribuzione con attribuzione.
 ## 📄 Licenza
 
 MIT License — libero utilizzo, modifica e distribuzione con attribuzione.
