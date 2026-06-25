@@ -233,23 +233,19 @@
         "description": "Set the desired temperature for daytime and nighttime, with their respective schedules.",
         "data": {
           "simple_target_day": "Daytime target temperature (°C)",
-          "simple_day_start": "Daytime period start",
-          "simple_day_end": "Daytime period end",
           "simple_target_night": "Nighttime target temperature (°C)",
-          "simple_night_start": "Nighttime period start",
-          "simple_night_end": "Nighttime period end",
+          "simple_night_start": "Night mode start",
+          "simple_night_end": "Night mode end",
           "night_end_shutoff_enabled": "▶ Turn off AC at the end of night mode (always)",
           "night_end_shutoff_auto_only": "▶ Turn off at end of night only if turned on automatically",
           "simple_dry_enabled": "▶ Use dehumidifier before cooling",
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)"
         },
         "data_description": {
-          "simple_target_day": "The temperature you want to maintain in the room during the day. The AC turns on when the room exceeds this temperature and turns off when it reaches it. Example: 25°C → AC starts above 26.5°C (external sensor) or 27°C (internal sensor).",
-          "simple_day_start": "Daytime mode is active from this time. Example: 07:00.",
-          "simple_day_end": "Daytime mode is active until this time. Example: 23:00.",
-          "simple_target_night": "Desired temperature at night. Usually a couple of degrees higher than daytime to avoid over-cooling while sleeping. Example: 26°C.",
-          "simple_night_start": "Nighttime mode is active from this time. Example: 23:00.",
-          "simple_night_end": "Nighttime mode is active until this time. Example: 07:00.",
+          "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
+          "simple_target_night": "Desired temperature at night. Usually a couple of degrees higher than daytime to avoid over-cooling. Example: 26°C.",
+          "simple_night_start": "Night mode starts at this time with the nighttime target. Daytime mode starts automatically when night ends. Example: 23:00.",
+          "simple_night_end": "Night mode ends at this time and daytime mode starts automatically. Example: 07:00.",
           "night_end_shutoff_enabled": "If enabled: when night mode ends (e.g. at 07:00), the AC is turned off ALWAYS, regardless of why it was on.",
           "night_end_shutoff_auto_only": "If enabled: turns off at end of night ONLY IF the AC was turned on automatically. If you turned it on manually, nothing happens.",
           "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
@@ -272,7 +268,10 @@
           "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
           "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
           "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
-          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off"
+          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off",
+          "sunset_info": "🌅 Today's sunset time (informational)",
+          "cutoff_info": "⏱️ Manual control cutoff time (informational)",
+          "simple_sunset_anticipate_h": "Hours before sunset to stop controlling manual AC"
         },
         "data_description": {
           "fv_sensor": "Sensor measuring Watts produced by panels in real time. Example: sensor.solar_panels_total.",
@@ -287,7 +286,10 @@
           "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
           "fv_shutoff_delay_min": "Consecutive samples below threshold before turning off. Sliding window. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
           "fv_shutoff_threshold": "Surplus must stay below this for all N samples. Value 0 = turns off when FV < consumption. Example: 500W.",
-          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends 16:00, extra 1h → can turn off until 17:00."
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends 16:00, extra 1h → can turn off until 17:00.",
+          "sunset_info": "Time the sun sets today at your location. Calculated automatically by Home Assistant based on your geographic position. Updates every time you open these settings.",
+          "cutoff_info": "Automatically calculated: sunset minus the configured hours of anticipation. After this time the automation no longer turns off the AC turned on manually by the user. Updates every time you open these settings.",
+          "simple_sunset_anticipate_h": "How many hours before sunset the automation stops intervening on the AC turned on manually. Minimum 2 hours to avoid shutdowns in the evening when solar production is low. Example: sunset at 19:40 with 2 hours anticipation → automation stops at 17:40."
         }
       },
       "simple_notifiche": {
@@ -536,23 +538,19 @@
         "description": "Set the desired temperature for daytime and nighttime, with their respective schedules.",
         "data": {
           "simple_target_day": "Daytime target temperature (°C)",
-          "simple_day_start": "Daytime period start",
-          "simple_day_end": "Daytime period end",
           "simple_target_night": "Nighttime target temperature (°C)",
-          "simple_night_start": "Nighttime period start",
-          "simple_night_end": "Nighttime period end",
+          "simple_night_start": "Night mode start",
+          "simple_night_end": "Night mode end",
           "night_end_shutoff_enabled": "▶ Turn off AC at the end of night mode (always)",
           "night_end_shutoff_auto_only": "▶ Turn off at end of night only if turned on automatically",
           "simple_dry_enabled": "▶ Use dehumidifier before cooling",
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)"
         },
         "data_description": {
-          "simple_target_day": "The temperature you want to maintain in the room during the day. The AC turns on when the room exceeds this temperature and turns off when it reaches it. Example: 25°C → AC starts above 26.5°C (external sensor) or 27°C (internal sensor).",
-          "simple_day_start": "Daytime mode is active from this time. Example: 07:00.",
-          "simple_day_end": "Daytime mode is active until this time. Example: 23:00.",
-          "simple_target_night": "Desired temperature at night. Usually a couple of degrees higher than daytime to avoid over-cooling while sleeping. Example: 26°C.",
-          "simple_night_start": "Nighttime mode is active from this time. Example: 23:00.",
-          "simple_night_end": "Nighttime mode is active until this time. Example: 07:00.",
+          "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
+          "simple_target_night": "Desired temperature at night. Usually a couple of degrees higher than daytime to avoid over-cooling. Example: 26°C.",
+          "simple_night_start": "Night mode starts at this time with the nighttime target. Daytime mode starts automatically when night ends. Example: 23:00.",
+          "simple_night_end": "Night mode ends at this time and daytime mode starts automatically. Example: 07:00.",
           "night_end_shutoff_enabled": "If enabled: when night mode ends (e.g. at 07:00), the AC is turned off ALWAYS, regardless of why it was on.",
           "night_end_shutoff_auto_only": "If enabled: turns off at end of night ONLY IF the AC was turned on automatically. If you turned it on manually, nothing happens.",
           "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
@@ -575,7 +573,10 @@
           "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
           "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
           "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
-          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off"
+          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off",
+          "sunset_info": "🌅 Today's sunset time (informational)",
+          "cutoff_info": "⏱️ Manual control cutoff time (informational)",
+          "simple_sunset_anticipate_h": "Hours before sunset to stop controlling manual AC"
         },
         "data_description": {
           "fv_sensor": "Sensor measuring Watts produced by panels in real time. Example: sensor.solar_panels_total.",
@@ -590,7 +591,10 @@
           "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
           "fv_shutoff_delay_min": "Consecutive samples below threshold before turning off. Sliding window. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
           "fv_shutoff_threshold": "Surplus must stay below this for all N samples. Value 0 = turns off when FV < consumption. Example: 500W.",
-          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends 16:00, extra 1h → can turn off until 17:00."
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends 16:00, extra 1h → can turn off until 17:00.",
+          "sunset_info": "Time the sun sets today at your location. Calculated automatically by Home Assistant based on your geographic position. Updates every time you open these settings.",
+          "cutoff_info": "Automatically calculated: sunset minus the configured hours of anticipation. After this time the automation no longer turns off the AC turned on manually by the user. Updates every time you open these settings.",
+          "simple_sunset_anticipate_h": "How many hours before sunset the automation stops intervening on the AC turned on manually. Minimum 2 hours to avoid shutdowns in the evening when solar production is low. Example: sunset at 19:40 with 2 hours anticipation → automation stops at 17:40."
         }
       },
       "simple_notifiche": {
