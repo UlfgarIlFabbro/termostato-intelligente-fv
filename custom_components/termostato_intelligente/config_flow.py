@@ -6,7 +6,10 @@ from typing import Any
 
 import voluptuous as vol
 
+from datetime import timedelta
+
 from homeassistant import config_entries
+from homeassistant.util import dt as dt_util
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
@@ -14,10 +17,9 @@ from .const import (
     CONF_CONFIG_MODE,
     CONF_SIMPLE_DRY_ENABLED,
     CONF_SIMPLE_DRY_MAX_MIN,
-    CONF_SIMPLE_DAY_END,
-    CONF_SIMPLE_DAY_START,
     CONF_SIMPLE_NIGHT_END,
     CONF_SIMPLE_NIGHT_START,
+    CONF_SIMPLE_SUNSET_ANTICIPATE_H,
     CONF_SIMPLE_NOTIFY_AC_OFF,
     CONF_SIMPLE_NOTIFY_AC_ON,
     CONF_SIMPLE_NOTIFY_DOOR_CLOSE,
@@ -36,10 +38,9 @@ from .const import (
     DEFAULT_CONFIG_MODE,
     DEFAULT_SIMPLE_DRY_ENABLED,
     DEFAULT_SIMPLE_DRY_MAX_MIN,
-    DEFAULT_SIMPLE_DAY_END,
-    DEFAULT_SIMPLE_DAY_START,
     DEFAULT_SIMPLE_NIGHT_END,
     DEFAULT_SIMPLE_NIGHT_START,
+    DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
     DEFAULT_SIMPLE_NOTIFY_AC_OFF,
     DEFAULT_SIMPLE_NOTIFY_AC_ON,
     DEFAULT_SIMPLE_NOTIFY_DOOR_CLOSE,
@@ -216,8 +217,6 @@ def _schema_simple_entita(defaults: dict) -> vol.Schema:
 def _schema_simple_temperature(defaults: dict) -> vol.Schema:
     return vol.Schema({
         _f(vol.Required, CONF_SIMPLE_TARGET_DAY, defaults, DEFAULT_SIMPLE_TARGET_DAY): selector.NumberSelector(selector.NumberSelectorConfig(min=16, max=30, step=0.5, unit_of_measurement="°C", mode="box")),
-        _f(vol.Required, CONF_SIMPLE_DAY_START, defaults, DEFAULT_SIMPLE_DAY_START): selector.TimeSelector(),
-        _f(vol.Required, CONF_SIMPLE_DAY_END, defaults, DEFAULT_SIMPLE_DAY_END): selector.TimeSelector(),
         _f(vol.Required, CONF_SIMPLE_TARGET_NIGHT, defaults, DEFAULT_SIMPLE_TARGET_NIGHT): selector.NumberSelector(selector.NumberSelectorConfig(min=16, max=30, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Required, CONF_SIMPLE_NIGHT_START, defaults, DEFAULT_SIMPLE_NIGHT_START): selector.TimeSelector(),
         _f(vol.Required, CONF_SIMPLE_NIGHT_END, defaults, DEFAULT_SIMPLE_NIGHT_END): selector.TimeSelector(),
@@ -225,6 +224,28 @@ def _schema_simple_temperature(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_AUTO_ONLY, defaults, DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_DRY_ENABLED, defaults, DEFAULT_SIMPLE_DRY_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_DRY_MAX_MIN, defaults, DEFAULT_SIMPLE_DRY_MAX_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="min", mode="box")),
+    })
+
+
+def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str = "") -> vol.Schema:
+    """Schema step FV con campi readonly per orario tramonto e orario limite controllo manuale."""
+    return vol.Schema({
+        _f(vol.Optional, "sunset_info", defaults, sunset_str): selector.TextSelector(),
+        _f(vol.Optional, "cutoff_info", defaults, cutoff_str): selector.TextSelector(),
+        _f(vol.Optional, CONF_SIMPLE_SUNSET_ANTICIPATE_H, defaults, DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H): selector.NumberSelector(selector.NumberSelectorConfig(min=2, max=4, step=0.5, unit_of_measurement="ore", mode="box")),
+        _f(vol.Optional, CONF_FV_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        _f(vol.Optional, CONF_CONSUMPTION_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        _f(vol.Optional, CONF_BATTERY_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        _f(vol.Optional, CONF_FV_MARGIN_W, defaults, DEFAULT_FV_MARGIN_W): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=5000, step=50, unit_of_measurement="W", mode="box")),
+        _f(vol.Optional, CONF_SOC_MIN, defaults, DEFAULT_SOC_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=100, step=1, unit_of_measurement="%", mode="box")),
+        _f(vol.Optional, CONF_FV_START_TIME, defaults, DEFAULT_FV_START_TIME): selector.TimeSelector(),
+        _f(vol.Optional, CONF_FV_END_TIME, defaults, DEFAULT_FV_END_TIME): selector.TimeSelector(),
+        _f(vol.Optional, CONF_FV_PRIORITY, defaults, DEFAULT_FV_PRIORITY): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=99, step=1, mode="box")),
+        _f(vol.Optional, CONF_FV_STAGGER_MIN, defaults, DEFAULT_FV_STAGGER_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=60, step=1, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_FV_SHUTOFF_ENABLED, defaults, DEFAULT_FV_SHUTOFF_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SHUTOFF_DELAY_MIN, defaults, DEFAULT_FV_SHUTOFF_DELAY_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=60, step=1, unit_of_measurement="campioni", mode="box")),
+        _f(vol.Optional, CONF_FV_SHUTOFF_THRESHOLD, defaults, DEFAULT_FV_SHUTOFF_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=-5000, max=5000, step=50, unit_of_measurement="W", mode="box")),
+        _f(vol.Optional, CONF_FV_SHUTOFF_EXTRA_HOURS, defaults, DEFAULT_FV_SHUTOFF_EXTRA_HOURS): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=4, step=0.5, unit_of_measurement="h", mode="box")),
     })
 
 
@@ -360,6 +381,26 @@ def _schema_notifiche(defaults: dict) -> vol.Schema:
     })
 
 
+
+
+def _calc_sunset_info(hass, anticipate_h: float = 2.0) -> tuple[str, str]:
+    """Calcola orario tramonto e orario limite controllo manuale."""
+    sun_state = hass.states.get("sun.sun") if hass else None
+    if sun_state is None:
+        return "non disponibile", "non disponibile"
+    next_setting = sun_state.attributes.get("next_setting")
+    if not next_setting:
+        return "non disponibile", "non disponibile"
+    try:
+        from homeassistant.util import dt as dt_util
+        sunset_dt = dt_util.as_local(dt_util.parse_datetime(str(next_setting)))
+        sunset_str = sunset_dt.strftime("%H:%M")
+        cutoff_dt = sunset_dt - timedelta(hours=anticipate_h)
+        cutoff_str = cutoff_dt.strftime("%H:%M")
+        return sunset_str, cutoff_str
+    except Exception:
+        return "non disponibile", "non disponibile"
+
 class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -443,11 +484,19 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
         return self.async_show_form(step_id="simple_temperature", data_schema=_schema_simple_temperature(self._data))
 
     async def async_step_energia_simple(self, user_input=None):
-        """Step FV per il modo semplificato con fotovoltaico — riusa lo schema completo."""
+        """Step FV per il modo semplificato con fotovoltaico."""
         if user_input is not None:
+            # Ignora i campi readonly sunset_info e cutoff_info
+            user_input.pop("sunset_info", None)
+            user_input.pop("cutoff_info", None)
             self._data.update(user_input)
             return await self.async_step_simple_notifiche()
-        return self.async_show_form(step_id="energia_simple", data_schema=_schema_energia(self._data))
+        anticipate_h = float(self._data.get(CONF_SIMPLE_SUNSET_ANTICIPATE_H, DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H))
+        sunset_str, cutoff_str = _calc_sunset_info(self.hass, anticipate_h)
+        return self.async_show_form(
+            step_id="energia_simple",
+            data_schema=_schema_energia_simple(self._data, sunset_str, cutoff_str),
+        )
 
     async def async_step_simple_notifiche(self, user_input=None):
         if user_input is not None:
@@ -536,9 +585,16 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_energia_simple(self, user_input=None):
         if user_input is not None:
+            user_input.pop("sunset_info", None)
+            user_input.pop("cutoff_info", None)
             self._data.update(user_input)
             return await self.async_step_simple_notifiche()
-        return self.async_show_form(step_id="energia_simple", data_schema=_schema_energia(self._data))
+        anticipate_h = float(self._data.get(CONF_SIMPLE_SUNSET_ANTICIPATE_H, DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H))
+        sunset_str, cutoff_str = _calc_sunset_info(self.hass, anticipate_h)
+        return self.async_show_form(
+            step_id="energia_simple",
+            data_schema=_schema_energia_simple(self._data, sunset_str, cutoff_str),
+        )
 
     async def async_step_simple_notifiche(self, user_input=None):
         if user_input is not None:
