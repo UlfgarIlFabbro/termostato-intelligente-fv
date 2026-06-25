@@ -261,11 +261,10 @@ DEFAULT_CONFIG_MODE = CONFIG_MODE_SIMPLE
 
 # --- Modo semplificato — temperature e orari ---
 CONF_SIMPLE_TARGET_DAY = "simple_target_day"
-CONF_SIMPLE_DAY_START = "simple_day_start"
-CONF_SIMPLE_DAY_END = "simple_day_end"
 CONF_SIMPLE_TARGET_NIGHT = "simple_target_night"
 CONF_SIMPLE_NIGHT_START = "simple_night_start"
 CONF_SIMPLE_NIGHT_END = "simple_night_end"
+CONF_SIMPLE_SUNSET_ANTICIPATE_H = "simple_sunset_anticipate_h"  # ore di anticipo rispetto al tramonto
 
 # --- Modo semplificato — notifiche selettive ---
 CONF_SIMPLE_NOTIFY_DOOR_OPEN = "simple_notify_door_open"
@@ -281,9 +280,8 @@ CONF_SIMPLE_QUIET_NIGHT_NOTIFY = "simple_quiet_night_notify"
 
 # --- Default modo semplificato ---
 DEFAULT_SIMPLE_TARGET_DAY = 25.0
-DEFAULT_SIMPLE_DAY_START = "07:00:00"
-DEFAULT_SIMPLE_DAY_END = "23:00:00"
 DEFAULT_SIMPLE_TARGET_NIGHT = 26.0
+DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H = 2  # ore di anticipo rispetto al tramonto
 DEFAULT_SIMPLE_NIGHT_START = "23:00:00"
 DEFAULT_SIMPLE_NIGHT_END = "07:00:00"
 DEFAULT_SIMPLE_NOTIFY_DOOR_OPEN = True
