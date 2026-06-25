@@ -1,65 +1,273 @@
-# Termostato Intelligente FV
+# 🌡️ Termostato Intelligente FV
 
-Integrazione custom per Home Assistant (HACS) che crea un'entità `climate`
-"termostato intelligente" la quale pilota un climatizzatore reale in base a:
+**Termostato Intelligente FV** è una custom integration per Home Assistant che trasforma qualsiasi climatizzatore in un termostato smart, con gestione automatica basata su fotovoltaico, modalità notturna, deumidificazione intelligente e notifiche contestuali.
 
-- **Finestra aperta** → blocco totale, avviso vocale, spegnimento ritardato e
-  notifica, ripristino automatico alla chiusura.
-- **Surplus fotovoltaico + batteria** → accensione automatica solo se c'è
-  margine di produzione, SOC sufficiente e siamo nella fascia oraria attiva.
-- **Temperatura** → regolazione a 3 livelli (caldo forte / sopra target / in
-  range), con fan limitato a `low`/`medium`.
-- **Presenza** → boost della ventola dopo N minuti di presenza continua.
-- **Avvisi personalizzabili** → dispositivi Google (TTS) e notifiche
-  Telegram/notify scelti e personalizzati dalla UI di configurazione, niente
-  YAML.
+Sviluppata e mantenuta da [UlfgarIlFabbro](https://github.com/UlfgarIlFabbro).
 
-Il repository è pubblicato su `https://github.com/UlfgarIlFabbro/termostato-intelligente-fv`.
+---
 
-Sostituisce le automazioni + l'helper `input_number` originali: il "target"
-ora è semplicemente la temperatura impostata sull'entità climate creata da
-questa integrazione.
+## ✨ Caratteristiche principali
 
-## Installazione
+- **Tre modalità di configurazione**: Semplificato, Semplificato con Fotovoltaico, Completo
+- **Gestione fotovoltaico**: accensione e spegnimento automatico basati su surplus energetico con sliding window anti-oscillazione
+- **Modalità notturna**: target separato, accensione/spegnimento automatico, spegnimento a fine notte
+- **Deumidificatore intelligente**: pre-trattamento in DRY prima del raffreddamento (modo semplificato)
+- **Calibrazione sonda interna**: compensazione automatica della differenza tra sonda stanza e sonda interna del clima
+- **Gestione finestra e porta**: avvisi e spegnimento automatico con ripristino
+- **Notifiche contestuali**: Google Home (TTS) e Telegram con messaggi che spiegano il motivo di ogni azione
+- **Fascia di silenzio**: silenzia gli avvisi negli orari configurati
+- **Cascata multi-istanza**: gestione priorità tra più climatizzatori
 
-1. Copia la cartella `custom_components/termostato_intelligente` nella
-   cartella `custom_components` della tua configurazione Home Assistant
-   (oppure pubblica questo repository su GitHub e aggiungilo come "custom
-   repository" in HACS → Integrazioni → menu in alto a destra → Repository
-   personalizzati).
-2. Riavvia Home Assistant.
-3. Vai su **Impostazioni → Dispositivi e servizi → Aggiungi integrazione** e
-   cerca "Termostato Intelligente FV".
-4. Compila i 4 step del form:
-   - **Entità principali**: climatizzatore, sensore temperatura, finestra,
-     presenza (opzionale).
-   - **Fotovoltaico e batteria**: sensori FV/consumo/batteria e soglie
-     (lascia vuoto per disattivare la logica FV).
-   - **Soglie termiche**: scostamenti e tempistiche.
-   - **Avvisi**: dispositivi Google su cui annunciare, messaggio vocale
-     personalizzato, entità notify/Telegram a cui notificare, messaggio
-     personalizzato.
+---
 
-Tutti i parametri (tranne le entità scelte al passo 1) sono modificabili in
-qualsiasi momento da **Impostazioni → Dispositivi e servizi → Termostato
-Intelligente FV → Opzioni**, senza dover ricreare l'integrazione.
+## 📦 Installazione
 
-## Prima di usarlo
+### Tramite HACS (consigliato)
+1. Apri HACS in Home Assistant
+2. Vai su **Integrazioni** → menu in alto a destra → **Repository personalizzati**
+3. Aggiungi `https://github.com/UlfgarIlFabbro/termostato-intelligente-fv` come tipo **Integrazione**
+4. Cerca "Termostato Intelligente FV" e clicca **Installa**
+5. Riavvia Home Assistant
+6. Vai su **Impostazioni → Dispositivi e Servizi → Aggiungi integrazione** e cerca "Termostato Intelligente"
 
-- Il **delta di regolazione** (di quanto scostarsi dal target quando imposti
-  la temperatura sul climatizzatore reale, default ±1°C) è configurabile
-  nello step "Soglie termiche".
-- Il **boost da presenza** ha un interruttore dedicato ("Attiva il boost da
-  presenza") oltre ai minuti di conferma richiesti: se il tuo sensore di
-  presenza dà falsi positivi puoi disattivarlo senza rimuovere il sensore
-  selezionato, oppure aumentare i minuti di conferma per filtrare meglio i
-  falsi allarmi.
+### Manuale
+1. Scarica la cartella `custom_components/termostato_intelligente/` da questo repository
+2. Copiala in `config/custom_components/termostato_intelligente/`
+3. Riavvia Home Assistant
+4. Aggiungi l'integrazione da **Impostazioni → Dispositivi e Servizi**
 
-## Note
+---
 
-- Il messaggio vocale e quello di notifica accettano variabili in stile
-  Jinja: `{{ delay }}` (minuti di attesa), `{{ name }}` (nome del
-  termostato), `{{ target }}` (temperatura target).
-- Per Telegram l'integrazione usa preferibilmente le entità `notify.*`
-  (il metodo moderno consigliato da Home Assistant); se non ne selezioni
-  nessuna puoi indicare uno o più `chat_id` come fallback testuale.
+## 🚀 Modalità di configurazione
+
+Al momento dell'aggiunta dell'integrazione ti viene chiesto di scegliere tra tre modalità. Puoi cambiarla in qualsiasi momento dalle opzioni dell'integrazione.
+
+---
+
+### 🟢 Modo Semplificato
+
+La modalità più accessibile. Pochi campi, tutto il resto è automatico.
+
+**Step 1 — Dispositivi**
+- Climatizzatore da controllare (obbligatorio)
+- Sensore temperatura stanza (opzionale — se non impostato usa la sonda interna del clima)
+- Sensore finestra (opzionale)
+- Sensore porta (opzionale)
+
+**Step 2 — Temperature e orari**
+- Temperatura target di giorno + orari fascia diurna
+- Temperatura target di notte + orari fascia notturna
+- Opzione spegnimento a fine modalità notturna (sempre o solo se acceso automaticamente)
+- Opzione deumidificatore prima del raffreddamento
+
+**Step 3 — Notifiche**
+- Google Home e/o Telegram
+- Checkbox individuali per ogni tipo di avviso
+- Silenzia notifiche di notte (Google e Telegram separati)
+
+#### Logica termica — con sonda esterna (valori decimali)
+
+| Temperatura stanza | Azione |
+|---|---|
+| > target +2°C | Ventola **alta**, setpoint = sonda interna -2°C |
+| > target +1.5°C | Ventola **media**, setpoint = sonda interna -2°C |
+| > target +0.3°C | Ventola **bassa**, setpoint = sonda interna -1°C |
+| ≤ target +0.3°C | Ventola **bassa**, setpoint = sonda interna (rallenta) |
+| ≤ target -0.3°C per 15 min | **Spegni** |
+
+Il clima si **accende** quando la stanza supera `target + 1.5°C`.
+
+#### Logica termica — con sonda interna (valori interi)
+
+Quando non è configurata una sonda esterna, il termostato usa la `current_temperature` riportata dal climatizzatore stesso. Poiché questa legge solo valori interi, le soglie si adattano:
+
+| Temperatura stanza | Azione |
+|---|---|
+| > target +2°C | Ventola **alta**, setpoint = sonda interna -2°C |
+| > target +1°C | Ventola **media**, setpoint = sonda interna -1°C |
+| ≤ target +1°C | Ventola **bassa**, setpoint = sonda interna (rallenta) |
+| ≤ target -1°C per 15 min | **Spegni** |
+
+Il clima si **accende** quando la stanza supera `target + 2°C`.
+
+#### Deumidificatore intelligente (opzionale)
+
+Se abilitato, prima di avviare il raffreddamento il termostato tenta la deumidificazione:
+
+**Con sonda esterna:**
+- Stanza tra `target +0.3°C` e `target +1.5°C` → accende in **DRY** per max X minuti (configurabile, default 30)
+- Se durante il DRY la stanza scende sotto `target -0.3°C` → spegne (funzionato!)
+- Se sale sopra `target +1.5°C` o scadono i minuti → passa a **COOL**
+- Già sopra `target +1.5°C` → **COOL diretto** senza passare dal DRY
+
+**Con sonda interna:**
+- Stanza tra `target +1°C` e `target +2°C` → accende in **DRY**
+- Se scende sotto `target -1°C` → spegne
+- Se sale sopra `target +2°C` o scadono i minuti → passa a **COOL**
+- Già sopra `target +2°C` → **COOL diretto**
+
+> 💡 **Perché è utile?** In climi umidi (come quello pugliese) la mattina presto la stanza può essere a 26°C con 70% di umidità. Il deumidificatore abbassa l'umidità percepita facendo sentire la stanza più fresca, consumando meno del raffreddamento pieno. Se in 30 minuti non basta, il termostato passa automaticamente al raffreddamento.
+
+---
+
+### 🔵 Modo Semplificato con Fotovoltaico
+
+Identico al modo semplificato, con l'aggiunta di uno step per configurare l'uso del fotovoltaico.
+
+**Step aggiuntivo — Fotovoltaico**
+- Sensore produzione FV (W)
+- Sensore consumo rete (W)
+- Sensore stato di carica batteria (%)
+- Surplus minimo per accendere (W) — evita accensioni con produzione appena sufficiente
+- SOC minimo batteria (%) — protegge la batteria da scariche eccessive
+- Fascia oraria di accensione automatica
+- Priorità tra più climatizzatori
+- Stagger (distanza minima tra accensioni successive)
+- Spegnimento automatico con sliding window (vedi sotto)
+
+#### Sliding window per lo spegnimento FV
+
+Il sistema campiona il surplus (`produzione - consumo`) ad ogni ciclo e mantiene un buffer degli ultimi N campioni. Lo spegnimento avviene **solo se tutti gli N campioni sono sotto la soglia configurata**. Un singolo picco di produzione non azzera il conteggio ma fa scorrere il buffer.
+
+Esempio con 5 campioni e soglia 0W:
+```
+Buffer: [400, 450, 300, 600, 100] → max=600 > 0 → non spegne
+Buffer: [450, 300, 600, 100, 300] → max=600 > 0 → non spegne
+Buffer: [300, 100, 300, 200, 150] → tutti < 0? No → non spegne
+Buffer: [-50, -100, -200, -150, -80] → tutti < 0 → SPEGNE
+```
+
+#### Cascata multi-istanza
+
+Con più climatizzatori gestiti da istanze separate:
+- **Priorità più bassa** (numero più piccolo) = si accende per **prima** e si spegne per **ultima**
+- **Priorità più alta** (numero più grande) = si accende per **ultima** e si spegne per **prima**
+- Lo **stagger** impone una pausa tra l'accensione/spegnimento di un clima e il successivo, evitando picchi di consumo
+
+---
+
+### ⚙️ Modo Completo
+
+Accesso completo a tutti i parametri dell'integrazione. Consigliato per utenti avanzati che vogliono il massimo controllo.
+
+**Step 1 — Entità principali**
+Climatizzatore, sensore temperatura, sensore finestra, sensore presenza, sensore porta.
+
+**Step 2 — Fotovoltaico**
+Configurazione completa FV con tutti i parametri di accensione e spegnimento (sliding window, soglia, ore extra, stagger, priorità).
+
+**Step 3 — Profilo di regolazione**
+- 🔵 **Bilanciato** — accende a +1.5°C, ventola alta da +2°C. Per uso quotidiano.
+- 🔴 **Aggressivo** — accende a +1.2°C, ventola alta da +1.6°C. Per stanze grandi o molto esposte.
+- 🟢 **Delicato** — accende a +1.8°C, ventola alta da +2.4°C. Silenzioso, per dormire.
+- ⚙️ **Personalizzato** — imposta manualmente ogni soglia.
+
+**Step 4 — Soglie termiche personalizzate** *(solo con profilo Personalizzato)*
+Controllo granulare su ogni offset, delta setpoint e parametro di calibrazione.
+
+**Step 5 — Modalità notturna**
+- Fascia oraria notturna con target separato
+- Accensione automatica notturna (senza FV)
+- Spegnimento automatico per target raggiunto (con timer configurabile)
+- Spegnimento a fine modalità notturna (sempre / solo se acceso automaticamente)
+- Calibrazione sonda interna, boost presenza, delay finestra, frequenza ciclo
+
+**Step 6 — Notifiche e fascia di silenzio**
+- Google Home (TTS) e Telegram configurabili separatamente
+- Avvisi accensione/spegnimento automatico con motivo contestuale
+- Avviso dedicato per spegnimento fine notte
+- Avvisi porta (apertura e chiusura)
+- Notifica cambio setpoint (con limite di frequenza configurabile)
+- Fascia di silenzio separata per Google e Telegram
+- Quiet hours con silenziamento selettivo per canale
+
+#### Calibrazione sonda interna
+
+Il climatizzatore ha una sonda interna che spesso legge temperature diverse dalla stanza reale. Il termostato calcola automaticamente la differenza e abbassa il setpoint per compensare, entro un massimo configurabile. Questo garantisce che il compressore continui a lavorare anche quando il clima "pensa" di essere già a temperatura.
+
+#### Fix transizioni sensori
+
+Gli avvisi di apertura/chiusura porta e finestra scattano **solo su transizioni reali** (`off→on` e `on→off`). Le transizioni da/verso stati `unavailable` o `unknown` vengono ignorate, eliminando le notifiche spurie quando un sensore torna online dopo un'interruzione di rete.
+
+---
+
+## 🔔 Notifiche
+
+### Modo semplificato
+Checkbox individuali per ogni evento:
+- Accensione / spegnimento automatico clima
+- Finestra aperta / chiusa
+- Porta aperta / chiusa
+- Inizio / fine modalità notturna
+- Silenziamento Google e Telegram separati durante la notte
+
+### Modo completo
+Sistema di notifiche avanzato con:
+- Messaggi contestuali che spiegano il **motivo** di ogni accensione/spegnimento (FV, notte, target raggiunto, fine notte)
+- Template personalizzabili per ogni tipo di messaggio
+- Limite di frequenza per notifiche cambio setpoint (evita spam)
+- Fascia di silenzio configurabile separatamente per Google Home e Telegram
+- Bypass automatico della fascia di silenzio per eventi critici (finestra aperta)
+
+---
+
+## 🔧 Switch ausiliari
+
+Ogni istanza espone tre switch in Home Assistant:
+
+| Switch | Funzione |
+|---|---|
+| **Master** | Abilita/disabilita completamente il termostato |
+| **Accensione FV** | Abilita/disabilita solo l'accensione automatica da fotovoltaico |
+| **Raffreddamento rapido** | Abbassa ulteriormente il setpoint e porta la ventola al massimo |
+
+---
+
+## 📊 Attributi esposti
+
+Il termostato espone attributi aggiuntivi utili per automazioni e dashboard:
+
+- `finestra_aperta` — stato corrente finestra
+- `porta_aperta` — stato corrente porta
+- `modalita_notturna_attiva` — se siamo nella fascia notturna
+- `target_effettivo` — target considerando l'offset notturno
+- `accensione_notturna_automatica` — se il clima è stato acceso automaticamente di notte
+- `spegnimento_fv_abilitato` — stato dello spegnimento FV
+- `fv_surplus_buffer` — buffer corrente della sliding window (utile per debug)
+- `fascia_silenzio_attiva` — se siamo nella fascia di silenzio
+
+---
+
+## 🗂️ File dell'integrazione
+
+```
+custom_components/termostato_intelligente/
+├── __init__.py
+├── climate.py          # Logica principale del termostato
+├── config_flow.py      # Configurazione guidata
+├── const.py            # Costanti e valori di default
+├── manifest.json       # Metadati integrazione
+├── strings.json        # Stringhe UI (base inglese)
+├── switch.py           # Switch ausiliari (master, FV, rapid cool)
+├── util.py             # Funzioni di utilità
+└── translations/
+    ├── it.json         # Traduzione italiana
+    └── en.json         # Traduzione inglese
+```
+
+---
+
+## 📋 Versioni
+
+| Versione | Note |
+|---|---|
+| v0.5.0 | Tre modalità di configurazione, modo semplificato con deumidificatore intelligente |
+| v0.4.1 | Limite frequenza notifiche cambio setpoint |
+| v0.4.0 | Sliding window FV, fix sensori porta/finestra, spegnimento fine notte |
+| v0.3.3 | Prima versione stabile pubblica |
+
+---
+
+## 📄 Licenza
+
+MIT License — libero utilizzo, modifica e distribuzione con attribuzione.
