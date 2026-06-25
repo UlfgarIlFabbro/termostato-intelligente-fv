@@ -233,8 +233,6 @@
         "description": "Imposta la temperatura desiderata durante il giorno e durante la notte, con i relativi orari.",
         "data": {
           "simple_target_day": "Temperatura target di giorno (°C)",
-          "simple_day_start": "Inizio fascia diurna",
-          "simple_day_end": "Fine fascia diurna",
           "simple_target_night": "Temperatura target di notte (°C)",
           "simple_night_start": "Inizio fascia notturna",
           "simple_night_end": "Fine fascia notturna",
@@ -244,12 +242,10 @@
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)"
         },
         "data_description": {
-          "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Il clima si accende quando la stanza supera questa temperatura e si spegne quando la raggiunge. Esempio: 25°C → il clima parte quando fa più di 26.5°C (con sonda esterna) o 27°C (con sonda interna) e si spegne quando torna a 25°C.",
-          "simple_day_start": "Da quest'ora è attiva la modalità giorno con la temperatura diurna. Esempio: 07:00.",
-          "simple_day_end": "Fino a quest'ora è attiva la modalità giorno. Esempio: 23:00.",
-          "simple_target_night": "La temperatura desiderata durante la notte. Di solito qualche grado in più rispetto al giorno per non raffreddare troppo mentre si dorme. Esempio: 26°C.",
-          "simple_night_start": "Da quest'ora è attiva la modalità notte con la temperatura notturna. Esempio: 23:00.",
-          "simple_night_end": "Fino a quest'ora è attiva la modalità notte. Esempio: 07:00.",
+          "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
+          "simple_target_night": "La temperatura desiderata di notte. Di solito qualche grado in più rispetto al giorno per non raffreddare troppo mentre si dorme. Esempio: 26°C.",
+          "simple_night_start": "Da quest'ora entra in modalità notturna con la temperatura target notturna. La fascia diurna inizia automaticamente alla fine della notte. Esempio: 23:00.",
+          "simple_night_end": "A quest'ora finisce la modalità notturna e inizia automaticamente quella diurna. Esempio: 07:00.",
           "night_end_shutoff_enabled": "Se attivato: quando la modalità notturna termina (es. alle 07:00), il climatizzatore viene spento SEMPRE, indipendentemente da chi lo aveva acceso. Utile per non lasciare il clima acceso tutta la mattina.",
           "night_end_shutoff_auto_only": "Se attivato: spegne il clima a fine notte SOLO SE era stato acceso automaticamente dal termostato. Se lo avevi acceso tu a mano, non fa nulla. Può essere usato insieme all'opzione 'sempre'.",
           "simple_dry_enabled": "Se attivato: quando la temperatura sale leggermente sopra il target, il climatizzatore parte prima in modalità deumidificatore (DRY) invece che in raffreddamento. Questo abbassa l'umidità e fa percepire la stanza più fresca consumando meno. Dopo il tempo massimo configurato (o se la temperatura sale ulteriormente) passa automaticamente al raffreddamento pieno. Particolarmente utile in climi umidi come quello pugliese, soprattutto nelle ore mattutine. Se la temperatura all'accensione è già troppo alta, parte direttamente in raffreddamento senza passare dal dry.",
@@ -272,7 +268,10 @@
           "fv_shutoff_enabled": "▶ Spegnimento automatico quando il FV cala",
           "fv_shutoff_delay_min": "Campioni insufficienti consecutivi prima di spegnere",
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
-          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può spegnere"
+          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può spegnere",
+          "sunset_info": "🌅 Orario tramonto oggi (informativo)",
+          "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
+          "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto"
         },
         "data_description": {
           "fv_sensor": "Sensore che misura i Watt prodotti dai pannelli in tempo reale. Esempio: sensor.somma_sensori_zcs_pannelli.",
@@ -287,7 +286,10 @@
           "fv_shutoff_enabled": "Se attivato: spegne il clima quando il surplus FV rimane sotto la soglia per N campioni consecutivi.",
           "fv_shutoff_delay_min": "Quanti campioni consecutivi di surplus insufficiente prima di spegnere. La finestra è scorrevole. Esempio: 5 campioni con ciclo 1 min = 5 minuti confermati.",
           "fv_shutoff_threshold": "Il surplus deve restare sotto questo valore in tutti gli ultimi N campioni. Valore 0 = spegne quando FV < consumo. Esempio: 500W → spegne quando il surplus scende sotto 500W per N campioni.",
-          "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00."
+          "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00.",
+          "sunset_info": "Orario in cui il sole tramonta oggi nella tua posizione. Calcolato automaticamente da Home Assistant in base alla tua posizione geografica. Si aggiorna ogni volta che apri queste impostazioni.",
+          "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate sotto. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente. Si aggiorna ogni volta che apri queste impostazioni.",
+          "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire sul clima acceso manualmente. Minimo 2 ore per evitare spegnimenti nelle ore serali quando il FV produce poco. Con un impianto da 4kW si consiglia di lasciare 2 ore. Con impianti più grandi (8-10kW) si può ridurre a 2 ore comunque per sicurezza. Esempio: tramonto alle 19:40 con 2 ore di anticipo → l'automazione smette alle 17:40."
         }
       },
       "simple_notifiche": {
@@ -536,8 +538,6 @@
         "description": "Imposta la temperatura desiderata durante il giorno e durante la notte, con i relativi orari.",
         "data": {
           "simple_target_day": "Temperatura target di giorno (°C)",
-          "simple_day_start": "Inizio fascia diurna",
-          "simple_day_end": "Fine fascia diurna",
           "simple_target_night": "Temperatura target di notte (°C)",
           "simple_night_start": "Inizio fascia notturna",
           "simple_night_end": "Fine fascia notturna",
@@ -547,12 +547,10 @@
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)"
         },
         "data_description": {
-          "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Il clima si accende quando la stanza supera questa temperatura e si spegne quando la raggiunge. Esempio: 25°C → il clima parte quando fa più di 26.5°C (con sonda esterna) o 27°C (con sonda interna) e si spegne quando torna a 25°C.",
-          "simple_day_start": "Da quest'ora è attiva la modalità giorno con la temperatura diurna. Esempio: 07:00.",
-          "simple_day_end": "Fino a quest'ora è attiva la modalità giorno. Esempio: 23:00.",
-          "simple_target_night": "La temperatura desiderata durante la notte. Di solito qualche grado in più rispetto al giorno per non raffreddare troppo mentre si dorme. Esempio: 26°C.",
-          "simple_night_start": "Da quest'ora è attiva la modalità notte con la temperatura notturna. Esempio: 23:00.",
-          "simple_night_end": "Fino a quest'ora è attiva la modalità notte. Esempio: 07:00.",
+          "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
+          "simple_target_night": "La temperatura desiderata di notte. Di solito qualche grado in più rispetto al giorno per non raffreddare troppo mentre si dorme. Esempio: 26°C.",
+          "simple_night_start": "Da quest'ora entra in modalità notturna con la temperatura target notturna. La fascia diurna inizia automaticamente alla fine della notte. Esempio: 23:00.",
+          "simple_night_end": "A quest'ora finisce la modalità notturna e inizia automaticamente quella diurna. Esempio: 07:00.",
           "night_end_shutoff_enabled": "Se attivato: quando la modalità notturna termina (es. alle 07:00), il climatizzatore viene spento SEMPRE, indipendentemente da chi lo aveva acceso. Utile per non lasciare il clima acceso tutta la mattina.",
           "night_end_shutoff_auto_only": "Se attivato: spegne il clima a fine notte SOLO SE era stato acceso automaticamente dal termostato. Se lo avevi acceso tu a mano, non fa nulla. Può essere usato insieme all'opzione 'sempre'.",
           "simple_dry_enabled": "Se attivato: quando la temperatura sale leggermente sopra il target, il climatizzatore parte prima in modalità deumidificatore (DRY) invece che in raffreddamento. Questo abbassa l'umidità e fa percepire la stanza più fresca consumando meno. Dopo il tempo massimo configurato (o se la temperatura sale ulteriormente) passa automaticamente al raffreddamento pieno. Particolarmente utile in climi umidi come quello pugliese, soprattutto nelle ore mattutine. Se la temperatura all'accensione è già troppo alta, parte direttamente in raffreddamento senza passare dal dry.",
@@ -575,7 +573,10 @@
           "fv_shutoff_enabled": "▶ Spegnimento automatico quando il FV cala",
           "fv_shutoff_delay_min": "Campioni insufficienti consecutivi prima di spegnere",
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
-          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può spegnere"
+          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può spegnere",
+          "sunset_info": "🌅 Orario tramonto oggi (informativo)",
+          "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
+          "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto"
         },
         "data_description": {
           "fv_sensor": "Sensore che misura i Watt prodotti dai pannelli in tempo reale. Esempio: sensor.somma_sensori_zcs_pannelli.",
@@ -590,7 +591,10 @@
           "fv_shutoff_enabled": "Se attivato: spegne il clima quando il surplus FV rimane sotto la soglia per N campioni consecutivi.",
           "fv_shutoff_delay_min": "Quanti campioni consecutivi di surplus insufficiente prima di spegnere. La finestra è scorrevole. Esempio: 5 campioni con ciclo 1 min = 5 minuti confermati.",
           "fv_shutoff_threshold": "Il surplus deve restare sotto questo valore in tutti gli ultimi N campioni. Valore 0 = spegne quando FV < consumo. Esempio: 500W → spegne quando il surplus scende sotto 500W per N campioni.",
-          "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00."
+          "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00.",
+          "sunset_info": "Orario in cui il sole tramonta oggi nella tua posizione. Calcolato automaticamente da Home Assistant in base alla tua posizione geografica. Si aggiorna ogni volta che apri queste impostazioni.",
+          "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate sotto. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente. Si aggiorna ogni volta che apri queste impostazioni.",
+          "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire sul clima acceso manualmente. Minimo 2 ore per evitare spegnimenti nelle ore serali quando il FV produce poco. Con un impianto da 4kW si consiglia di lasciare 2 ore. Con impianti più grandi (8-10kW) si può ridurre a 2 ore comunque per sicurezza. Esempio: tramonto alle 19:40 con 2 ore di anticipo → l'automazione smette alle 17:40."
         }
       },
       "simple_notifiche": {
