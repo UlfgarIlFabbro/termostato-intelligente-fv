@@ -359,6 +359,9 @@ SIMPLE_INT_DRY_LOW = 1      # accende in dry se stanza > target + 1
 SIMPLE_INT_DRY_HIGH = 2     # passa a cool se stanza > target + 2
 SIMPLE_WINDOW_DELAY_MIN = 5
 
+# Ore di limbo dopo fine modalità notturna (nessuna azione del termostato)
+SIMPLE_NIGHT_END_LIMBO_H = 1
+
 # Messaggi modo semplificato
 DEFAULT_SIMPLE_MSG_TEMP_CHANGE = "🌡️ {{ name }}: temperatura {{ temp }}°C (target {{ target }}°C)."
 DEFAULT_SIMPLE_MSG_DOOR_OPEN = "\U0001f6aa {{ name }}: porta aperta."
