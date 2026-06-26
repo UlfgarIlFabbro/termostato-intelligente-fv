@@ -78,6 +78,27 @@ from .const import (
     DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
     DEFAULT_SIMPLE_TARGET_DAY,
     DEFAULT_SIMPLE_TARGET_NIGHT,
+    CONF_POWER_LIMIT_ENABLED,
+    CONF_POWER_LIMIT_HYSTERESIS_W,
+    CONF_POWER_LIMIT_MAX_W,
+    CONF_POWER_LIMIT_MODE,
+    CONF_POWER_LIMIT_MSG_OFF,
+    CONF_POWER_LIMIT_MSG_ON,
+    CONF_POWER_LIMIT_NOTIFY_TELEGRAM,
+    CONF_POWER_LIMIT_NOTIFY_TTS,
+    CONF_POWER_LIMIT_RESTORE_MIN,
+    CONF_POWER_LIMIT_SENSOR,
+    DEFAULT_POWER_LIMIT_ENABLED,
+    DEFAULT_POWER_LIMIT_HYSTERESIS_W,
+    DEFAULT_POWER_LIMIT_MAX_W,
+    DEFAULT_POWER_LIMIT_MODE,
+    DEFAULT_POWER_LIMIT_MSG_OFF,
+    DEFAULT_POWER_LIMIT_MSG_ON,
+    DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM,
+    DEFAULT_POWER_LIMIT_NOTIFY_TTS,
+    DEFAULT_POWER_LIMIT_RESTORE_MIN,
+    POWER_LIMIT_MODE_MULTI,
+    POWER_LIMIT_MODE_SINGLE,
     CONF_BATTERY_SENSOR,
     CONF_BELOW_OFFSET,
     CONF_CALIBRATION_MAX_OFFSET,
@@ -308,6 +329,48 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
     })
 
 
+
+def _schema_protezione_potenza(defaults: dict) -> vol.Schema:
+    """Schema protezione potenza — comune a tutti i modi."""
+    return vol.Schema({
+        _f(vol.Optional, CONF_POWER_LIMIT_ENABLED, defaults, DEFAULT_POWER_LIMIT_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_POWER_LIMIT_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        _f(vol.Optional, CONF_POWER_LIMIT_MODE, defaults, DEFAULT_POWER_LIMIT_MODE): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[POWER_LIMIT_MODE_SINGLE, POWER_LIMIT_MODE_MULTI],
+                mode=selector.SelectSelectorMode.LIST,
+                translation_key="power_limit_mode",
+            )
+        ),
+        _f(vol.Optional, CONF_POWER_LIMIT_MAX_W, defaults, DEFAULT_POWER_LIMIT_MAX_W): selector.NumberSelector(selector.NumberSelectorConfig(min=500, max=15000, step=100, unit_of_measurement="W", mode="box")),
+        _f(vol.Optional, CONF_POWER_LIMIT_HYSTERESIS_W, defaults, DEFAULT_POWER_LIMIT_HYSTERESIS_W): selector.NumberSelector(selector.NumberSelectorConfig(min=100, max=3000, step=50, unit_of_measurement="W", mode="box")),
+        _f(vol.Optional, CONF_POWER_LIMIT_RESTORE_MIN, defaults, DEFAULT_POWER_LIMIT_RESTORE_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=30, step=1, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_POWER_LIMIT_NOTIFY_TTS, defaults, DEFAULT_POWER_LIMIT_NOTIFY_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_POWER_LIMIT_NOTIFY_TELEGRAM, defaults, DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM): selector.BooleanSelector(),
+    })
+
+
+def _schema_protezione_potenza_completo(defaults: dict) -> vol.Schema:
+    """Schema protezione potenza per modo completo — aggiunge messaggi personalizzabili."""
+    return vol.Schema({
+        _f(vol.Optional, CONF_POWER_LIMIT_ENABLED, defaults, DEFAULT_POWER_LIMIT_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_POWER_LIMIT_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        _f(vol.Optional, CONF_POWER_LIMIT_MODE, defaults, DEFAULT_POWER_LIMIT_MODE): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[POWER_LIMIT_MODE_SINGLE, POWER_LIMIT_MODE_MULTI],
+                mode=selector.SelectSelectorMode.LIST,
+                translation_key="power_limit_mode",
+            )
+        ),
+        _f(vol.Optional, CONF_POWER_LIMIT_MAX_W, defaults, DEFAULT_POWER_LIMIT_MAX_W): selector.NumberSelector(selector.NumberSelectorConfig(min=500, max=15000, step=100, unit_of_measurement="W", mode="box")),
+        _f(vol.Optional, CONF_POWER_LIMIT_HYSTERESIS_W, defaults, DEFAULT_POWER_LIMIT_HYSTERESIS_W): selector.NumberSelector(selector.NumberSelectorConfig(min=100, max=3000, step=50, unit_of_measurement="W", mode="box")),
+        _f(vol.Optional, CONF_POWER_LIMIT_RESTORE_MIN, defaults, DEFAULT_POWER_LIMIT_RESTORE_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=30, step=1, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_POWER_LIMIT_NOTIFY_TTS, defaults, DEFAULT_POWER_LIMIT_NOTIFY_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_POWER_LIMIT_NOTIFY_TELEGRAM, defaults, DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_POWER_LIMIT_MSG_OFF, defaults, DEFAULT_POWER_LIMIT_MSG_OFF): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+        _f(vol.Optional, CONF_POWER_LIMIT_MSG_ON, defaults, DEFAULT_POWER_LIMIT_MSG_ON): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+    })
+
 def _schema_user(defaults: dict) -> vol.Schema:
     return vol.Schema({
         _f(vol.Required, CONF_NAME, defaults, DEFAULT_NAME): selector.TextSelector(),
@@ -500,8 +563,14 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_notifiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+            return await self.async_step_protezione_potenza_completo()
         return self.async_show_form(step_id="notifiche", data_schema=_schema_notifiche(self._data))
+
+    async def async_step_protezione_potenza_completo(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+        return self.async_show_form(step_id="protezione_potenza_completo", data_schema=_schema_protezione_potenza_completo(self._data))
 
     # --- Step modo semplificato e semplificato FV ---
 
@@ -541,8 +610,14 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_simple_notifiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+            return await self.async_step_protezione_potenza()
         return self.async_show_form(step_id="simple_notifiche", data_schema=_schema_simple_notifiche(self._data))
+
+    async def async_step_protezione_potenza(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+        return self.async_show_form(step_id="protezione_potenza", data_schema=_schema_protezione_potenza(self._data))
 
     @staticmethod
     @callback
@@ -614,8 +689,14 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     async def async_step_notifiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(data=self._data)
+            return await self.async_step_protezione_potenza_completo()
         return self.async_show_form(step_id="notifiche", data_schema=_schema_notifiche(self._data))
+
+    async def async_step_protezione_potenza_completo(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(data=self._data)
+        return self.async_show_form(step_id="protezione_potenza_completo", data_schema=_schema_protezione_potenza_completo(self._data))
 
     # --- Options modo semplificato ---
 
@@ -650,5 +731,11 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     async def async_step_simple_notifiche(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(data=self._data)
+            return await self.async_step_protezione_potenza()
         return self.async_show_form(step_id="simple_notifiche", data_schema=_schema_simple_notifiche(self._data))
+
+    async def async_step_protezione_potenza(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(data=self._data)
+        return self.async_show_form(step_id="protezione_potenza", data_schema=_schema_protezione_potenza(self._data))

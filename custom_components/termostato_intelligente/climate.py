@@ -170,6 +170,16 @@ from .const import (
 )
 from .const import (
     CONF_CONFIG_MODE,
+    CONF_POWER_LIMIT_ENABLED,
+    CONF_POWER_LIMIT_HYSTERESIS_W,
+    CONF_POWER_LIMIT_MAX_W,
+    CONF_POWER_LIMIT_MODE,
+    CONF_POWER_LIMIT_MSG_OFF,
+    CONF_POWER_LIMIT_MSG_ON,
+    CONF_POWER_LIMIT_NOTIFY_TELEGRAM,
+    CONF_POWER_LIMIT_NOTIFY_TTS,
+    CONF_POWER_LIMIT_RESTORE_MIN,
+    CONF_POWER_LIMIT_SENSOR,
     CONF_SIMPLE_NIGHT_END,
     CONF_SIMPLE_NIGHT_START,
     CONF_SIMPLE_SUNSET_ANTICIPATE_H,
@@ -200,6 +210,19 @@ from .const import (
     CONF_SIMPLE_NO_AUTO_ON_NIGHT,
     CONFIG_MODE_FULL,
     CONFIG_MODE_SIMPLE,
+    DEFAULT_POWER_LIMIT_ENABLED,
+    DEFAULT_POWER_LIMIT_HYSTERESIS_W,
+    DEFAULT_POWER_LIMIT_MAX_W,
+    DEFAULT_POWER_LIMIT_MODE,
+    DEFAULT_POWER_LIMIT_MSG_OFF,
+    DEFAULT_POWER_LIMIT_MSG_ON,
+    DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM,
+    DEFAULT_POWER_LIMIT_NOTIFY_TTS,
+    DEFAULT_POWER_LIMIT_RESTORE_MIN,
+    POWER_LIMIT_MODE_MULTI,
+    POWER_LIMIT_MODE_SINGLE,
+    POWER_LIMIT_RESTORE_STAGGER_MIN,
+    POWER_LIMIT_SPIKE_SEC,
     CONFIG_MODE_SIMPLE_FV,
     DEFAULT_SIMPLE_DRY_ENABLED,
     DEFAULT_SIMPLE_DRY_MAX_MIN,
@@ -331,6 +354,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # --- Limite notifiche cambio temperatura ---
         self._last_temp_notify: datetime | None = None
 
+        # --- Protezione potenza ---
+        self._power_limit_high_since: datetime | None = None  # da quando il consumo è sopra soglia
+        self._power_limit_off: bool = False                    # True se spento per power limit
+        self._power_limit_off_at: datetime | None = None       # quando è stato spento
+        self._power_limit_low_since: datetime | None = None    # da quando il consumo è sotto soglia-isteresi
+
         # --- Modo semplificato ---
         self._simple_shutoff_since: datetime | None = None  # timer spegnimento per target raggiunto
         self._simple_was_night: bool = False                 # per rilevare transizione notte→giorno
@@ -457,11 +486,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if new_state and new_state.state in ("off", "unknown", "unavailable"):
                 self._fv_surplus_buffer = []
                 self._night_below_since = None
-                self._night_auto_on = False  # clima spento: reset flag accensione notte
-                self._fv_auto_on = False     # reset flag accensione FV
+                self._night_auto_on = False
+                self._fv_auto_on = False
                 self._simple_night_auto_on = False
                 self._simple_dry_since = None
                 self._simple_shutoff_since = None
+                self._power_limit_high_since = None
+                self._power_limit_low_since = None
+                # Non resettiamo _power_limit_off qui — lo gestiamo nel metodo dedicato
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
@@ -520,6 +552,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         target = self._effective_target()
 
+        # Protezione potenza — ha precedenza su tutto
+        await self._async_handle_power_limit()
+
+        # Se spento per power limit non fare altro
+        if self._power_limit_off:
+            return
+        temp = self.current_temperature
+        if temp is None:
+            return
+        target = self._effective_target()
+
         # Rileva transizione notte → giorno PRIMA di aggiornare _was_night_mode
         night_now = self._is_night_mode_active()
         night_just_ended = self._was_night_mode and not night_now
@@ -554,6 +597,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         use_internal = not bool(self._temp_sensor)
         temp = self._simple_read_temp()
         if temp is None:
+            return
+
+        # Protezione potenza — ha precedenza su tutto
+        await self._async_handle_power_limit()
+        if self._power_limit_off:
             return
 
         night_now = self._simple_is_night()
@@ -941,14 +989,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         """Accensione FV per il modo semplificato.
 
         Accende solo se:
-        1. Temperatura ≥ soglia configurata
-        2. FV surplus > margine E SOC > minimo
-        3. Priorità e stagger rispettati
-        4. Non siamo in limbo post-notte
-
-        All'accensione parte sempre dal DRY (se abilitato).
+        1. Clima completamente spento (non in DRY, non in COOL)
+        2. Temperatura ≥ soglia configurata
+        3. FV surplus > margine E SOC > minimo
+        4. Priorità e stagger rispettati
+        5. Non siamo in limbo post-notte
         """
-        if self.hvac_mode != HVACMode.OFF:
+        # Non intervenire se il clima è già acceso in qualsiasi modalità (COOL o DRY)
+        real_state = self.hass.states.get(self._climate_entity)
+        if real_state and real_state.state not in ("off", "unknown", "unavailable"):
             return
         if self._simple_is_in_limbo():
             return
@@ -1191,6 +1240,125 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 await self._async_simple_speak(msg)
             if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE)):
                 await self._async_simple_notify(msg)
+
+    # ------------------------------------------------------------------
+    # Protezione potenza (evita distacco contatore)
+    # ------------------------------------------------------------------
+
+    async def _async_handle_power_limit(self) -> None:
+        """Spegne il clima se il consumo supera la soglia per 30 secondi.
+
+        Riaccende quando il consumo scende sotto soglia-isteresi per X minuti.
+        Modalità unico: gestisce solo se stesso.
+        Modalità multi: usa priorità FV con stagger 2 min tra riaccensioni.
+        """
+        if not bool(get_conf(self.entry, CONF_POWER_LIMIT_ENABLED, DEFAULT_POWER_LIMIT_ENABLED)):
+            return
+
+        sensor = get_conf(self.entry, CONF_POWER_LIMIT_SENSOR)
+        if not sensor:
+            return
+
+        consumo = self._read_float(sensor)
+        if consumo is None:
+            return
+
+        max_w = float(get_conf(self.entry, CONF_POWER_LIMIT_MAX_W, DEFAULT_POWER_LIMIT_MAX_W))
+        hysteresis_w = float(get_conf(self.entry, CONF_POWER_LIMIT_HYSTERESIS_W, DEFAULT_POWER_LIMIT_HYSTERESIS_W))
+        restore_min = int(get_conf(self.entry, CONF_POWER_LIMIT_RESTORE_MIN, DEFAULT_POWER_LIMIT_RESTORE_MIN))
+        mode = get_conf(self.entry, CONF_POWER_LIMIT_MODE, DEFAULT_POWER_LIMIT_MODE)
+        now = dt_util.utcnow()
+
+        current_state = self.hass.states.get(self._climate_entity)
+        is_on = current_state and current_state.state not in ("off", "unknown", "unavailable")
+
+        # --- Spegnimento per eccesso consumo ---
+        if is_on and not self._power_limit_off:
+            if consumo > max_w:
+                if self._power_limit_high_since is None:
+                    self._power_limit_high_since = now
+                elif (now - self._power_limit_high_since).total_seconds() >= POWER_LIMIT_SPIKE_SEC:
+                    _LOGGER.warning(
+                        "%s: [power limit] spegnimento (consumo=%.0fW > max=%.0fW)",
+                        self._attr_name, consumo, max_w,
+                    )
+                    await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
+                    self._power_limit_off = True
+                    self._power_limit_off_at = now
+                    self._power_limit_high_since = None
+                    self._power_limit_low_since = None
+                    # Registra in coordinamento per cascata multi
+                    coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+                    pl_order = coord.setdefault("power_limit_off_order", [])
+                    if self.entry.entry_id not in pl_order:
+                        pl_order.append(self.entry.entry_id)
+                    await self._async_power_limit_notify(is_on=False, consumo=consumo)
+                    return
+            else:
+                self._power_limit_high_since = None
+
+        # --- Riaccensione dopo calo consumo ---
+        if self._power_limit_off:
+            restore_threshold = max_w - hysteresis_w
+            if consumo <= restore_threshold:
+                if self._power_limit_low_since is None:
+                    self._power_limit_low_since = now
+                elif (now - self._power_limit_low_since) >= timedelta(minutes=restore_min):
+                    # Modalità multi: rispetta cascata e stagger
+                    if mode == POWER_LIMIT_MODE_MULTI:
+                        coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+                        pl_order = coord.get("power_limit_off_order", [])
+                        last_restore = coord.get("last_power_limit_restore")
+                        # Riaccende solo se siamo il primo della lista e lo stagger è passato
+                        if pl_order and pl_order[-1] == self.entry.entry_id:
+                            if last_restore is None or (now - last_restore) >= timedelta(minutes=POWER_LIMIT_RESTORE_STAGGER_MIN):
+                                # Verifica che il consumo sia ancora sotto soglia
+                                if consumo <= restore_threshold:
+                                    await self._async_power_limit_restore()
+                                    pl_order.pop()
+                                    coord["last_power_limit_restore"] = now
+                        return
+                    else:
+                        # Modalità unico: riaccende direttamente
+                        await self._async_power_limit_restore()
+            else:
+                self._power_limit_low_since = None
+
+    async def _async_power_limit_restore(self) -> None:
+        """Riaccende il clima dopo calo consumo."""
+        _LOGGER.info("%s: [power limit] riaccensione dopo calo consumo", self._attr_name)
+        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        self._power_limit_off = False
+        self._power_limit_off_at = None
+        self._power_limit_low_since = None
+        self._power_limit_high_since = None
+        await self._async_power_limit_notify(is_on=True)
+
+    async def _async_power_limit_notify(self, is_on: bool, consumo: float = 0) -> None:
+        """Notifica spegnimento/riaccensione per protezione potenza."""
+        notify_tts = bool(get_conf(self.entry, CONF_POWER_LIMIT_NOTIFY_TTS, DEFAULT_POWER_LIMIT_NOTIFY_TTS))
+        notify_tel = bool(get_conf(self.entry, CONF_POWER_LIMIT_NOTIFY_TELEGRAM, DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM))
+        if not notify_tts and not notify_tel:
+            return
+
+        config_mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        if is_on:
+            if config_mode == CONFIG_MODE_FULL:
+                tpl = get_conf(self.entry, CONF_POWER_LIMIT_MSG_ON, DEFAULT_POWER_LIMIT_MSG_ON)
+            else:
+                tpl = DEFAULT_POWER_LIMIT_MSG_ON
+        else:
+            if config_mode == CONFIG_MODE_FULL:
+                tpl = get_conf(self.entry, CONF_POWER_LIMIT_MSG_OFF, DEFAULT_POWER_LIMIT_MSG_OFF)
+            else:
+                tpl = DEFAULT_POWER_LIMIT_MSG_OFF
+
+        message = await self._async_render(tpl, {"name": self._attr_name, "consumo": round(consumo)})
+
+        if notify_tts:
+            await self._async_speak(message, bypass_quiet=True)
+        if notify_tel:
+            await self._async_send_notification(message, bypass_quiet=True)
 
     # ------------------------------------------------------------------
     # Helpers orari / stato

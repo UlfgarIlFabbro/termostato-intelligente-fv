@@ -104,6 +104,41 @@ CONF_DOOR_ALERT_MESSAGE = "door_alert_message"
 CONF_DOOR_ALERT_TTS = "door_alert_tts"
 CONF_DOOR_ALERT_NOTIFY = "door_alert_notify"
 
+
+# --- Protezione potenza (evita distacco contatore) ---
+CONF_POWER_LIMIT_ENABLED = "power_limit_enabled"
+CONF_POWER_LIMIT_SENSOR = "power_limit_sensor"
+CONF_POWER_LIMIT_MODE = "power_limit_mode"
+CONF_POWER_LIMIT_MAX_W = "power_limit_max_w"
+CONF_POWER_LIMIT_HYSTERESIS_W = "power_limit_hysteresis_w"
+CONF_POWER_LIMIT_RESTORE_MIN = "power_limit_restore_min"
+CONF_POWER_LIMIT_NOTIFY_TTS = "power_limit_notify_tts"
+CONF_POWER_LIMIT_NOTIFY_TELEGRAM = "power_limit_notify_telegram"
+CONF_POWER_LIMIT_MSG_OFF = "power_limit_msg_off"
+CONF_POWER_LIMIT_MSG_ON = "power_limit_msg_on"
+
+POWER_LIMIT_MODE_SINGLE = "unico"
+POWER_LIMIT_MODE_MULTI = "multiplo"
+
+DEFAULT_POWER_LIMIT_ENABLED = False
+DEFAULT_POWER_LIMIT_MODE = POWER_LIMIT_MODE_SINGLE
+DEFAULT_POWER_LIMIT_MAX_W = 3500
+DEFAULT_POWER_LIMIT_HYSTERESIS_W = 800
+DEFAULT_POWER_LIMIT_RESTORE_MIN = 5
+DEFAULT_POWER_LIMIT_NOTIFY_TTS = False
+DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM = True
+DEFAULT_POWER_LIMIT_MSG_OFF = (
+    "Ho spento il climatizzatore {{ name }} per evitare che vada via la luce."
+)
+DEFAULT_POWER_LIMIT_MSG_ON = (
+    "Ho riacceso il condizionatore {{ name }} perché stai consumando meno."
+)
+
+# Anti-picco: secondi di consumo sopra soglia prima di spegnere (fisso)
+POWER_LIMIT_SPIKE_SEC = 30
+# Stagger riaccensione cascata multi-clima (fisso)
+POWER_LIMIT_RESTORE_STAGGER_MIN = 2
+
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"
 SWITCH_KEY_FV = "switch_fv"

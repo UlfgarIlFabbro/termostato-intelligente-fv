@@ -14,6 +14,12 @@
         "semplificato_fv": "🔵 Simple with solar",
         "completo": "⚙️ Full"
       }
+    },
+    "power_limit_mode": {
+      "options": {
+        "unico": "🔵 Single AC on circuit",
+        "multiplo": "🟢 Multiple AC on same circuit"
+      }
     }
   },
   "config": {
@@ -344,6 +350,58 @@
           "simple_notify_tel_night_start": "Telegram alerts at start of night mode.",
           "simple_notify_tel_night_end": "Telegram alerts at end of night mode.",
           "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours."
+        }
+      },
+      "protezione_potenza": {
+        "title": "Power protection — Prevent circuit breaker trip",
+        "description": "Configure automatic protection against circuit breaker trips. If consumption exceeds the set threshold, the AC turns off automatically and turns back on when consumption drops.",
+        "data": {
+          "power_limit_enabled": "▶ Enable power protection",
+          "power_limit_sensor": "Consumption sensor to monitor (W)",
+          "power_limit_mode": "Management mode",
+          "power_limit_max_w": "Maximum consumption threshold before turn-off (W)",
+          "power_limit_hysteresis_w": "Consumption reduction required to turn back on (W)",
+          "power_limit_restore_min": "Minutes of low consumption before turning back on",
+          "power_limit_notify_tts": "▶ Google Home voice alert",
+          "power_limit_notify_telegram": "▶ Telegram alert"
+        },
+        "data_description": {
+          "power_limit_enabled": "If enabled: the thermostat monitors consumption and automatically turns off the AC if it exceeds the threshold for at least 30 seconds (anti-spike). It turns back on when consumption drops enough.",
+          "power_limit_sensor": "Sensor measuring the electrical consumption of the circuit to protect. Can be total house consumption or a single circuit meter. Example: sensor.living_room_consumption.",
+          "power_limit_mode": "Single AC: manages only this AC independently. Multiple AC: coordinates shutdown and restart in cascade with other thermostats that have the same protection active, using the already configured priority.",
+          "power_limit_max_w": "If consumption exceeds this value for at least 30 seconds, the AC turns off. The 30 seconds prevent shutdowns due to momentary spikes (e.g. washing machine start, induction hob). Example: 3500W → turns off if consuming more than 3500W.",
+          "power_limit_hysteresis_w": "How many Watts consumption must drop below the maximum threshold before the AC can turn back on. Example: threshold 3500W, hysteresis 800W → turns on only when consumption drops below 2700W. Avoids rapid on/off cycles.",
+          "power_limit_restore_min": "How many minutes consumption must stay below the restart threshold before the AC turns back on. Example: 5 minutes → if consumption drops but rises again within 5 minutes, AC does not restart.",
+          "power_limit_notify_tts": "If enabled: Google Home announces when the AC is turned off or on due to power protection.",
+          "power_limit_notify_telegram": "If enabled: Telegram alerts when the AC is turned off or on due to power protection."
+        }
+      },
+      "protezione_potenza_completo": {
+        "title": "Power protection — Prevent circuit breaker trip",
+        "description": "Configure automatic protection against circuit breaker trips. If consumption exceeds the set threshold, the AC turns off automatically and turns back on when consumption drops.",
+        "data": {
+          "power_limit_enabled": "▶ Enable power protection",
+          "power_limit_sensor": "Consumption sensor to monitor (W)",
+          "power_limit_mode": "Management mode",
+          "power_limit_max_w": "Maximum consumption threshold before turn-off (W)",
+          "power_limit_hysteresis_w": "Consumption reduction required to turn back on (W)",
+          "power_limit_restore_min": "Minutes of low consumption before turning back on",
+          "power_limit_notify_tts": "▶ Google Home voice alert",
+          "power_limit_notify_telegram": "▶ Telegram alert",
+          "power_limit_msg_off": "Turn-off message (template)",
+          "power_limit_msg_on": "Turn-on message (template)"
+        },
+        "data_description": {
+          "power_limit_enabled": "If enabled: the thermostat monitors consumption and automatically turns off the AC if it exceeds the threshold for at least 30 seconds (anti-spike). It turns back on when consumption drops enough.",
+          "power_limit_sensor": "Sensor measuring the electrical consumption of the circuit to protect. Can be total house consumption or a single circuit meter. Example: sensor.living_room_consumption.",
+          "power_limit_mode": "Single AC: manages only this AC independently. Multiple AC: coordinates shutdown and restart in cascade with other thermostats that have the same protection active, using the already configured priority.",
+          "power_limit_max_w": "If consumption exceeds this value for at least 30 seconds, the AC turns off. The 30 seconds prevent shutdowns due to momentary spikes (e.g. washing machine start, induction hob). Example: 3500W → turns off if consuming more than 3500W.",
+          "power_limit_hysteresis_w": "How many Watts consumption must drop below the maximum threshold before the AC can turn back on. Example: threshold 3500W, hysteresis 800W → turns on only when consumption drops below 2700W. Avoids rapid on/off cycles.",
+          "power_limit_restore_min": "How many minutes consumption must stay below the restart threshold before the AC turns back on. Example: 5 minutes → if consumption drops but rises again within 5 minutes, AC does not restart.",
+          "power_limit_notify_tts": "If enabled: Google Home announces when the AC is turned off or on due to power protection.",
+          "power_limit_notify_telegram": "If enabled: Telegram alerts when the AC is turned off or on due to power protection.",
+          "power_limit_msg_off": "Message sent when AC turns off due to excess consumption. Variables: {{ name }} = thermostat name, {{ consumo }} = current consumption in W.",
+          "power_limit_msg_on": "Message sent when AC turns back on after consumption drops. Variables: {{ name }} = thermostat name."
         }
       }
     },
@@ -677,6 +735,58 @@
         },
         "data_description": {
           "config_mode": "🟢 SIMPLE — Few essential fields, automatic logic.\n🔵 SIMPLE WITH SOLAR — Like Simple + solar management.\n⚙️ FULL — All advanced parameters."
+        }
+      },
+      "protezione_potenza": {
+        "title": "Power protection — Prevent circuit breaker trip",
+        "description": "Configure automatic protection against circuit breaker trips. If consumption exceeds the set threshold, the AC turns off automatically and turns back on when consumption drops.",
+        "data": {
+          "power_limit_enabled": "▶ Enable power protection",
+          "power_limit_sensor": "Consumption sensor to monitor (W)",
+          "power_limit_mode": "Management mode",
+          "power_limit_max_w": "Maximum consumption threshold before turn-off (W)",
+          "power_limit_hysteresis_w": "Consumption reduction required to turn back on (W)",
+          "power_limit_restore_min": "Minutes of low consumption before turning back on",
+          "power_limit_notify_tts": "▶ Google Home voice alert",
+          "power_limit_notify_telegram": "▶ Telegram alert"
+        },
+        "data_description": {
+          "power_limit_enabled": "If enabled: the thermostat monitors consumption and automatically turns off the AC if it exceeds the threshold for at least 30 seconds (anti-spike). It turns back on when consumption drops enough.",
+          "power_limit_sensor": "Sensor measuring the electrical consumption of the circuit to protect. Can be total house consumption or a single circuit meter. Example: sensor.living_room_consumption.",
+          "power_limit_mode": "Single AC: manages only this AC independently. Multiple AC: coordinates shutdown and restart in cascade with other thermostats that have the same protection active, using the already configured priority.",
+          "power_limit_max_w": "If consumption exceeds this value for at least 30 seconds, the AC turns off. The 30 seconds prevent shutdowns due to momentary spikes (e.g. washing machine start, induction hob). Example: 3500W → turns off if consuming more than 3500W.",
+          "power_limit_hysteresis_w": "How many Watts consumption must drop below the maximum threshold before the AC can turn back on. Example: threshold 3500W, hysteresis 800W → turns on only when consumption drops below 2700W. Avoids rapid on/off cycles.",
+          "power_limit_restore_min": "How many minutes consumption must stay below the restart threshold before the AC turns back on. Example: 5 minutes → if consumption drops but rises again within 5 minutes, AC does not restart.",
+          "power_limit_notify_tts": "If enabled: Google Home announces when the AC is turned off or on due to power protection.",
+          "power_limit_notify_telegram": "If enabled: Telegram alerts when the AC is turned off or on due to power protection."
+        }
+      },
+      "protezione_potenza_completo": {
+        "title": "Power protection — Prevent circuit breaker trip",
+        "description": "Configure automatic protection against circuit breaker trips. If consumption exceeds the set threshold, the AC turns off automatically and turns back on when consumption drops.",
+        "data": {
+          "power_limit_enabled": "▶ Enable power protection",
+          "power_limit_sensor": "Consumption sensor to monitor (W)",
+          "power_limit_mode": "Management mode",
+          "power_limit_max_w": "Maximum consumption threshold before turn-off (W)",
+          "power_limit_hysteresis_w": "Consumption reduction required to turn back on (W)",
+          "power_limit_restore_min": "Minutes of low consumption before turning back on",
+          "power_limit_notify_tts": "▶ Google Home voice alert",
+          "power_limit_notify_telegram": "▶ Telegram alert",
+          "power_limit_msg_off": "Turn-off message (template)",
+          "power_limit_msg_on": "Turn-on message (template)"
+        },
+        "data_description": {
+          "power_limit_enabled": "If enabled: the thermostat monitors consumption and automatically turns off the AC if it exceeds the threshold for at least 30 seconds (anti-spike). It turns back on when consumption drops enough.",
+          "power_limit_sensor": "Sensor measuring the electrical consumption of the circuit to protect. Can be total house consumption or a single circuit meter. Example: sensor.living_room_consumption.",
+          "power_limit_mode": "Single AC: manages only this AC independently. Multiple AC: coordinates shutdown and restart in cascade with other thermostats that have the same protection active, using the already configured priority.",
+          "power_limit_max_w": "If consumption exceeds this value for at least 30 seconds, the AC turns off. The 30 seconds prevent shutdowns due to momentary spikes (e.g. washing machine start, induction hob). Example: 3500W → turns off if consuming more than 3500W.",
+          "power_limit_hysteresis_w": "How many Watts consumption must drop below the maximum threshold before the AC can turn back on. Example: threshold 3500W, hysteresis 800W → turns on only when consumption drops below 2700W. Avoids rapid on/off cycles.",
+          "power_limit_restore_min": "How many minutes consumption must stay below the restart threshold before the AC turns back on. Example: 5 minutes → if consumption drops but rises again within 5 minutes, AC does not restart.",
+          "power_limit_notify_tts": "If enabled: Google Home announces when the AC is turned off or on due to power protection.",
+          "power_limit_notify_telegram": "If enabled: Telegram alerts when the AC is turned off or on due to power protection.",
+          "power_limit_msg_off": "Message sent when AC turns off due to excess consumption. Variables: {{ name }} = thermostat name, {{ consumo }} = current consumption in W.",
+          "power_limit_msg_on": "Message sent when AC turns back on after consumption drops. Variables: {{ name }} = thermostat name."
         }
       }
     }
