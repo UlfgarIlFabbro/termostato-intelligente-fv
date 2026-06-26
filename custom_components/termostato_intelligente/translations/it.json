@@ -14,6 +14,12 @@
         "semplificato_fv": "🔵 Semplificato con fotovoltaico",
         "completo": "⚙️ Completo"
       }
+    },
+    "power_limit_mode": {
+      "options": {
+        "unico": "🔵 Unico clima sul contatore",
+        "multiplo": "🟢 Più clima sullo stesso contatore"
+      }
     }
   },
   "config": {
@@ -344,6 +350,58 @@
           "simple_notify_tel_night_start": "Telegram avvisa all'inizio della modalità notturna.",
           "simple_notify_tel_night_end": "Telegram avvisa alla fine della modalità notturna.",
           "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna."
+        }
+      },
+      "protezione_potenza": {
+        "title": "Protezione potenza — Evita distacco contatore",
+        "description": "Configura la protezione automatica contro il distacco del contatore. Se il consumo supera la soglia impostata, il climatizzatore viene spento automaticamente e riacceso quando i consumi calano.",
+        "data": {
+          "power_limit_enabled": "▶ Attiva protezione potenza",
+          "power_limit_sensor": "Sensore consumo da monitorare (W)",
+          "power_limit_mode": "Modalità gestione",
+          "power_limit_max_w": "Soglia massima di consumo prima dello spegnimento (W)",
+          "power_limit_hysteresis_w": "Riduzione consumo necessaria per riaccendere (W)",
+          "power_limit_restore_min": "Minuti di consumo basso prima di riaccendere",
+          "power_limit_notify_tts": "▶ Avviso vocale Google Home",
+          "power_limit_notify_telegram": "▶ Avviso Telegram"
+        },
+        "data_description": {
+          "power_limit_enabled": "Se attivato: il termostato monitora il consumo e spegne automaticamente il climatizzatore se supera la soglia per almeno 30 secondi (anti-picco). Lo riaccende quando i consumi calano abbastanza.",
+          "power_limit_sensor": "Il sensore che misura il consumo elettrico del circuito da proteggere. Può essere il consumo totale della casa o di un singolo circuito (es. meter della sala da pranzo). Esempio: sensor.consumo_sala.",
+          "power_limit_mode": "Unico clima: gestisce solo questo climatizzatore indipendentemente dagli altri. Più clima: coordina lo spegnimento e la riaccensione in cascata con gli altri termostati che hanno la stessa protezione attiva, usando la priorità già configurata.",
+          "power_limit_max_w": "Se il consumo supera questo valore per almeno 30 secondi, il climatizzatore viene spento. I 30 secondi evitano spegnimenti per picchi momentanei (es. avvio lavatrice, forno a induzione). Esempio: 3500W → spegne se stai assorbendo più di 3500W.",
+          "power_limit_hysteresis_w": "Di quanti Watt deve scendere il consumo rispetto alla soglia massima prima che il clima possa riaccendersi. Esempio: soglia 3500W, isteresi 800W → riaccende solo quando il consumo scende sotto 2700W. Evita cicli rapidi di accensione/spegnimento.",
+          "power_limit_restore_min": "Quanti minuti il consumo deve restare sotto la soglia di riaccensione prima che il clima si riaccenda. Esempio: 5 minuti → se i consumi calano ma risalgono prima di 5 minuti, il clima non riaccende.",
+          "power_limit_notify_tts": "Se attivato: Google Home annuncia quando il clima viene spento o riacceso per protezione potenza.",
+          "power_limit_notify_telegram": "Se attivato: Telegram avvisa quando il clima viene spento o riacceso per protezione potenza."
+        }
+      },
+      "protezione_potenza_completo": {
+        "title": "Protezione potenza — Evita distacco contatore",
+        "description": "Configura la protezione automatica contro il distacco del contatore. Se il consumo supera la soglia impostata, il climatizzatore viene spento automaticamente e riacceso quando i consumi calano.",
+        "data": {
+          "power_limit_enabled": "▶ Attiva protezione potenza",
+          "power_limit_sensor": "Sensore consumo da monitorare (W)",
+          "power_limit_mode": "Modalità gestione",
+          "power_limit_max_w": "Soglia massima di consumo prima dello spegnimento (W)",
+          "power_limit_hysteresis_w": "Riduzione consumo necessaria per riaccendere (W)",
+          "power_limit_restore_min": "Minuti di consumo basso prima di riaccendere",
+          "power_limit_notify_tts": "▶ Avviso vocale Google Home",
+          "power_limit_notify_telegram": "▶ Avviso Telegram",
+          "power_limit_msg_off": "Messaggio spegnimento (template)",
+          "power_limit_msg_on": "Messaggio riaccensione (template)"
+        },
+        "data_description": {
+          "power_limit_enabled": "Se attivato: il termostato monitora il consumo e spegne automaticamente il climatizzatore se supera la soglia per almeno 30 secondi (anti-picco). Lo riaccende quando i consumi calano abbastanza.",
+          "power_limit_sensor": "Il sensore che misura il consumo elettrico del circuito da proteggere. Può essere il consumo totale della casa o di un singolo circuito (es. meter della sala da pranzo). Esempio: sensor.consumo_sala.",
+          "power_limit_mode": "Unico clima: gestisce solo questo climatizzatore indipendentemente dagli altri. Più clima: coordina lo spegnimento e la riaccensione in cascata con gli altri termostati che hanno la stessa protezione attiva, usando la priorità già configurata.",
+          "power_limit_max_w": "Se il consumo supera questo valore per almeno 30 secondi, il climatizzatore viene spento. I 30 secondi evitano spegnimenti per picchi momentanei (es. avvio lavatrice, forno a induzione). Esempio: 3500W → spegne se stai assorbendo più di 3500W.",
+          "power_limit_hysteresis_w": "Di quanti Watt deve scendere il consumo rispetto alla soglia massima prima che il clima possa riaccendersi. Esempio: soglia 3500W, isteresi 800W → riaccende solo quando il consumo scende sotto 2700W. Evita cicli rapidi di accensione/spegnimento.",
+          "power_limit_restore_min": "Quanti minuti il consumo deve restare sotto la soglia di riaccensione prima che il clima si riaccenda. Esempio: 5 minuti → se i consumi calano ma risalgono prima di 5 minuti, il clima non riaccende.",
+          "power_limit_notify_tts": "Se attivato: Google Home annuncia quando il clima viene spento o riacceso per protezione potenza.",
+          "power_limit_notify_telegram": "Se attivato: Telegram avvisa quando il clima viene spento o riacceso per protezione potenza.",
+          "power_limit_msg_off": "Messaggio inviato quando il clima viene spento per eccesso di consumo. Variabili: {{ name }} = nome termostato, {{ consumo }} = consumo attuale in W.",
+          "power_limit_msg_on": "Messaggio inviato quando il clima viene riacceso dopo il calo dei consumi. Variabili: {{ name }} = nome termostato."
         }
       }
     },
@@ -677,6 +735,58 @@
         },
         "data_description": {
           "config_mode": "🟢 SEMPLIFICATO — Pochi campi essenziali, logica automatica.\n🔵 SEMPLIFICATO CON FOTOVOLTAICO — Come il semplificato + gestione FV.\n⚙️ COMPLETO — Tutti i parametri avanzati."
+        }
+      },
+      "protezione_potenza": {
+        "title": "Protezione potenza — Evita distacco contatore",
+        "description": "Configura la protezione automatica contro il distacco del contatore. Se il consumo supera la soglia impostata, il climatizzatore viene spento automaticamente e riacceso quando i consumi calano.",
+        "data": {
+          "power_limit_enabled": "▶ Attiva protezione potenza",
+          "power_limit_sensor": "Sensore consumo da monitorare (W)",
+          "power_limit_mode": "Modalità gestione",
+          "power_limit_max_w": "Soglia massima di consumo prima dello spegnimento (W)",
+          "power_limit_hysteresis_w": "Riduzione consumo necessaria per riaccendere (W)",
+          "power_limit_restore_min": "Minuti di consumo basso prima di riaccendere",
+          "power_limit_notify_tts": "▶ Avviso vocale Google Home",
+          "power_limit_notify_telegram": "▶ Avviso Telegram"
+        },
+        "data_description": {
+          "power_limit_enabled": "Se attivato: il termostato monitora il consumo e spegne automaticamente il climatizzatore se supera la soglia per almeno 30 secondi (anti-picco). Lo riaccende quando i consumi calano abbastanza.",
+          "power_limit_sensor": "Il sensore che misura il consumo elettrico del circuito da proteggere. Può essere il consumo totale della casa o di un singolo circuito (es. meter della sala da pranzo). Esempio: sensor.consumo_sala.",
+          "power_limit_mode": "Unico clima: gestisce solo questo climatizzatore indipendentemente dagli altri. Più clima: coordina lo spegnimento e la riaccensione in cascata con gli altri termostati che hanno la stessa protezione attiva, usando la priorità già configurata.",
+          "power_limit_max_w": "Se il consumo supera questo valore per almeno 30 secondi, il climatizzatore viene spento. I 30 secondi evitano spegnimenti per picchi momentanei (es. avvio lavatrice, forno a induzione). Esempio: 3500W → spegne se stai assorbendo più di 3500W.",
+          "power_limit_hysteresis_w": "Di quanti Watt deve scendere il consumo rispetto alla soglia massima prima che il clima possa riaccendersi. Esempio: soglia 3500W, isteresi 800W → riaccende solo quando il consumo scende sotto 2700W. Evita cicli rapidi di accensione/spegnimento.",
+          "power_limit_restore_min": "Quanti minuti il consumo deve restare sotto la soglia di riaccensione prima che il clima si riaccenda. Esempio: 5 minuti → se i consumi calano ma risalgono prima di 5 minuti, il clima non riaccende.",
+          "power_limit_notify_tts": "Se attivato: Google Home annuncia quando il clima viene spento o riacceso per protezione potenza.",
+          "power_limit_notify_telegram": "Se attivato: Telegram avvisa quando il clima viene spento o riacceso per protezione potenza."
+        }
+      },
+      "protezione_potenza_completo": {
+        "title": "Protezione potenza — Evita distacco contatore",
+        "description": "Configura la protezione automatica contro il distacco del contatore. Se il consumo supera la soglia impostata, il climatizzatore viene spento automaticamente e riacceso quando i consumi calano.",
+        "data": {
+          "power_limit_enabled": "▶ Attiva protezione potenza",
+          "power_limit_sensor": "Sensore consumo da monitorare (W)",
+          "power_limit_mode": "Modalità gestione",
+          "power_limit_max_w": "Soglia massima di consumo prima dello spegnimento (W)",
+          "power_limit_hysteresis_w": "Riduzione consumo necessaria per riaccendere (W)",
+          "power_limit_restore_min": "Minuti di consumo basso prima di riaccendere",
+          "power_limit_notify_tts": "▶ Avviso vocale Google Home",
+          "power_limit_notify_telegram": "▶ Avviso Telegram",
+          "power_limit_msg_off": "Messaggio spegnimento (template)",
+          "power_limit_msg_on": "Messaggio riaccensione (template)"
+        },
+        "data_description": {
+          "power_limit_enabled": "Se attivato: il termostato monitora il consumo e spegne automaticamente il climatizzatore se supera la soglia per almeno 30 secondi (anti-picco). Lo riaccende quando i consumi calano abbastanza.",
+          "power_limit_sensor": "Il sensore che misura il consumo elettrico del circuito da proteggere. Può essere il consumo totale della casa o di un singolo circuito (es. meter della sala da pranzo). Esempio: sensor.consumo_sala.",
+          "power_limit_mode": "Unico clima: gestisce solo questo climatizzatore indipendentemente dagli altri. Più clima: coordina lo spegnimento e la riaccensione in cascata con gli altri termostati che hanno la stessa protezione attiva, usando la priorità già configurata.",
+          "power_limit_max_w": "Se il consumo supera questo valore per almeno 30 secondi, il climatizzatore viene spento. I 30 secondi evitano spegnimenti per picchi momentanei (es. avvio lavatrice, forno a induzione). Esempio: 3500W → spegne se stai assorbendo più di 3500W.",
+          "power_limit_hysteresis_w": "Di quanti Watt deve scendere il consumo rispetto alla soglia massima prima che il clima possa riaccendersi. Esempio: soglia 3500W, isteresi 800W → riaccende solo quando il consumo scende sotto 2700W. Evita cicli rapidi di accensione/spegnimento.",
+          "power_limit_restore_min": "Quanti minuti il consumo deve restare sotto la soglia di riaccensione prima che il clima si riaccenda. Esempio: 5 minuti → se i consumi calano ma risalgono prima di 5 minuti, il clima non riaccende.",
+          "power_limit_notify_tts": "Se attivato: Google Home annuncia quando il clima viene spento o riacceso per protezione potenza.",
+          "power_limit_notify_telegram": "Se attivato: Telegram avvisa quando il clima viene spento o riacceso per protezione potenza.",
+          "power_limit_msg_off": "Messaggio inviato quando il clima viene spento per eccesso di consumo. Variabili: {{ name }} = nome termostato, {{ consumo }} = consumo attuale in W.",
+          "power_limit_msg_on": "Messaggio inviato quando il clima viene riacceso dopo il calo dei consumi. Variabili: {{ name }} = nome termostato."
         }
       }
     }
