@@ -17,17 +17,29 @@ from .const import (
     CONF_CONFIG_MODE,
     CONF_SIMPLE_DRY_ENABLED,
     CONF_SIMPLE_DRY_MAX_MIN,
+    CONF_SIMPLE_NO_AUTO_ON_NIGHT,
+    CONF_SIMPLE_TURN_ON_OFFSET,
     CONF_SIMPLE_NIGHT_END,
     CONF_SIMPLE_NIGHT_START,
     CONF_SIMPLE_SUNSET_ANTICIPATE_H,
-    CONF_SIMPLE_NOTIFY_AC_OFF,
-    CONF_SIMPLE_NOTIFY_AC_ON,
-    CONF_SIMPLE_NOTIFY_DOOR_CLOSE,
-    CONF_SIMPLE_NOTIFY_DOOR_OPEN,
-    CONF_SIMPLE_NOTIFY_NIGHT_END,
-    CONF_SIMPLE_NOTIFY_NIGHT_START,
-    CONF_SIMPLE_NOTIFY_WINDOW_CLOSE,
-    CONF_SIMPLE_NOTIFY_WINDOW_OPEN,
+    CONF_SIMPLE_NOTIFY_TEL_AC_OFF,
+    CONF_SIMPLE_NOTIFY_TEL_AC_ON,
+    CONF_SIMPLE_NOTIFY_TEL_DOOR_CLOSE,
+    CONF_SIMPLE_NOTIFY_TEL_DOOR_OPEN,
+    CONF_SIMPLE_NOTIFY_TEL_NIGHT_END,
+    CONF_SIMPLE_NOTIFY_TEL_NIGHT_START,
+    CONF_SIMPLE_NOTIFY_TEL_TEMP_CHANGE,
+    CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE,
+    CONF_SIMPLE_NOTIFY_TEL_WINDOW_OPEN,
+    CONF_SIMPLE_NOTIFY_TTS_AC_OFF,
+    CONF_SIMPLE_NOTIFY_TTS_AC_ON,
+    CONF_SIMPLE_NOTIFY_TTS_DOOR_CLOSE,
+    CONF_SIMPLE_NOTIFY_TTS_DOOR_OPEN,
+    CONF_SIMPLE_NOTIFY_TTS_NIGHT_END,
+    CONF_SIMPLE_NOTIFY_TTS_NIGHT_START,
+    CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE,
+    CONF_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE,
+    CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN,
     CONF_SIMPLE_QUIET_NIGHT_NOTIFY,
     CONF_SIMPLE_QUIET_NIGHT_TTS,
     CONF_SIMPLE_TARGET_DAY,
@@ -38,17 +50,30 @@ from .const import (
     DEFAULT_CONFIG_MODE,
     DEFAULT_SIMPLE_DRY_ENABLED,
     DEFAULT_SIMPLE_DRY_MAX_MIN,
+    DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
+    DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
+    DEFAULT_SIMPLE_TURN_ON_OFFSET_INT,
     DEFAULT_SIMPLE_NIGHT_END,
     DEFAULT_SIMPLE_NIGHT_START,
     DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
-    DEFAULT_SIMPLE_NOTIFY_AC_OFF,
-    DEFAULT_SIMPLE_NOTIFY_AC_ON,
-    DEFAULT_SIMPLE_NOTIFY_DOOR_CLOSE,
-    DEFAULT_SIMPLE_NOTIFY_DOOR_OPEN,
-    DEFAULT_SIMPLE_NOTIFY_NIGHT_END,
-    DEFAULT_SIMPLE_NOTIFY_NIGHT_START,
-    DEFAULT_SIMPLE_NOTIFY_WINDOW_CLOSE,
-    DEFAULT_SIMPLE_NOTIFY_WINDOW_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF,
+    DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON,
+    DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END,
+    DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START,
+    DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF,
+    DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON,
+    DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END,
+    DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START,
+    DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE,
+    DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN,
     DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY,
     DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
     DEFAULT_SIMPLE_TARGET_DAY,
@@ -222,13 +247,19 @@ def _schema_simple_temperature(defaults: dict) -> vol.Schema:
         _f(vol.Required, CONF_SIMPLE_NIGHT_END, defaults, DEFAULT_SIMPLE_NIGHT_END): selector.TimeSelector(),
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_ENABLED, defaults, DEFAULT_NIGHT_END_SHUTOFF_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_AUTO_ONLY, defaults, DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NO_AUTO_ON_NIGHT, defaults, DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_TURN_ON_OFFSET, defaults, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT): selector.NumberSelector(selector.NumberSelectorConfig(min=0.3, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_SIMPLE_DRY_ENABLED, defaults, DEFAULT_SIMPLE_DRY_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_DRY_MAX_MIN, defaults, DEFAULT_SIMPLE_DRY_MAX_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="min", mode="box")),
     })
 
 
 def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str = "") -> vol.Schema:
-    """Schema step FV con campi readonly per orario tramonto e orario limite controllo manuale."""
+    """Schema step FV con campi readonly per orario tramonto e orario limite controllo manuale.
+
+    Fascia oraria accensione FV non configurabile — parte dalla fine della notte
+    e termina automaticamente al tramonto - X ore (sun.sun).
+    """
     return vol.Schema({
         _f(vol.Optional, "sunset_info", defaults, sunset_str): selector.TextSelector(),
         _f(vol.Optional, "cutoff_info", defaults, cutoff_str): selector.TextSelector(),
@@ -238,32 +269,41 @@ def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str
         _f(vol.Optional, CONF_BATTERY_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
         _f(vol.Optional, CONF_FV_MARGIN_W, defaults, DEFAULT_FV_MARGIN_W): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=5000, step=50, unit_of_measurement="W", mode="box")),
         _f(vol.Optional, CONF_SOC_MIN, defaults, DEFAULT_SOC_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=100, step=1, unit_of_measurement="%", mode="box")),
-        _f(vol.Optional, CONF_FV_START_TIME, defaults, DEFAULT_FV_START_TIME): selector.TimeSelector(),
-        _f(vol.Optional, CONF_FV_END_TIME, defaults, DEFAULT_FV_END_TIME): selector.TimeSelector(),
         _f(vol.Optional, CONF_FV_PRIORITY, defaults, DEFAULT_FV_PRIORITY): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=99, step=1, mode="box")),
         _f(vol.Optional, CONF_FV_STAGGER_MIN, defaults, DEFAULT_FV_STAGGER_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=60, step=1, unit_of_measurement="min", mode="box")),
         _f(vol.Optional, CONF_FV_SHUTOFF_ENABLED, defaults, DEFAULT_FV_SHUTOFF_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_FV_SHUTOFF_DELAY_MIN, defaults, DEFAULT_FV_SHUTOFF_DELAY_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=60, step=1, unit_of_measurement="campioni", mode="box")),
         _f(vol.Optional, CONF_FV_SHUTOFF_THRESHOLD, defaults, DEFAULT_FV_SHUTOFF_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=-5000, max=5000, step=50, unit_of_measurement="W", mode="box")),
-        _f(vol.Optional, CONF_FV_SHUTOFF_EXTRA_HOURS, defaults, DEFAULT_FV_SHUTOFF_EXTRA_HOURS): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=4, step=0.5, unit_of_measurement="h", mode="box")),
     })
 
 
 def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
     return vol.Schema({
+        # --- Google Home ---
         _f(vol.Optional, CONF_TTS_PLAYERS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="media_player", multiple=True)),
         _f(vol.Optional, CONF_TTS_ENGINE, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="tts")),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_AC_ON, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_AC_OFF, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_DOOR_OPEN, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_OPEN): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_DOOR_CLOSE, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_CLOSE): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_TTS, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_TTS): selector.BooleanSelector(),
+        # --- Telegram ---
         _f(vol.Optional, CONF_NOTIFY_TARGETS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="notify", multiple=True)),
         _f(vol.Optional, CONF_NOTIFY_CHAT_IDS, defaults): selector.TextSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_AC_ON, defaults, DEFAULT_SIMPLE_NOTIFY_AC_ON): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_AC_OFF, defaults, DEFAULT_SIMPLE_NOTIFY_AC_OFF): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_WINDOW_OPEN, defaults, DEFAULT_SIMPLE_NOTIFY_WINDOW_OPEN): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_WINDOW_CLOSE, defaults, DEFAULT_SIMPLE_NOTIFY_WINDOW_CLOSE): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_DOOR_OPEN, defaults, DEFAULT_SIMPLE_NOTIFY_DOOR_OPEN): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_DOOR_CLOSE, defaults, DEFAULT_SIMPLE_NOTIFY_DOOR_CLOSE): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_NIGHT_START): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_NOTIFY_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_NIGHT_END): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_TTS, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_AC_ON, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_TEMP_CHANGE, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_WINDOW_OPEN, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_OPEN): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_DOOR_OPEN, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_OPEN): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_DOOR_CLOSE, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_CLOSE): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_NOTIFY, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY): selector.BooleanSelector(),
     })
 
@@ -519,10 +559,21 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
         self._data: dict[str, Any] = merged
 
     async def async_step_init(self, user_input=None):
-        mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_FULL)
-        if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
+        """Primo step options: permette di cambiare la modalità di configurazione."""
+        return await self.async_step_cambia_modalita()
+
+    async def async_step_cambia_modalita(self, user_input=None):
+        """Step per scegliere/cambiare la modalità — mostrato sempre come primo step delle opzioni."""
+        if user_input is not None:
+            new_mode = user_input[CONF_CONFIG_MODE]
+            self._data[CONF_CONFIG_MODE] = new_mode
+            if new_mode == CONFIG_MODE_FULL:
+                return await self.async_step_sensori()
             return await self.async_step_simple_entita()
-        return await self.async_step_sensori()
+        return self.async_show_form(
+            step_id="cambia_modalita",
+            data_schema=_schema_modalita(self._data),
+        )
 
     # --- Options modo completo ---
 
