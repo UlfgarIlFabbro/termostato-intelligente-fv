@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -19,6 +20,13 @@ async def async_setup_entry(
     """Crea i 3 interruttori ausiliari legati a questa istanza del termostato."""
     base_name = entry.data.get("name") or "Termostato Intelligente"
 
+    device_info = DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=base_name,
+        manufacturer="Termostato Intelligente FV",
+        model="Termostato Intelligente",
+    )
+
     entities = [
         TermostatoAuxSwitch(
             hass,
@@ -27,6 +35,7 @@ async def async_setup_entry(
             name=f"{base_name} - Abilita Termostato Intelligente",
             icon="mdi:brain",
             default_on=True,
+            device_info=device_info,
         ),
         TermostatoAuxSwitch(
             hass,
@@ -35,6 +44,7 @@ async def async_setup_entry(
             name=f"{base_name} - Accensione automatica da FV",
             icon="mdi:white-balance-sunny",
             default_on=True,
+            device_info=device_info,
         ),
         TermostatoAuxSwitch(
             hass,
@@ -43,6 +53,7 @@ async def async_setup_entry(
             name=f"{base_name} - Raffreddamento rapido",
             icon="mdi:snowflake-variant",
             default_on=False,
+            device_info=device_info,
         ),
     ]
     async_add_entities(entities)
@@ -61,6 +72,7 @@ class TermostatoAuxSwitch(SwitchEntity, RestoreEntity):
         name: str,
         icon: str,
         default_on: bool,
+        device_info: DeviceInfo,
     ) -> None:
         self.hass = hass
         self.entry = entry
@@ -69,6 +81,7 @@ class TermostatoAuxSwitch(SwitchEntity, RestoreEntity):
         self._attr_icon = icon
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_is_on = default_on
+        self._attr_device_info = device_info
 
         # Si registra subito in hass.data così climate.py può leggerne lo stato
         # anche prima che async_added_to_hass sia stato chiamato.
