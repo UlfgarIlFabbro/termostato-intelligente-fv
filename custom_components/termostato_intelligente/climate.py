@@ -15,6 +15,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import Event, HomeAssistant, State
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_call_later,
@@ -172,25 +173,37 @@ from .const import (
     CONF_SIMPLE_NIGHT_END,
     CONF_SIMPLE_NIGHT_START,
     CONF_SIMPLE_SUNSET_ANTICIPATE_H,
-    CONF_SIMPLE_NOTIFY_AC_OFF,
-    CONF_SIMPLE_NOTIFY_AC_ON,
-    CONF_SIMPLE_NOTIFY_DOOR_CLOSE,
-    CONF_SIMPLE_NOTIFY_DOOR_OPEN,
-    CONF_SIMPLE_NOTIFY_NIGHT_END,
-    CONF_SIMPLE_NOTIFY_NIGHT_START,
-    CONF_SIMPLE_NOTIFY_WINDOW_CLOSE,
-    CONF_SIMPLE_NOTIFY_WINDOW_OPEN,
+    CONF_SIMPLE_NOTIFY_TEL_AC_OFF,
+    CONF_SIMPLE_NOTIFY_TEL_AC_ON,
+    CONF_SIMPLE_NOTIFY_TEL_DOOR_CLOSE,
+    CONF_SIMPLE_NOTIFY_TEL_DOOR_OPEN,
+    CONF_SIMPLE_NOTIFY_TEL_NIGHT_END,
+    CONF_SIMPLE_NOTIFY_TEL_NIGHT_START,
+    CONF_SIMPLE_NOTIFY_TEL_TEMP_CHANGE,
+    CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE,
+    CONF_SIMPLE_NOTIFY_TEL_WINDOW_OPEN,
+    CONF_SIMPLE_NOTIFY_TTS_AC_OFF,
+    CONF_SIMPLE_NOTIFY_TTS_AC_ON,
+    CONF_SIMPLE_NOTIFY_TTS_DOOR_CLOSE,
+    CONF_SIMPLE_NOTIFY_TTS_DOOR_OPEN,
+    CONF_SIMPLE_NOTIFY_TTS_NIGHT_END,
+    CONF_SIMPLE_NOTIFY_TTS_NIGHT_START,
+    CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE,
+    CONF_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE,
+    CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN,
     CONF_SIMPLE_QUIET_NIGHT_NOTIFY,
     CONF_SIMPLE_QUIET_NIGHT_TTS,
     CONF_SIMPLE_TARGET_DAY,
     CONF_SIMPLE_TARGET_NIGHT,
     CONF_SIMPLE_DRY_ENABLED,
     CONF_SIMPLE_DRY_MAX_MIN,
+    CONF_SIMPLE_NO_AUTO_ON_NIGHT,
     CONFIG_MODE_FULL,
     CONFIG_MODE_SIMPLE,
     CONFIG_MODE_SIMPLE_FV,
     DEFAULT_SIMPLE_DRY_ENABLED,
     DEFAULT_SIMPLE_DRY_MAX_MIN,
+    DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
     DEFAULT_SIMPLE_MSG_AC_OFF,
     DEFAULT_SIMPLE_MSG_AC_ON,
     DEFAULT_SIMPLE_MSG_DOOR_CLOSE,
@@ -202,14 +215,25 @@ from .const import (
     DEFAULT_SIMPLE_NIGHT_END,
     DEFAULT_SIMPLE_NIGHT_START,
     DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
-    DEFAULT_SIMPLE_NOTIFY_AC_OFF,
-    DEFAULT_SIMPLE_NOTIFY_AC_ON,
-    DEFAULT_SIMPLE_NOTIFY_DOOR_CLOSE,
-    DEFAULT_SIMPLE_NOTIFY_DOOR_OPEN,
-    DEFAULT_SIMPLE_NOTIFY_NIGHT_END,
-    DEFAULT_SIMPLE_NOTIFY_NIGHT_START,
-    DEFAULT_SIMPLE_NOTIFY_WINDOW_CLOSE,
-    DEFAULT_SIMPLE_NOTIFY_WINDOW_OPEN,
+    DEFAULT_SIMPLE_MSG_TEMP_CHANGE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF,
+    DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON,
+    DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END,
+    DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START,
+    DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF,
+    DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON,
+    DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_OPEN,
+    DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END,
+    DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START,
+    DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE,
+    DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE,
+    DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN,
     DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY,
     DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
     DEFAULT_SIMPLE_TARGET_DAY,
@@ -217,13 +241,13 @@ from .const import (
     SIMPLE_EXT_DRY_HIGH,
     SIMPLE_EXT_DRY_LOW,
     SIMPLE_EXT_HOT_OFFSET,
+    SIMPLE_NIGHT_END_LIMBO_H,
     SIMPLE_EXT_MILD_OFFSET,
     SIMPLE_EXT_SETPOINT_HOT,
     SIMPLE_EXT_SETPOINT_MILD,
     SIMPLE_EXT_SHUTOFF_MIN,
     SIMPLE_EXT_SHUTOFF_OFFSET,
     SIMPLE_EXT_SLOW_OFFSET,
-    SIMPLE_EXT_TURN_ON_OFFSET,
     SIMPLE_EXT_WARM_OFFSET,
     SIMPLE_INT_DRY_HIGH,
     SIMPLE_INT_DRY_LOW,
@@ -233,7 +257,6 @@ from .const import (
     SIMPLE_INT_SETPOINT_MILD,
     SIMPLE_INT_SHUTOFF_MIN,
     SIMPLE_INT_SHUTOFF_OFFSET,
-    SIMPLE_INT_TURN_ON_OFFSET,
     SIMPLE_INT_WARM_OFFSET,
     SIMPLE_WINDOW_DELAY_MIN,
 )
@@ -272,6 +295,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.entry = entry
         self._attr_unique_id = entry.entry_id
         self._attr_name = get_conf(entry, CONF_NAME, DEFAULT_NAME)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=get_conf(entry, CONF_NAME, DEFAULT_NAME),
+            manufacturer="Termostato Intelligente FV",
+            model="Termostato Intelligente",
+        )
         self._climate_entity: str = get_conf(entry, CONF_CLIMATE_ENTITY)
         self._temp_sensor: str = get_conf(entry, CONF_TEMP_SENSOR)
         self._window_sensor: str | None = get_conf(entry, CONF_WINDOW_SENSOR)
@@ -391,6 +420,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._was_night_mode = self._is_night_mode_active()
         # Stesso per il modo semplificato
         self._simple_was_night = self._simple_is_night()
+
+        # Se HA si riavvia mentre il clima è in modalità dry,
+        # inizializza il timer così il passaggio a COOL avviene regolarmente
+        real_state = self.hass.states.get(self._climate_entity)
+        if real_state and real_state.state == "dry" and self._simple_dry_since is None:
+            _LOGGER.info(
+                "%s: riavvio con clima in DRY — inizializzo timer dry_since",
+                self._attr_name,
+            )
+            self._simple_dry_since = dt_util.utcnow()
         interval_min = int(get_conf(self.entry, CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN))
         self.async_on_remove(
             async_track_time_interval(self.hass, self._async_periodic_update, timedelta(minutes=interval_min))
@@ -528,19 +567,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if night_just_started:
             await self._async_simple_notify_night_start(target)
 
+        # Ora di limbo dopo fine notte — non fare nulla
+        if self._simple_is_in_limbo():
+            _LOGGER.debug("%s: [semplificato] ora di limbo post-notte — nessuna azione", self._attr_name)
+            return
+
         # Regolazione termica
         await self._async_handle_thermal_simple(temp, target, use_internal)
 
         # Accensione e spegnimento automatico (solo modo semplificato con FV)
         mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         if mode == CONFIG_MODE_SIMPLE_FV:
-            if self._switch_state(SWITCH_KEY_FV, True) and self._within_fv_window():
+            if self._switch_state(SWITCH_KEY_FV, True) and self._simple_within_fv_window():
                 await self._async_handle_fv_turn_on_simple(temp, target)
             if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
                 await self._async_handle_fv_shutoff_simple(temp, target)
 
         # Spegnimento fine notte
         if night_just_ended:
+            self._simple_night_auto_on = False  # reset — non è più notte
             await self._async_handle_night_end_shutoff()
             await self._async_simple_notify_night_end()
 
@@ -565,6 +610,28 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             get_conf(self.entry, CONF_SIMPLE_NIGHT_START, DEFAULT_SIMPLE_NIGHT_START),
             get_conf(self.entry, CONF_SIMPLE_NIGHT_END, DEFAULT_SIMPLE_NIGHT_END),
         )
+
+    def _simple_is_in_limbo(self) -> bool:
+        """True nell'ora dopo la fine della modalità notturna.
+
+        Durante questo periodo il termostato non fa nulla — non accende,
+        non spegne, non regola. Evita accensioni indesiderate causate dal
+        cambio brusco di target (da notte a giorno).
+        L'ora di limbo è fissa (SIMPLE_NIGHT_END_LIMBO_H = 1h).
+        """
+        if self._simple_is_night():
+            return False
+        night_end_str = get_conf(self.entry, CONF_SIMPLE_NIGHT_END, DEFAULT_SIMPLE_NIGHT_END)
+        try:
+            night_end_t = dt_time.fromisoformat(str(night_end_str))
+        except ValueError:
+            return False
+        now_local = dt_util.now()
+        night_end_dt = now_local.replace(
+            hour=night_end_t.hour, minute=night_end_t.minute, second=0, microsecond=0
+        )
+        limbo_end_dt = night_end_dt + timedelta(hours=SIMPLE_NIGHT_END_LIMBO_H)
+        return night_end_dt <= now_local < limbo_end_dt
 
     def _simple_can_control_manual(self) -> bool:
         """Restituisce True se l'automazione può spegnere il clima acceso manualmente.
@@ -599,6 +666,43 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         return now_local < cutoff
 
+    def _simple_within_fv_window(self) -> bool:
+        """Finestra di accensione FV nel modo semplificato.
+
+        Inizia alla fine della modalità notturna (night_end)
+        e termina al tramonto - anticipate_h ore.
+        Non richiede configurazione oraria — usa sun.sun e la fascia notturna.
+        """
+        # Controlla che il sole sia sopra l'orizzonte
+        sun_state = self.hass.states.get("sun.sun")
+        if sun_state is None or sun_state.state != "above_horizon":
+            return False
+
+        now_local = dt_util.now()
+
+        # Inizio finestra = fine modalità notturna
+        night_end_str = get_conf(self.entry, CONF_SIMPLE_NIGHT_END, DEFAULT_SIMPLE_NIGHT_END)
+        try:
+            night_end_t = dt_time.fromisoformat(str(night_end_str))
+        except ValueError:
+            return False
+        night_end_dt = now_local.replace(
+            hour=night_end_t.hour, minute=night_end_t.minute, second=0, microsecond=0
+        )
+
+        # Fine finestra = tramonto - anticipate_h
+        next_setting_str = sun_state.attributes.get("next_setting")
+        if not next_setting_str:
+            return False
+        try:
+            sunset_dt = dt_util.as_local(dt_util.parse_datetime(str(next_setting_str)))
+        except (ValueError, TypeError):
+            return False
+        anticipate_h = float(get_conf(self.entry, CONF_SIMPLE_SUNSET_ANTICIPATE_H, DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H))
+        cutoff_dt = sunset_dt - timedelta(hours=anticipate_h)
+
+        return night_end_dt <= now_local <= cutoff_dt
+
     def _simple_current_target(self) -> float:
         if self._simple_is_night():
             return float(get_conf(self.entry, CONF_SIMPLE_TARGET_NIGHT, DEFAULT_SIMPLE_TARGET_NIGHT))
@@ -627,6 +731,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     pass
 
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+        no_auto_on_night = bool(get_conf(self.entry, CONF_SIMPLE_NO_AUTO_ON_NIGHT, DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT))
+
+        # Se siamo di notte e l'accensione notturna automatica è disabilitata,
+        # non accendere — ma se il clima è già acceso continua a regolarlo
+        if no_auto_on_night and self._simple_is_night() and self.hvac_mode == HVACMode.OFF:
+            return
 
         if use_internal:
             await self._async_thermal_simple_internal(temp, target, internal_temp, real_state, dry_enabled)
@@ -638,15 +748,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     ) -> None:
         """Logica termica con sonda interna (interi).
 
-        Senza dry:
-          Accende in COOL se temp > target + 2
-        Con dry:
-          Accende in DRY se temp > target + 1, passa a COOL se temp > target + 2
-          oppure dopo dry_max_min minuti in dry
+        Soglia accensione configurabile (default target + 1°C).
+        All accensione: sempre DRY 30 min (se abilitato), poi fascia COOL.
+        Mai tornare in DRY quando già in COOL.
 
-        Spegne se temp <= target - 1 per 15 min consecutivi.
+        Fasce COOL:
+          temp ≥ target + 2  → ventola alta,  setpoint = internal - 2
+          temp ≥ target + 1  → ventola media, setpoint = internal - 1
+          temp > target      → ventola bassa, setpoint = internal - 1
+          temp ≤ target      → ventola bassa, setpoint = internal (rallenta)
+          temp ≤ target - 1 per 15 min → spegni
         """
         dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
+        turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_INT))
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
         is_on = self.hvac_mode == HVACMode.COOL or current_mode == "dry"
@@ -658,7 +772,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_INT_SHUTOFF_MIN):
-                    _LOGGER.info("%s: [semplificato] spegnimento target raggiunto (int, temp=%.0f)", self._attr_name, temp)
+                    _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_shutoff_since = None
                     self._simple_dry_since = None
@@ -669,52 +783,46 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 self._simple_shutoff_since = None
 
-        # --- Passaggio da DRY a COOL ---
-        if dry_enabled and current_mode == "dry":
+        # --- Passaggio da DRY a COOL dopo timer ---
+        if current_mode == "dry":
             dry_elapsed = (now - self._simple_dry_since) if self._simple_dry_since else timedelta(0)
-            should_switch_cool = (
-                temp > target + SIMPLE_INT_DRY_HIGH or
-                dry_elapsed >= timedelta(minutes=dry_max_min)
-            )
-            if should_switch_cool:
-                _LOGGER.info("%s: [semplificato] DRY→COOL (int, temp=%.0f, elapsed=%s)", self._attr_name, temp, dry_elapsed)
+            if dry_elapsed >= timedelta(minutes=dry_max_min):
+                _LOGGER.info("%s: [semplificato] DRY→COOL (int, elapsed=%s)", self._attr_name, dry_elapsed)
                 await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                 self._simple_dry_since = None
             else:
-                _LOGGER.debug("%s: [semplificato] in DRY (int, temp=%.0f, elapsed=%s)", self._attr_name, temp, dry_elapsed)
-                return  # rimane in dry, niente da fare
+                _LOGGER.debug("%s: [semplificato] in DRY (int, elapsed=%s/%smin)", self._attr_name, dry_elapsed, dry_max_min)
+                return  # rimane in DRY
 
-        # --- Accensione ---
+        # --- Accensione (clima spento) ---
         if not is_on:
-            if dry_enabled and temp > target + SIMPLE_INT_DRY_LOW and temp <= target + SIMPLE_INT_DRY_HIGH:
-                # Fascia dry: accende in deumidificazione
-                _LOGGER.info("%s: [semplificato] accensione DRY (int, temp=%.0f)", self._attr_name, temp)
-                await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
-                self._simple_dry_since = now
+            if temp >= target + turn_on_offset:
+                if dry_enabled:
+                    _LOGGER.info("%s: [semplificato] accensione DRY (int, temp=%.0f)", self._attr_name, temp)
+                    await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                    self._simple_dry_since = now
+                else:
+                    _LOGGER.info("%s: [semplificato] accensione COOL (int, temp=%.0f)", self._attr_name, temp)
+                    await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                    self._simple_dry_since = None
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
                 await self._async_simple_notify_ac_on(temp)
-                return
-            elif temp > target + SIMPLE_INT_TURN_ON_OFFSET:
-                # Sopra soglia cool: accende direttamente in raffreddamento
-                _LOGGER.info("%s: [semplificato] accensione COOL diretta (int, temp=%.0f)", self._attr_name, temp)
-                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_dry_since = None
-                self._simple_night_auto_on = self._simple_is_night()
-                self._fv_auto_on = False
-                await self._async_simple_notify_ac_on(temp)
-            return  # se ancora OFF non regolare
+            return  # se ancora spento non regolare
 
-        # --- Regolazione termica (clima in COOL) ---
+        # --- Regolazione COOL (mai in DRY) ---
         if internal_temp is None:
             return
 
-        if temp > target + SIMPLE_INT_HOT_OFFSET:
+        if temp >= target + SIMPLE_INT_HOT_OFFSET:
             new_setpoint = int(internal_temp) - SIMPLE_INT_SETPOINT_HOT
             fan = "high"
-        elif temp > target + SIMPLE_INT_WARM_OFFSET:
+        elif temp >= target + SIMPLE_INT_WARM_OFFSET:
             new_setpoint = int(internal_temp) - SIMPLE_INT_SETPOINT_MILD
             fan = "medium"
+        elif temp > target + SIMPLE_INT_AT_TARGET:
+            new_setpoint = int(internal_temp) - SIMPLE_INT_SETPOINT_MILD
+            fan = "low"
         else:
             new_setpoint = int(internal_temp)
             fan = "low"
@@ -736,15 +844,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     ) -> None:
         """Logica termica con sonda esterna (decimali).
 
-        Senza dry:
-          Accende in COOL se temp > target + 1.5
-        Con dry:
-          Accende in DRY se temp > target + 0.3, passa a COOL se temp > target + 1.5
-          oppure dopo dry_max_min minuti in dry
+        Soglia accensione configurabile (default target + 0.8°C).
+        All accensione: sempre DRY 30 min (se abilitato), poi fascia COOL.
+        Mai tornare in DRY quando già in COOL.
 
-        Spegne se temp <= target - 0.3 per 15 min consecutivi.
+        Fasce COOL:
+          temp ≥ target + 2.0 → ventola alta,  setpoint = internal - 2
+          temp ≥ target + 1.3 → ventola media, setpoint = internal - 2
+          temp > target + 0.3 → ventola bassa, setpoint = internal - 1
+          temp ≤ target + 0.3 → ventola bassa, setpoint = internal (rallenta)
+          temp ≤ target - 0.3 per 15 min → spegni
         """
         dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
+        turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
         shutoff_threshold = target + SIMPLE_EXT_SHUTOFF_OFFSET  # target - 0.3
@@ -756,7 +868,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_EXT_SHUTOFF_MIN):
-                    _LOGGER.info("%s: [semplificato] spegnimento target raggiunto (ext, temp=%.1f)", self._attr_name, temp)
+                    _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_shutoff_since = None
                     self._simple_dry_since = None
@@ -767,48 +879,41 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 self._simple_shutoff_since = None
 
-        # --- Passaggio da DRY a COOL ---
-        if dry_enabled and current_mode == "dry":
+        # --- Passaggio da DRY a COOL dopo timer ---
+        if current_mode == "dry":
             dry_elapsed = (now - self._simple_dry_since) if self._simple_dry_since else timedelta(0)
-            should_switch_cool = (
-                temp > target + SIMPLE_EXT_DRY_HIGH or
-                dry_elapsed >= timedelta(minutes=dry_max_min)
-            )
-            if should_switch_cool:
-                _LOGGER.info("%s: [semplificato] DRY→COOL (ext, temp=%.1f, elapsed=%s)", self._attr_name, temp, dry_elapsed)
+            if dry_elapsed >= timedelta(minutes=dry_max_min):
+                _LOGGER.info("%s: [semplificato] DRY→COOL (ext, elapsed=%s)", self._attr_name, dry_elapsed)
                 await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                 self._simple_dry_since = None
             else:
-                _LOGGER.debug("%s: [semplificato] in DRY (ext, temp=%.1f, elapsed=%s)", self._attr_name, temp, dry_elapsed)
-                return  # rimane in dry
+                _LOGGER.debug("%s: [semplificato] in DRY (ext, elapsed=%s/%smin)", self._attr_name, dry_elapsed, dry_max_min)
+                return  # rimane in DRY
 
-        # --- Accensione ---
+        # --- Accensione (clima spento) ---
         if not is_on:
-            if dry_enabled and temp > target + SIMPLE_EXT_DRY_LOW and temp <= target + SIMPLE_EXT_DRY_HIGH:
-                _LOGGER.info("%s: [semplificato] accensione DRY (ext, temp=%.1f)", self._attr_name, temp)
-                await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
-                self._simple_dry_since = now
+            if temp >= target + turn_on_offset:
+                if dry_enabled:
+                    _LOGGER.info("%s: [semplificato] accensione DRY (ext, temp=%.1f)", self._attr_name, temp)
+                    await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                    self._simple_dry_since = now
+                else:
+                    _LOGGER.info("%s: [semplificato] accensione COOL (ext, temp=%.1f)", self._attr_name, temp)
+                    await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                    self._simple_dry_since = None
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
                 await self._async_simple_notify_ac_on(temp)
-                return
-            elif temp > target + SIMPLE_EXT_TURN_ON_OFFSET:
-                _LOGGER.info("%s: [semplificato] accensione COOL diretta (ext, temp=%.1f)", self._attr_name, temp)
-                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_dry_since = None
-                self._simple_night_auto_on = self._simple_is_night()
-                self._fv_auto_on = False
-                await self._async_simple_notify_ac_on(temp)
-            return
+            return  # se ancora spento non regolare
 
-        # --- Regolazione termica (clima in COOL) ---
+        # --- Regolazione COOL (mai in DRY) ---
         if internal_temp is None:
             return
 
-        if temp > target + SIMPLE_EXT_HOT_OFFSET:
+        if temp >= target + SIMPLE_EXT_HOT_OFFSET:
             new_setpoint = internal_temp - SIMPLE_EXT_SETPOINT_HOT
             fan = "high"
-        elif temp > target + SIMPLE_EXT_WARM_OFFSET:
+        elif temp >= target + SIMPLE_EXT_WARM_OFFSET:
             new_setpoint = internal_temp - SIMPLE_EXT_SETPOINT_HOT
             fan = "medium"
         elif temp > target + SIMPLE_EXT_MILD_OFFSET:
@@ -831,10 +936,31 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if current_fan != fan:
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
 
+
     async def _async_handle_fv_turn_on_simple(self, temp: float, target: float) -> None:
-        """Accensione FV per il modo semplificato."""
+        """Accensione FV per il modo semplificato.
+
+        Accende solo se:
+        1. Temperatura ≥ soglia configurata
+        2. FV surplus > margine E SOC > minimo
+        3. Priorità e stagger rispettati
+        4. Non siamo in limbo post-notte
+
+        All'accensione parte sempre dal DRY (se abilitato).
+        """
         if self.hvac_mode != HVACMode.OFF:
             return
+        if self._simple_is_in_limbo():
+            return
+
+        # Check temperatura
+        use_internal = not bool(self._temp_sensor)
+        turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET,
+            DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
+        if temp < target + turn_on_offset:
+            return  # non fa abbastanza caldo
+
+        # Check FV
         if not (self._fv_sensor and self._consumption_sensor and self._battery_sensor):
             return
         fv = self._read_float(self._fv_sensor)
@@ -844,17 +970,29 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
         soc_min = float(get_conf(self.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
-        turn_on_offset = float(get_conf(self.entry, CONF_TURN_ON_OFFSET, DEFAULT_TURN_ON_OFFSET))
-        if not (fv > consumo + margin and soc > soc_min and temp > target + turn_on_offset):
-            return
+        if not (fv > consumo + margin and soc > soc_min):
+            return  # FV insufficiente — riprova al prossimo ciclo
+
+        # Check stagger e priorità
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
         stagger_min = float(get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN))
         last_on = coord.get("last_fv_turn_on")
         if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
             return
-        _LOGGER.info("%s: [semplificato FV] accensione da fotovoltaico (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-        coord["last_fv_turn_on"] = dt_util.utcnow()
+
+        # Accensione — sempre DRY prima (se abilitato)
+        dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+        now = dt_util.utcnow()
+        if dry_enabled:
+            _LOGGER.info("%s: [semplificato FV] accensione DRY (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
+            await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+            self._simple_dry_since = now
+        else:
+            _LOGGER.info("%s: [semplificato FV] accensione COOL (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
+            await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+            self._simple_dry_since = None
+
+        coord["last_fv_turn_on"] = now
         self._fv_auto_on = True
         self._simple_night_auto_on = False
         await self._async_simple_notify_ac_on(temp)
@@ -899,43 +1037,71 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self.hass.services.async_call("telegram_bot", "send_message", {"target": ids, "message": message}, blocking=True)
 
     async def _async_handle_fv_shutoff_simple(self, temp: float, target: float) -> None:
-        """Spegnimento FV per il modo semplificato con sliding window.
+        """Spegnimento e riaccensione FV per il modo semplificato.
 
-        4 casi:
-        1. Acceso di notte automaticamente (_simple_night_auto_on) → non spegnere mai per FV
-        2. Acceso dal FV (_fv_auto_on) → spegne sempre se FV insufficiente
-        3. Acceso manualmente E siamo prima di tramonto-Xh → spegne se FV insufficiente
+        4 casi per spegnimento:
+        1. Acceso di notte automaticamente → non spegnere mai per FV
+        2. Acceso dal FV → spegne sempre se FV insufficiente, riaccende quando torna
+        3. Acceso manualmente prima di tramonto-Xh → spegne se FV insufficiente
         4. Acceso manualmente dopo tramonto-Xh → non toccare
+
+        Riaccensione: se il clima è spento per FV e la produzione torna
+        sufficiente + temperatura ancora sopra soglia → riaccende da DRY.
         """
         if not (self._fv_sensor and self._consumption_sensor):
             return
 
-        current_mode = self.hass.states.get(self._climate_entity)
-        is_on = self.hvac_mode == HVACMode.COOL or (
-            current_mode and current_mode.state == "dry"
-        )
-        if not is_on:
-            self._fv_surplus_buffer = []
-            return
-
-        # Caso 1: acceso dalla modalità notturna → FV non interviene mai
-        if self._simple_night_auto_on:
-            self._fv_surplus_buffer = []
-            return
-
-        # Caso 2: acceso dal FV → può sempre spegnere
-        # Caso 3: acceso manualmente ma siamo nella finestra di controllo → può spegnere
-        # Caso 4: acceso manualmente fuori finestra → non toccare
-        if not self._fv_auto_on and not self._simple_can_control_manual():
-            self._fv_surplus_buffer = []
-            return
-
-        # Sliding window
         fv = self._read_float(self._fv_sensor)
         consumo = self._read_float(self._consumption_sensor)
         if fv is None or consumo is None:
             return
 
+        current_state = self.hass.states.get(self._climate_entity)
+        is_on = self.hvac_mode == HVACMode.COOL or (
+            current_state and current_state.state == "dry"
+        )
+
+        # --- Riaccensione dopo spegnimento FV ---
+        # Se il clima è spento, era stato acceso dal FV, e il FV è tornato sufficiente
+        if not is_on and self._fv_auto_on:
+            margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+            soc_min = float(get_conf(self.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
+            soc = self._read_float(self._battery_sensor)
+            use_internal = not bool(self._temp_sensor)
+            turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET,
+                DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
+            fv_ok = fv > consumo + margin and (soc is None or soc > soc_min)
+            temp_ok = temp >= target + turn_on_offset
+            if fv_ok and temp_ok and not self._simple_is_in_limbo():
+                dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+                now = dt_util.utcnow()
+                if dry_enabled:
+                    _LOGGER.info("%s: [semplificato FV] riaccensione DRY dopo calo FV", self._attr_name)
+                    await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                    self._simple_dry_since = now
+                else:
+                    _LOGGER.info("%s: [semplificato FV] riaccensione COOL dopo calo FV", self._attr_name)
+                    await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                    self._simple_dry_since = None
+                self._fv_surplus_buffer = []
+                await self._async_simple_notify_ac_on(temp)
+            return
+
+        if not is_on:
+            self._fv_surplus_buffer = []
+            return
+
+        # Caso 1: acceso dalla modalità notturna → FV non interviene
+        if self._simple_night_auto_on:
+            self._fv_surplus_buffer = []
+            return
+
+        # Caso 2/3/4: verifica se può spegnere
+        if not self._fv_auto_on and not self._simple_can_control_manual():
+            self._fv_surplus_buffer = []
+            return
+
+        # Sliding window
         surplus = fv - consumo
         threshold = float(get_conf(self.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
         delay_min = int(get_conf(self.entry, CONF_FV_SHUTOFF_DELAY_MIN, DEFAULT_FV_SHUTOFF_DELAY_MIN))
@@ -945,9 +1111,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._fv_surplus_buffer.pop(0)
 
         _LOGGER.debug(
-            "%s: [semplificato FV] shutoff buffer %s (soglia=%.0f, fv_auto=%s, manual_ctrl=%s)",
-            self._attr_name, [round(s) for s in self._fv_surplus_buffer],
-            threshold, self._fv_auto_on, self._simple_can_control_manual(),
+            "%s: [semplificato FV] shutoff buffer %s (soglia=%.0f)",
+            self._attr_name, [round(s) for s in self._fv_surplus_buffer], threshold,
         )
 
         if len(self._fv_surplus_buffer) < delay_min:
@@ -963,61 +1128,69 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if last_off is not None and (now - last_off) < timedelta(minutes=stagger_min):
             return
 
-        _LOGGER.info(
-            "%s: [semplificato FV] spegnimento (fv=%.0fW, consumo=%.0fW, fv_auto=%s)",
-            self._attr_name, fv, consumo, self._fv_auto_on,
-        )
+        _LOGGER.info("%s: [semplificato FV] spegnimento per FV (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
         await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
         coord["last_fv_shutoff"] = now
         self._fv_surplus_buffer = []
-        self._fv_auto_on = False
+        # NON resettiamo _fv_auto_on così la riaccensione sa che era il FV ad averlo acceso
         await self._async_simple_notify_ac_off(temp, target)
-        if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_AC_ON, DEFAULT_SIMPLE_NOTIFY_AC_ON)):
-            return
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_ON, {"name": self._attr_name, "temp": round(temp, 1)})
-        await self._async_simple_speak(msg)
-        await self._async_simple_notify(msg)
+
 
     async def _async_simple_notify_ac_off(self, temp: float, target: float) -> None:
-        if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_AC_OFF, DEFAULT_SIMPLE_NOTIFY_AC_OFF)):
-            return
         msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_OFF, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
-        await self._async_simple_speak(msg)
-        await self._async_simple_notify(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
+            await self._async_simple_notify(msg)
+
+    async def _async_simple_notify_temp_change(self, temp: float, target: float) -> None:
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_TEMP_CHANGE, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE, DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_TEMP_CHANGE, DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE)):
+            await self._async_simple_notify(msg)
 
     async def _async_simple_notify_night_start(self, target: float) -> None:
-        if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_NIGHT_START, DEFAULT_SIMPLE_NOTIFY_NIGHT_START)):
-            return
         msg = await self._async_render(DEFAULT_SIMPLE_MSG_NIGHT_START, {"name": self._attr_name, "target": round(target, 1)})
-        await self._async_simple_speak(msg)
-        await self._async_simple_notify(msg, bypass_quiet=True)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_NIGHT_START, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_NIGHT_START, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START)):
+            await self._async_simple_notify(msg, bypass_quiet=True)
 
     async def _async_simple_notify_night_end(self) -> None:
-        if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_NIGHT_END, DEFAULT_SIMPLE_NOTIFY_NIGHT_END)):
-            return
         msg = await self._async_render(DEFAULT_SIMPLE_MSG_NIGHT_END, {"name": self._attr_name})
-        await self._async_simple_speak(msg)
-        await self._async_simple_notify(msg, bypass_quiet=True)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_NIGHT_END, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_NIGHT_END, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END)):
+            await self._async_simple_notify(msg, bypass_quiet=True)
 
     async def _async_simple_notify_door(self, is_open: bool) -> None:
-        key = CONF_SIMPLE_NOTIFY_DOOR_OPEN if is_open else CONF_SIMPLE_NOTIFY_DOOR_CLOSE
-        default = DEFAULT_SIMPLE_NOTIFY_DOOR_OPEN if is_open else DEFAULT_SIMPLE_NOTIFY_DOOR_CLOSE
-        if not bool(get_conf(self.entry, key, default)):
-            return
         tpl = DEFAULT_SIMPLE_MSG_DOOR_OPEN if is_open else DEFAULT_SIMPLE_MSG_DOOR_CLOSE
         msg = await self._async_render(tpl, {"name": self._attr_name})
-        await self._async_simple_speak(msg)
-        await self._async_simple_notify(msg)
+        if is_open:
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_DOOR_OPEN, DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_OPEN)):
+                await self._async_simple_speak(msg)
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_DOOR_OPEN, DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_OPEN)):
+                await self._async_simple_notify(msg)
+        else:
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_DOOR_CLOSE, DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_CLOSE)):
+                await self._async_simple_speak(msg)
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_DOOR_CLOSE, DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_CLOSE)):
+                await self._async_simple_notify(msg)
 
     async def _async_simple_notify_window(self, is_open: bool, delay_min: int = 0) -> None:
-        key = CONF_SIMPLE_NOTIFY_WINDOW_OPEN if is_open else CONF_SIMPLE_NOTIFY_WINDOW_CLOSE
-        default = DEFAULT_SIMPLE_NOTIFY_WINDOW_OPEN if is_open else DEFAULT_SIMPLE_NOTIFY_WINDOW_CLOSE
-        if not bool(get_conf(self.entry, key, default)):
-            return
         tpl = DEFAULT_SIMPLE_MSG_WINDOW_OPEN if is_open else DEFAULT_SIMPLE_MSG_WINDOW_CLOSE
         msg = await self._async_render(tpl, {"name": self._attr_name, "delay": delay_min})
-        await self._async_simple_speak(msg)
-        await self._async_simple_notify(msg)
+        if is_open:
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN, DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN)):
+                await self._async_simple_speak(msg)
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_WINDOW_OPEN, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_OPEN)):
+                await self._async_simple_notify(msg)
+        else:
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE, DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE)):
+                await self._async_simple_speak(msg)
+            if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE)):
+                await self._async_simple_notify(msg)
 
     # ------------------------------------------------------------------
     # Helpers orari / stato
@@ -1319,8 +1492,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._night_auto_on = False
         self._night_below_since = None
 
-        # Notifica dedicata (canali separati configurabili)
-        await self._async_notify_night_end_shutoff()
+        # Nel modo semplificato la notifica fine notte è gestita da
+        # _async_simple_notify_night_end — non inviare duplicati
+        mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        if mode not in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
+            await self._async_notify_night_end_shutoff()
 
     # ------------------------------------------------------------------
     # Regolazione termica
@@ -1379,7 +1555,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 pass
         if current_temp_rounded is None or current_temp_rounded != new_temp_rounded:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_temp_rounded}, blocking=True)
-            await self._async_notify_temp_change(current_temp_rounded, new_temp_rounded, fan_mode, temp, target)
+            mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+            if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
+                await self._async_simple_notify_temp_change(temp, target)
+            else:
+                await self._async_notify_temp_change(current_temp_rounded, new_temp_rounded, fan_mode, temp, target)
         if current_fan != fan_mode:
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan_mode}, blocking=True)
 
@@ -1423,7 +1603,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._window_cancel_timer = None
             if is_simple:
                 await self._async_simple_notify_window(False)
-                await self._async_window_closed()
+                await self._async_window_closed_simple()
             else:
                 await self._async_window_closed()
 
@@ -1442,6 +1622,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._window_cancel_timer = async_call_later(
             self.hass, timedelta(minutes=SIMPLE_WINDOW_DELAY_MIN), self._async_window_timeout
         )
+
+    async def _async_window_closed_simple(self) -> None:
+        """Chiusura finestra in modo semplificato — ripristina clima senza notifiche duplicate."""
+        if self._snapshot is None:
+            return
+        snap, self._snapshot = self._snapshot, None
+        if snap["hvac_mode"] == "off":
+            return
+        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        if snap.get("temperature") is not None:
+            await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]}, blocking=True)
+        if snap.get("fan_mode") is not None:
+            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": snap["fan_mode"]}, blocking=True)
 
     async def _async_window_opened(self) -> None:
         if self.hvac_mode != HVACMode.COOL:
