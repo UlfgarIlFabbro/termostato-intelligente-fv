@@ -277,6 +277,13 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| v0.6.0 | Riscrittura logica termica semplificata: DRY sempre all accensione, soglia configurabile, 1h limbo post-notte, riaccensione FV automatica dopo calo |
+| v0.5.5 | Notifiche Google Home e Telegram separate per ogni evento nel modo semplificato, aggiunta notifica cambio temperatura, fix timer DRY dopo riavvio HA |
+| v0.5.4 | Notifiche Google Home e Telegram separate per ogni evento nel modo semplificato, aggiunta notifica cambio temperatura |
+| v0.5.4 | Rimozione campi orario fascia FV nel modo semplificato — finestra calcolata automaticamente da fine notte a tramonto -2h |
+| v0.5.3 | Fix entità non visibili nella pagina integrazione (DeviceInfo), fix cambio modalità dalle opzioni, fix ImportError DAY_END/START |
+| v0.5.2 | Fix ImportError DEFAULT_SIMPLE_DAY_END |
+| v0.5.1 | Fix e aggiornamenti modo semplificato FV |
 | v0.5.0 | Tre modalità di configurazione, modo semplificato con deumidificatore intelligente, controllo tramonto con `sun.sun`, logica spegnimento 4 casi, rimozione orari giorno |
 | v0.4.1 | Limite frequenza notifiche cambio setpoint |
 | v0.4.0 | Sliding window FV, fix sensori porta/finestra, spegnimento fine notte |
