@@ -277,6 +277,7 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| v0.6.3 | Riscrittura soglie termiche semplificato, fix _async_simple_notify_ac_on mancante, fix import CONF_SIMPLE_TURN_ON_OFFSET |
 | v0.6.2 | Protezione potenza: spegnimento automatico per evitare distacco contatore, riaccensione automatica, cascata multi-clima |
 | v0.6.1 | Fix SIMPLE_NIGHT_END_LIMBO_H mancante in const.py |
 | v0.6.0 | Riscrittura logica termica semplificata: DRY sempre all accensione, soglia configurabile, 1h limbo post-notte, riaccensione FV automatica dopo calo |

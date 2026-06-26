@@ -796,16 +796,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     ) -> None:
         """Logica termica con sonda interna (interi).
 
-        Soglia accensione configurabile (default target + 1°C).
-        All accensione: sempre DRY 30 min (se abilitato), poi fascia COOL.
+        Soglia accensione: target + turn_on_offset (default +1°C).
+        All accensione: DRY 30 min (se abilitato), poi fascia COOL.
         Mai tornare in DRY quando già in COOL.
 
-        Fasce COOL:
-          temp ≥ target + 2  → ventola alta,  setpoint = internal - 2
-          temp ≥ target + 1  → ventola media, setpoint = internal - 1
-          temp > target      → ventola bassa, setpoint = internal - 1
-          temp ≤ target      → ventola bassa, setpoint = internal (rallenta)
-          temp ≤ target - 1 per 15 min → spegni
+        Fasce COOL (target es. 25°C):
+          temp ≥ target+3 (28°C) → ventola alta,  setpoint = internal-3
+          temp ≥ target+2 (27°C) → ventola media, setpoint = internal-2
+          temp ≥ target+1 (26°C) → ventola media, setpoint = internal-1
+          temp = target   (25°C) → ventola bassa, setpoint = internal
+          temp < target          → ventola bassa, setpoint = internal per 15 min → spegne
         """
         dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_INT))
@@ -815,12 +815,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         # --- Spegnimento per target raggiunto ---
         if is_on:
-            shutoff_threshold = target + SIMPLE_INT_SHUTOFF_OFFSET  # target - 1
-            if temp <= shutoff_threshold:
+            if temp < target:
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_INT_SHUTOFF_MIN):
-                    _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f)", self._attr_name, temp)
+                    _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f < target=%.0f)", self._attr_name, temp, target)
                     await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_shutoff_since = None
                     self._simple_dry_since = None
@@ -840,7 +839,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._simple_dry_since = None
             else:
                 _LOGGER.debug("%s: [semplificato] in DRY (int, elapsed=%s/%smin)", self._attr_name, dry_elapsed, dry_max_min)
-                return  # rimane in DRY
+                return
 
         # --- Accensione (clima spento) ---
         if not is_on:
@@ -856,23 +855,26 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
                 await self._async_simple_notify_ac_on(temp)
-            return  # se ancora spento non regolare
+            return
 
-        # --- Regolazione COOL (mai in DRY) ---
+        # --- Regolazione COOL ---
         if internal_temp is None:
             return
 
-        if temp >= target + SIMPLE_INT_HOT_OFFSET:
-            new_setpoint = int(internal_temp) - SIMPLE_INT_SETPOINT_HOT
+        internal_int = int(internal_temp)
+
+        if temp >= target + 3:
+            new_setpoint = internal_int - 3
             fan = "high"
-        elif temp >= target + SIMPLE_INT_WARM_OFFSET:
-            new_setpoint = int(internal_temp) - SIMPLE_INT_SETPOINT_MILD
+        elif temp >= target + 2:
+            new_setpoint = internal_int - 2
             fan = "medium"
-        elif temp > target + SIMPLE_INT_AT_TARGET:
-            new_setpoint = int(internal_temp) - SIMPLE_INT_SETPOINT_MILD
-            fan = "low"
+        elif temp >= target + 1:
+            new_setpoint = internal_int - 1
+            fan = "medium"
         else:
-            new_setpoint = int(internal_temp)
+            # temp = target o leggermente sopra — ventola bassa, setpoint = interna
+            new_setpoint = internal_int
             fan = "low"
 
         current_sp = real_state.attributes.get("temperature") if real_state else None
@@ -892,31 +894,31 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     ) -> None:
         """Logica termica con sonda esterna (decimali).
 
-        Soglia accensione configurabile (default target + 0.8°C).
-        All accensione: sempre DRY 30 min (se abilitato), poi fascia COOL.
+        Soglia accensione: target + turn_on_offset (default +0.8°C).
+        All accensione: DRY 30 min (se abilitato), poi fascia COOL.
         Mai tornare in DRY quando già in COOL.
 
-        Fasce COOL:
-          temp ≥ target + 2.0 → ventola alta,  setpoint = internal - 2
-          temp ≥ target + 1.3 → ventola media, setpoint = internal - 2
-          temp > target + 0.3 → ventola bassa, setpoint = internal - 1
-          temp ≤ target + 0.3 → ventola bassa, setpoint = internal (rallenta)
-          temp ≤ target - 0.3 per 15 min → spegni
+        Fasce COOL (target es. 25°C):
+          temp ≥ target+3.1 (28.1°C) → ventola alta,  setpoint = internal-3
+          temp ≥ target+1.7 (26.7°C) → ventola media, setpoint = internal-2
+          temp ≥ target+0.7 (25.7°C) → ventola media, setpoint = internal-1
+          temp ≥ target+0.1 (25.1°C) → ventola bassa, setpoint = internal-1
+          temp = target    (25.0°C)  → ventola bassa, setpoint = internal
+          temp < target              → ventola bassa, setpoint = internal per 15 min → spegne
         """
         dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
-        shutoff_threshold = target + SIMPLE_EXT_SHUTOFF_OFFSET  # target - 0.3
         is_on = self.hvac_mode == HVACMode.COOL or current_mode == "dry"
 
         # --- Spegnimento per target raggiunto ---
         if is_on:
-            if temp <= shutoff_threshold:
+            if temp < target:
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_EXT_SHUTOFF_MIN):
-                    _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f)", self._attr_name, temp)
+                    _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f < target=%.1f)", self._attr_name, temp, target)
                     await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_shutoff_since = None
                     self._simple_dry_since = None
@@ -936,7 +938,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._simple_dry_since = None
             else:
                 _LOGGER.debug("%s: [semplificato] in DRY (ext, elapsed=%s/%smin)", self._attr_name, dry_elapsed, dry_max_min)
-                return  # rimane in DRY
+                return
 
         # --- Accensione (clima spento) ---
         if not is_on:
@@ -952,22 +954,26 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
                 await self._async_simple_notify_ac_on(temp)
-            return  # se ancora spento non regolare
+            return
 
-        # --- Regolazione COOL (mai in DRY) ---
+        # --- Regolazione COOL ---
         if internal_temp is None:
             return
 
-        if temp >= target + SIMPLE_EXT_HOT_OFFSET:
-            new_setpoint = internal_temp - SIMPLE_EXT_SETPOINT_HOT
+        if temp >= target + 3.1:
+            new_setpoint = internal_temp - 3.0
             fan = "high"
-        elif temp >= target + SIMPLE_EXT_WARM_OFFSET:
-            new_setpoint = internal_temp - SIMPLE_EXT_SETPOINT_HOT
+        elif temp >= target + 1.7:
+            new_setpoint = internal_temp - 2.0
             fan = "medium"
-        elif temp > target + SIMPLE_EXT_MILD_OFFSET:
-            new_setpoint = internal_temp - SIMPLE_EXT_SETPOINT_MILD
+        elif temp >= target + 0.7:
+            new_setpoint = internal_temp - 1.0
+            fan = "medium"
+        elif temp >= target + 0.1:
+            new_setpoint = internal_temp - 1.0
             fan = "low"
         else:
+            # temp = target — ventola bassa, setpoint = interna
             new_setpoint = internal_temp
             fan = "low"
 
@@ -1184,6 +1190,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # NON resettiamo _fv_auto_on così la riaccensione sa che era il FV ad averlo acceso
         await self._async_simple_notify_ac_off(temp, target)
 
+
+    async def _async_simple_notify_ac_on(self, temp: float) -> None:
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_ON, {"name": self._attr_name, "temp": round(temp, 1)})
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_ON, DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_ON, DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON)):
+            await self._async_simple_notify(msg)
 
     async def _async_simple_notify_ac_off(self, temp: float, target: float) -> None:
         msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_OFF, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
