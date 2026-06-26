@@ -266,16 +266,28 @@ CONF_SIMPLE_NIGHT_START = "simple_night_start"
 CONF_SIMPLE_NIGHT_END = "simple_night_end"
 CONF_SIMPLE_SUNSET_ANTICIPATE_H = "simple_sunset_anticipate_h"  # ore di anticipo rispetto al tramonto
 
-# --- Modo semplificato — notifiche selettive ---
-CONF_SIMPLE_NOTIFY_DOOR_OPEN = "simple_notify_door_open"
-CONF_SIMPLE_NOTIFY_DOOR_CLOSE = "simple_notify_door_close"
-CONF_SIMPLE_NOTIFY_WINDOW_OPEN = "simple_notify_window_open"
-CONF_SIMPLE_NOTIFY_WINDOW_CLOSE = "simple_notify_window_close"
-CONF_SIMPLE_NOTIFY_AC_ON = "simple_notify_ac_on"
-CONF_SIMPLE_NOTIFY_AC_OFF = "simple_notify_ac_off"
-CONF_SIMPLE_NOTIFY_NIGHT_START = "simple_notify_night_start"
-CONF_SIMPLE_NOTIFY_NIGHT_END = "simple_notify_night_end"
+# --- Modo semplificato — notifiche Google Home (TTS) ---
+CONF_SIMPLE_NOTIFY_TTS_AC_ON = "simple_notify_tts_ac_on"
+CONF_SIMPLE_NOTIFY_TTS_AC_OFF = "simple_notify_tts_ac_off"
+CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE = "simple_notify_tts_temp_change"
+CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN = "simple_notify_tts_window_open"
+CONF_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE = "simple_notify_tts_window_close"
+CONF_SIMPLE_NOTIFY_TTS_DOOR_OPEN = "simple_notify_tts_door_open"
+CONF_SIMPLE_NOTIFY_TTS_DOOR_CLOSE = "simple_notify_tts_door_close"
+CONF_SIMPLE_NOTIFY_TTS_NIGHT_START = "simple_notify_tts_night_start"
+CONF_SIMPLE_NOTIFY_TTS_NIGHT_END = "simple_notify_tts_night_end"
 CONF_SIMPLE_QUIET_NIGHT_TTS = "simple_quiet_night_tts"
+
+# --- Modo semplificato — notifiche Telegram ---
+CONF_SIMPLE_NOTIFY_TEL_AC_ON = "simple_notify_tel_ac_on"
+CONF_SIMPLE_NOTIFY_TEL_AC_OFF = "simple_notify_tel_ac_off"
+CONF_SIMPLE_NOTIFY_TEL_TEMP_CHANGE = "simple_notify_tel_temp_change"
+CONF_SIMPLE_NOTIFY_TEL_WINDOW_OPEN = "simple_notify_tel_window_open"
+CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE = "simple_notify_tel_window_close"
+CONF_SIMPLE_NOTIFY_TEL_DOOR_OPEN = "simple_notify_tel_door_open"
+CONF_SIMPLE_NOTIFY_TEL_DOOR_CLOSE = "simple_notify_tel_door_close"
+CONF_SIMPLE_NOTIFY_TEL_NIGHT_START = "simple_notify_tel_night_start"
+CONF_SIMPLE_NOTIFY_TEL_NIGHT_END = "simple_notify_tel_night_end"
 CONF_SIMPLE_QUIET_NIGHT_NOTIFY = "simple_quiet_night_notify"
 
 # --- Default modo semplificato ---
@@ -284,22 +296,32 @@ DEFAULT_SIMPLE_TARGET_NIGHT = 26.0
 DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H = 2  # ore di anticipo rispetto al tramonto
 DEFAULT_SIMPLE_NIGHT_START = "23:00:00"
 DEFAULT_SIMPLE_NIGHT_END = "07:00:00"
-DEFAULT_SIMPLE_NOTIFY_DOOR_OPEN = True
-DEFAULT_SIMPLE_NOTIFY_DOOR_CLOSE = True
-DEFAULT_SIMPLE_NOTIFY_WINDOW_OPEN = True
-DEFAULT_SIMPLE_NOTIFY_WINDOW_CLOSE = True
-DEFAULT_SIMPLE_NOTIFY_AC_ON = True
-DEFAULT_SIMPLE_NOTIFY_AC_OFF = True
-DEFAULT_SIMPLE_NOTIFY_NIGHT_START = False
-DEFAULT_SIMPLE_NOTIFY_NIGHT_END = True
+DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON = False
+DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF = False
+DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE = False
+DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN = True
+DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE = True
+DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_OPEN = True
+DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_CLOSE = True
+DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START = False
+DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END = False
+DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON = True
+DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF = True
+DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE = False
+DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_OPEN = True
+DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE = True
+DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_OPEN = True
+DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_CLOSE = True
+DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START = False
+DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END = True
 DEFAULT_SIMPLE_QUIET_NIGHT_TTS = True
 DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY = False
 
 # --- Costanti logica termica semplificata ---
 # Con sonda esterna (decimale)
-SIMPLE_EXT_TURN_ON_OFFSET = 1.5    # accende se stanza > target + 1.5
+# La soglia di accensione è configurabile (CONF_SIMPLE_TURN_ON_OFFSET, default 0.8)
 SIMPLE_EXT_HOT_OFFSET = 2.0        # ventola alta da target + 2.0
-SIMPLE_EXT_WARM_OFFSET = 1.5       # ventola media da target + 1.5
+SIMPLE_EXT_WARM_OFFSET = 1.3       # ventola media da target + 1.3
 SIMPLE_EXT_MILD_OFFSET = 0.3       # ventola bassa da target + 0.3
 SIMPLE_EXT_SLOW_OFFSET = 0.3       # rallenta quando stanza ≤ target + 0.3
 SIMPLE_EXT_SHUTOFF_OFFSET = -0.3   # spegne se sotto target - 0.3 per 15 min
@@ -308,18 +330,23 @@ SIMPLE_EXT_SETPOINT_MILD = 1.0     # sonda interna - 1 in caldo lieve
 SIMPLE_EXT_SHUTOFF_MIN = 15        # minuti sotto soglia prima di spegnere
 
 # Con sonda interna (intera)
-SIMPLE_INT_TURN_ON_OFFSET = 2      # accende se stanza > target + 2
+# La soglia di accensione è configurabile (CONF_SIMPLE_TURN_ON_OFFSET, default 1.0)
 SIMPLE_INT_HOT_OFFSET = 2          # ventola alta da target + 2
 SIMPLE_INT_WARM_OFFSET = 1         # ventola media da target + 1
-SIMPLE_INT_AT_TARGET = 1           # rallenta quando stanza ≤ target + 1
+SIMPLE_INT_AT_TARGET = 0           # rallenta quando stanza ≤ target
 SIMPLE_INT_SHUTOFF_OFFSET = -1     # spegne se sotto target - 1 per 15 min
 SIMPLE_INT_SETPOINT_HOT = 2        # sonda interna - 2 in caldo forte/estremo
 SIMPLE_INT_SETPOINT_MILD = 1       # sonda interna - 1 in caldo lieve
 SIMPLE_INT_SHUTOFF_MIN = 15        # minuti sotto soglia prima di spegnere
 
 # --- Modo semplificato — deumidificatore ---
+CONF_SIMPLE_NO_AUTO_ON_NIGHT = "simple_no_auto_on_night"  # blocca accensione automatica di notte
+CONF_SIMPLE_TURN_ON_OFFSET = "simple_turn_on_offset"  # soglia accensione configurabile
 CONF_SIMPLE_DRY_ENABLED = "simple_dry_enabled"
 CONF_SIMPLE_DRY_MAX_MIN = "simple_dry_max_min"
+DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT = False
+DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT = 0.8  # sonda esterna: accende da target + 0.8°C
+DEFAULT_SIMPLE_TURN_ON_OFFSET_INT = 1.0  # sonda interna: accende da target + 1°C
 DEFAULT_SIMPLE_DRY_ENABLED = False
 DEFAULT_SIMPLE_DRY_MAX_MIN = 30
 
@@ -333,6 +360,7 @@ SIMPLE_INT_DRY_HIGH = 2     # passa a cool se stanza > target + 2
 SIMPLE_WINDOW_DELAY_MIN = 5
 
 # Messaggi modo semplificato
+DEFAULT_SIMPLE_MSG_TEMP_CHANGE = "🌡️ {{ name }}: temperatura {{ temp }}°C (target {{ target }}°C)."
 DEFAULT_SIMPLE_MSG_DOOR_OPEN = "\U0001f6aa {{ name }}: porta aperta."
 DEFAULT_SIMPLE_MSG_DOOR_CLOSE = "\u2705 {{ name }}: porta chiusa."
 DEFAULT_SIMPLE_MSG_WINDOW_OPEN = (
