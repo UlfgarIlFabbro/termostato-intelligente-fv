@@ -9,7 +9,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, SWITCH_KEY_FV, SWITCH_KEY_MASTER, SWITCH_KEY_QUICK
+from .const import DOMAIN, SWITCH_KEY_EMERGENCY, SWITCH_KEY_FV, SWITCH_KEY_MASTER, SWITCH_KEY_QUICK
 
 
 async def async_setup_entry(
@@ -28,6 +28,15 @@ async def async_setup_entry(
     )
 
     entities = [
+        TermostatoAuxSwitch(
+            hass,
+            entry,
+            key=SWITCH_KEY_EMERGENCY,
+            name=f"{base_name} - Emergenza caldo",
+            icon="mdi:fire-alert",
+            default_on=False,
+            device_info=device_info,
+        ),
         TermostatoAuxSwitch(
             hass,
             entry,

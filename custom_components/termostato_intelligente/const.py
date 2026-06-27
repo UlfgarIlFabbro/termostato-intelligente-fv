@@ -139,6 +139,27 @@ POWER_LIMIT_SPIKE_SEC = 30
 # Stagger riaccensione cascata multi-clima (fisso)
 POWER_LIMIT_RESTORE_STAGGER_MIN = 2
 
+
+# --- Emergenza caldo (solo modo semplificato FV e completo) ---
+SWITCH_KEY_EMERGENCY = "emergency_heat"
+
+CONF_EMERGENCY_HEAT_THRESHOLD = "emergency_heat_threshold"
+CONF_EMERGENCY_HEAT_END_THRESHOLD = "emergency_heat_end_threshold"
+CONF_EMERGENCY_NOTIFY_TTS = "emergency_notify_tts"
+CONF_EMERGENCY_NOTIFY_TELEGRAM = "emergency_notify_telegram"
+CONF_EMERGENCY_MSG_ON = "emergency_msg_on"
+CONF_EMERGENCY_MSG_OFF = "emergency_msg_off"
+
+DEFAULT_EMERGENCY_HEAT_THRESHOLD = 1.5
+DEFAULT_EMERGENCY_HEAT_END_THRESHOLD = 0.7
+DEFAULT_EMERGENCY_NOTIFY_TTS = False
+DEFAULT_EMERGENCY_NOTIFY_TELEGRAM = True
+DEFAULT_EMERGENCY_MSG_ON = "Ho acceso il condizionatore {{ name }} per emergenza caldo."
+DEFAULT_EMERGENCY_MSG_OFF = "Fine emergenza caldo, il condizionatore {{ name }} riprende a funzionare normalmente."
+
+# Minuti prima della notte per spegnere e disattivare emergenza
+EMERGENCY_PRE_NIGHT_MIN = 5
+
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"
 SWITCH_KEY_FV = "switch_fv"

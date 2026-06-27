@@ -170,6 +170,12 @@ from .const import (
 )
 from .const import (
     CONF_CONFIG_MODE,
+    CONF_EMERGENCY_HEAT_END_THRESHOLD,
+    CONF_EMERGENCY_HEAT_THRESHOLD,
+    CONF_EMERGENCY_MSG_OFF,
+    CONF_EMERGENCY_MSG_ON,
+    CONF_EMERGENCY_NOTIFY_TELEGRAM,
+    CONF_EMERGENCY_NOTIFY_TTS,
     CONF_POWER_LIMIT_ENABLED,
     CONF_POWER_LIMIT_HYSTERESIS_W,
     CONF_POWER_LIMIT_MAX_W,
@@ -209,8 +215,15 @@ from .const import (
     CONF_SIMPLE_DRY_MAX_MIN,
     CONF_SIMPLE_NO_AUTO_ON_NIGHT,
     CONF_SIMPLE_TURN_ON_OFFSET,
+    CONF_SIMPLE_TURN_ON_OFFSET,
     CONFIG_MODE_FULL,
     CONFIG_MODE_SIMPLE,
+    DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
+    DEFAULT_EMERGENCY_HEAT_THRESHOLD,
+    DEFAULT_EMERGENCY_MSG_OFF,
+    DEFAULT_EMERGENCY_MSG_ON,
+    DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
+    DEFAULT_EMERGENCY_NOTIFY_TTS,
     DEFAULT_POWER_LIMIT_ENABLED,
     DEFAULT_POWER_LIMIT_HYSTERESIS_W,
     DEFAULT_POWER_LIMIT_MAX_W,
@@ -220,7 +233,10 @@ from .const import (
     DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM,
     DEFAULT_POWER_LIMIT_NOTIFY_TTS,
     DEFAULT_POWER_LIMIT_RESTORE_MIN,
+    EMERGENCY_PRE_NIGHT_MIN,
+    EMERGENCY_PRE_NIGHT_MIN,
     POWER_LIMIT_MODE_MULTI,
+    SWITCH_KEY_EMERGENCY,
     POWER_LIMIT_MODE_SINGLE,
     POWER_LIMIT_RESTORE_STAGGER_MIN,
     POWER_LIMIT_SPIKE_SEC,
@@ -228,6 +244,8 @@ from .const import (
     DEFAULT_SIMPLE_DRY_ENABLED,
     DEFAULT_SIMPLE_DRY_MAX_MIN,
     DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
+    DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
+    DEFAULT_SIMPLE_TURN_ON_OFFSET_INT,
     DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
     DEFAULT_SIMPLE_TURN_ON_OFFSET_INT,
     DEFAULT_SIMPLE_MSG_AC_OFF,
@@ -307,7 +325,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     _attr_should_poll = False
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL, HVACMode.DRY]
     _attr_fan_modes = FAN_MODES_ALLOWED
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
@@ -363,6 +381,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._power_limit_off_at: datetime | None = None       # quando è stato spento
         self._power_limit_low_since: datetime | None = None    # da quando il consumo è sotto soglia-isteresi
 
+        # --- Emergenza caldo ---
+        self._emergency_notified: bool = False  # evita notifiche doppie
+
         # --- Modo semplificato ---
         self._simple_shutoff_since: datetime | None = None  # timer spegnimento per target raggiunto
         self._simple_was_night: bool = False                 # per rilevare transizione notte→giorno
@@ -389,6 +410,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         state = self.hass.states.get(self._climate_entity)
         if state is None or state.state in ("unknown", "unavailable", "off"):
             return HVACMode.OFF
+        if state.state == "dry":
+            return HVACMode.DRY
         return HVACMode.COOL
 
     @property
@@ -525,8 +548,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        service = "turn_on" if hvac_mode == HVACMode.COOL else "turn_off"
-        await self.hass.services.async_call("climate", service, {"entity_id": self._climate_entity}, blocking=True)
+        if hvac_mode == HVACMode.OFF:
+            await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
+        elif hvac_mode == HVACMode.DRY:
+            await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+            self._simple_dry_since = dt_util.utcnow()
+        else:
+            await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         self.async_write_ha_state()
 
     # ------------------------------------------------------------------
@@ -629,6 +657,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # Accensione e spegnimento automatico (solo modo semplificato con FV)
         mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         if mode == CONFIG_MODE_SIMPLE_FV:
+            # Gestione emergenza caldo — ha precedenza sul FV normale
+            await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
+            # Se emergenza attiva salta logica FV normale
+            if self._switch_state(SWITCH_KEY_EMERGENCY, False):
+                return
             if self._switch_state(SWITCH_KEY_FV, True) and self._simple_within_fv_window():
                 await self._async_handle_fv_turn_on_simple(temp, target)
             if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
@@ -1256,6 +1289,124 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 await self._async_simple_speak(msg)
             if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE)):
                 await self._async_simple_notify(msg)
+
+    # ------------------------------------------------------------------
+    # Emergenza caldo
+    # ------------------------------------------------------------------
+
+    async def _async_handle_emergency_heat(
+        self, temp: float, target: float, use_internal: bool, dry_enabled: bool
+    ) -> None:
+        """Gestisce l'emergenza caldo nel modo semplificato FV e completo.
+
+        Quando lo switch emergenza è attivo:
+        - Accende se temp ≥ target + soglia_emergenza (ignorando FV)
+        - Spegne per logica termica normale
+        - Si disattiva automaticamente 5 min prima della notte
+        - Si disattiva se temp scende sotto target + soglia_fine_emergenza
+        """
+        config_mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        if config_mode not in (CONFIG_MODE_SIMPLE_FV, CONFIG_MODE_FULL):
+            return
+
+        emergency_on = self._switch_state(SWITCH_KEY_EMERGENCY, False)
+
+        # --- Disattivazione automatica pre-notte ---
+        if emergency_on:
+            night_start_str = get_conf(self.entry, CONF_SIMPLE_NIGHT_START, DEFAULT_SIMPLE_NIGHT_START)
+            try:
+                night_start_t = dt_time.fromisoformat(str(night_start_str))
+            except ValueError:
+                night_start_t = None
+
+            if night_start_t:
+                now_local = dt_util.now()
+                night_start_dt = now_local.replace(
+                    hour=night_start_t.hour, minute=night_start_t.minute, second=0, microsecond=0
+                )
+                pre_night_dt = night_start_dt - timedelta(minutes=EMERGENCY_PRE_NIGHT_MIN)
+                if now_local >= pre_night_dt and not self._simple_is_night():
+                    _LOGGER.info("%s: [emergenza] disattivazione pre-notte", self._attr_name)
+                    # Spegni clima e disattiva switch
+                    await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
+                    await self._async_emergency_set_switch(False)
+                    await self._async_emergency_notify(False, temp, target)
+                    self._emergency_notified = False
+                    return
+
+        # --- Disattivazione per temperatura rientrata ---
+        if emergency_on:
+            end_threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_END_THRESHOLD, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD))
+            if temp <= target + end_threshold:
+                _LOGGER.info("%s: [emergenza] temperatura rientrata (temp=%.1f ≤ target+%.1f)", self._attr_name, temp, end_threshold)
+                await self._async_emergency_set_switch(False)
+                await self._async_emergency_notify(False, temp, target)
+                self._emergency_notified = False
+                return
+
+        # --- Logica emergenza attiva ---
+        if not emergency_on:
+            return
+
+        threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_THRESHOLD, DEFAULT_EMERGENCY_HEAT_THRESHOLD))
+        real_state = self.hass.states.get(self._climate_entity)
+        current_mode = real_state.state if real_state else "off"
+        is_on = self.hvac_mode == HVACMode.COOL or current_mode == "dry"
+
+        # Notifica accensione emergenza (una sola volta)
+        if not self._emergency_notified:
+            await self._async_emergency_notify(True, temp, target)
+            self._emergency_notified = True
+
+        # Accende se non è già acceso e supera la soglia
+        if not is_on and temp >= target + threshold:
+            internal_temp = self._read_float(self._climate_entity, attr="current_temperature")
+            if dry_enabled:
+                _LOGGER.info("%s: [emergenza] accensione DRY (temp=%.1f)", self._attr_name, temp)
+                await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                self._simple_dry_since = dt_util.utcnow()
+            else:
+                _LOGGER.info("%s: [emergenza] accensione COOL (temp=%.1f)", self._attr_name, temp)
+                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                self._simple_dry_since = None
+
+        # Regolazione termica normale (come semplificato puro)
+        if is_on:
+            internal_temp = self._read_float(self._climate_entity, attr="current_temperature")
+            if use_internal:
+                await self._async_thermal_simple_internal(temp, target, internal_temp, real_state, dry_enabled)
+            else:
+                await self._async_thermal_simple_external(temp, target, internal_temp, real_state, dry_enabled)
+
+    async def _async_emergency_set_switch(self, state: bool) -> None:
+        """Attiva/disattiva lo switch emergenza caldo."""
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
+        switch = entry_data.get(SWITCH_KEY_EMERGENCY)
+        if switch is not None:
+            if state:
+                await switch.async_turn_on()
+            else:
+                await switch.async_turn_off()
+
+    async def _async_emergency_notify(self, is_on: bool, temp: float, target: float) -> None:
+        """Notifica attivazione/disattivazione emergenza caldo."""
+        notify_tts = bool(get_conf(self.entry, CONF_EMERGENCY_NOTIFY_TTS, DEFAULT_EMERGENCY_NOTIFY_TTS))
+        notify_tel = bool(get_conf(self.entry, CONF_EMERGENCY_NOTIFY_TELEGRAM, DEFAULT_EMERGENCY_NOTIFY_TELEGRAM))
+        if not notify_tts and not notify_tel:
+            return
+
+        config_mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        if is_on:
+            tpl = get_conf(self.entry, CONF_EMERGENCY_MSG_ON, DEFAULT_EMERGENCY_MSG_ON) if config_mode == CONFIG_MODE_FULL else DEFAULT_EMERGENCY_MSG_ON
+        else:
+            tpl = get_conf(self.entry, CONF_EMERGENCY_MSG_OFF, DEFAULT_EMERGENCY_MSG_OFF) if config_mode == CONFIG_MODE_FULL else DEFAULT_EMERGENCY_MSG_OFF
+
+        msg = await self._async_render(tpl, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
+
+        if notify_tts:
+            await self._async_simple_speak(msg)
+        if notify_tel:
+            await self._async_simple_notify(msg)
 
     # ------------------------------------------------------------------
     # Protezione potenza (evita distacco contatore)

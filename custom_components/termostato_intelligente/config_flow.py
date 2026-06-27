@@ -78,6 +78,18 @@ from .const import (
     DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
     DEFAULT_SIMPLE_TARGET_DAY,
     DEFAULT_SIMPLE_TARGET_NIGHT,
+    CONF_EMERGENCY_HEAT_END_THRESHOLD,
+    CONF_EMERGENCY_HEAT_THRESHOLD,
+    CONF_EMERGENCY_MSG_OFF,
+    CONF_EMERGENCY_MSG_ON,
+    CONF_EMERGENCY_NOTIFY_TELEGRAM,
+    CONF_EMERGENCY_NOTIFY_TTS,
+    DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
+    DEFAULT_EMERGENCY_HEAT_THRESHOLD,
+    DEFAULT_EMERGENCY_MSG_OFF,
+    DEFAULT_EMERGENCY_MSG_ON,
+    DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
+    DEFAULT_EMERGENCY_NOTIFY_TTS,
     CONF_POWER_LIMIT_ENABLED,
     CONF_POWER_LIMIT_HYSTERESIS_W,
     CONF_POWER_LIMIT_MAX_W,
@@ -330,6 +342,28 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
 
 
 
+
+def _schema_emergenza_simple(defaults: dict) -> vol.Schema:
+    """Schema emergenza caldo per modo semplificato FV."""
+    return vol.Schema({
+        _f(vol.Optional, CONF_EMERGENCY_HEAT_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_EMERGENCY_HEAT_END_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_EMERGENCY_NOTIFY_TTS, defaults, DEFAULT_EMERGENCY_NOTIFY_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_EMERGENCY_NOTIFY_TELEGRAM, defaults, DEFAULT_EMERGENCY_NOTIFY_TELEGRAM): selector.BooleanSelector(),
+    })
+
+
+def _schema_emergenza_completo(defaults: dict) -> vol.Schema:
+    """Schema emergenza caldo per modo completo — aggiunge messaggi personalizzabili."""
+    return vol.Schema({
+        _f(vol.Optional, CONF_EMERGENCY_HEAT_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_EMERGENCY_HEAT_END_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_EMERGENCY_NOTIFY_TTS, defaults, DEFAULT_EMERGENCY_NOTIFY_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_EMERGENCY_NOTIFY_TELEGRAM, defaults, DEFAULT_EMERGENCY_NOTIFY_TELEGRAM): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_EMERGENCY_MSG_ON, defaults, DEFAULT_EMERGENCY_MSG_ON): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+        _f(vol.Optional, CONF_EMERGENCY_MSG_OFF, defaults, DEFAULT_EMERGENCY_MSG_OFF): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+    })
+
 def _schema_protezione_potenza(defaults: dict) -> vol.Schema:
     """Schema protezione potenza — comune a tutti i modi."""
     return vol.Schema({
@@ -569,8 +603,14 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_protezione_potenza_completo(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+            return await self.async_step_emergenza_completo()
         return self.async_show_form(step_id="protezione_potenza_completo", data_schema=_schema_protezione_potenza_completo(self._data))
+
+    async def async_step_emergenza_completo(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+        return self.async_show_form(step_id="emergenza_completo", data_schema=_schema_emergenza_completo(self._data))
 
     # --- Step modo semplificato e semplificato FV ---
 
@@ -616,8 +656,17 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_protezione_potenza(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+            return await self.async_step_emergenza_simple()
         return self.async_show_form(step_id="protezione_potenza", data_schema=_schema_protezione_potenza(self._data))
+
+    async def async_step_emergenza_simple(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+        mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        if mode != CONFIG_MODE_SIMPLE_FV:
+            return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
+        return self.async_show_form(step_id="emergenza_simple", data_schema=_schema_emergenza_simple(self._data))
 
     @staticmethod
     @callback
@@ -695,8 +744,14 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     async def async_step_protezione_potenza_completo(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(data=self._data)
+            return await self.async_step_emergenza_completo()
         return self.async_show_form(step_id="protezione_potenza_completo", data_schema=_schema_protezione_potenza_completo(self._data))
+
+    async def async_step_emergenza_completo(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(data=self._data)
+        return self.async_show_form(step_id="emergenza_completo", data_schema=_schema_emergenza_completo(self._data))
 
     # --- Options modo semplificato ---
 
@@ -737,5 +792,14 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     async def async_step_protezione_potenza(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            return self.async_create_entry(data=self._data)
+            return await self.async_step_emergenza_simple()
         return self.async_show_form(step_id="protezione_potenza", data_schema=_schema_protezione_potenza(self._data))
+
+    async def async_step_emergenza_simple(self, user_input=None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(data=self._data)
+        mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        if mode != CONFIG_MODE_SIMPLE_FV:
+            return self.async_create_entry(data=self._data)
+        return self.async_show_form(step_id="emergenza_simple", data_schema=_schema_emergenza_simple(self._data))
