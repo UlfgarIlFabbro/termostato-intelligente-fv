@@ -65,8 +65,10 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SWITCH]
 
-# Versione schema configurazione — incrementa ad ogni migrazione
 SCHEMA_VERSION = 2
+
+# Valori config_mode validi
+VALID_MODES = ("simple", "simple_fv", "full")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -84,19 +86,27 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Migra le entry alla versione più recente aggiungendo i campi mancanti."""
-    _LOGGER.info(
-        "Migrazione %s dalla versione %s alla versione %s",
-        config_entry.title,
-        config_entry.version,
-        SCHEMA_VERSION,
-    )
+    """Migra le entry alla versione più recente.
+
+    TABELLA DI CONVERSIONE:
+    - config_mode None / "semplificato" / qualsiasi valore non valido:
+        → "simple_fv" se fv_sensor presente, altrimenti "simple"
+    - config_mode già valido ("simple", "simple_fv", "full"):
+        → mantieni invariato
+    - Tutti gli altri campi: aggiunge solo se MANCANTI, non sovrascrive mai
+    """
+    _LOGGER.info("Migrazione %s v%s → v%s", config_entry.title, config_entry.version, SCHEMA_VERSION)
 
     new_data = dict(config_entry.data)
 
-    # Campi aggiunti nella v0.5.5 — notifiche separate TTS/Telegram
-    notify_defaults = {
-        # Notifiche Telegram separate (v0.5.5)
+    # TABELLA CONVERSIONE config_mode
+    current_mode = new_data.get("config_mode")
+    if current_mode not in VALID_MODES:
+        new_data["config_mode"] = "simple_fv" if new_data.get("fv_sensor") else "simple"
+        _LOGGER.info("%s: config_mode '%s' → '%s'", config_entry.title, current_mode, new_data["config_mode"])
+
+    # Aggiunge solo i campi MANCANTI — non sovrascrive mai
+    field_defaults = {
         "simple_notify_tel_ac_on": DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON,
         "simple_notify_tel_ac_off": DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF,
         "simple_notify_tel_temp_change": DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE,
@@ -117,7 +127,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         "simple_notify_tts_night_end": DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END,
         "simple_quiet_night_tts": DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
         "simple_quiet_night_notify": DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY,
-        # Campi v0.6.0
         "simple_no_auto_on_night": DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
         "simple_turn_on_offset": DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
         "simple_dry_enabled": DEFAULT_SIMPLE_DRY_ENABLED,
@@ -130,7 +139,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         "night_end_shutoff_enabled": DEFAULT_NIGHT_END_SHUTOFF_ENABLED,
         "night_end_shutoff_auto_only": DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY,
         "update_interval": 1,
-        # Campi FV
         "fv_margin_w": DEFAULT_FV_MARGIN_W,
         "fv_priority": DEFAULT_FV_PRIORITY,
         "fv_shutoff_delay_min": DEFAULT_FV_SHUTOFF_DELAY_MIN,
@@ -138,7 +146,6 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         "fv_shutoff_threshold": DEFAULT_FV_SHUTOFF_THRESHOLD,
         "fv_stagger_minutes": DEFAULT_FV_STAGGER_MIN,
         "soc_min": DEFAULT_SOC_MIN,
-        # Campi v0.6.2 protezione potenza
         "power_limit_enabled": DEFAULT_POWER_LIMIT_ENABLED,
         "power_limit_mode": DEFAULT_POWER_LIMIT_MODE,
         "power_limit_max_w": DEFAULT_POWER_LIMIT_MAX_W,
@@ -146,32 +153,21 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         "power_limit_restore_min": DEFAULT_POWER_LIMIT_RESTORE_MIN,
         "power_limit_notify_tts": DEFAULT_POWER_LIMIT_NOTIFY_TTS,
         "power_limit_notify_telegram": DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM,
-        # Campi v0.6.4 emergenza caldo
         "emergency_heat_threshold": DEFAULT_EMERGENCY_HEAT_THRESHOLD,
         "emergency_heat_end_threshold": DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
         "emergency_notify_tts": DEFAULT_EMERGENCY_NOTIFY_TTS,
         "emergency_notify_telegram": DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
     }
 
-    updated = False
-    for key, default in notify_defaults.items():
+    for key, default in field_defaults.items():
         if key not in new_data:
             new_data[key] = default
-            updated = True
 
-    if updated:
-        hass.config_entries.async_update_entry(
-            config_entry,
-            data=new_data,
-            version=SCHEMA_VERSION,
-        )
-        _LOGGER.info("Migrazione %s completata", config_entry.title)
-    else:
-        hass.config_entries.async_update_entry(
-            config_entry,
-            version=SCHEMA_VERSION,
-        )
-
+    hass.config_entries.async_update_entry(
+        config_entry,
+        data=new_data,
+        version=SCHEMA_VERSION,
+    )
     return True
 
 

@@ -345,6 +345,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self.entry = entry
         self._attr_unique_id = entry.entry_id
         self._attr_name = get_conf(entry, CONF_NAME, DEFAULT_NAME)
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=get_conf(entry, CONF_NAME, DEFAULT_NAME),
@@ -465,6 +466,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+
+        # Fix config_mode per istanze create con versioni vecchie
+        raw_mode = self.entry.data.get(CONF_CONFIG_MODE)
+        if not raw_mode or raw_mode not in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV, CONFIG_MODE_FULL):
+            fixed_mode = CONFIG_MODE_SIMPLE_FV if self.entry.data.get(CONF_FV_SENSOR) else CONFIG_MODE_SIMPLE
+            new_data = {**self.entry.data, CONF_CONFIG_MODE: fixed_mode}
+            self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+            _LOGGER.info("%s: config_mode corretto da '%s' a '%s'", self._attr_name, raw_mode, fixed_mode)
         last_state = await self.async_get_last_state()
         if last_state is not None:
             temp_attr = last_state.attributes.get(ATTR_TEMPERATURE)
