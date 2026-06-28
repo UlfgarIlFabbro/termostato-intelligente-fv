@@ -323,7 +323,8 @@
           "simple_notify_tel_door_close": "▶ Porta chiusa",
           "simple_notify_tel_night_start": "▶ Inizio modalità notturna",
           "simple_notify_tel_night_end": "▶ Fine modalità notturna",
-          "simple_quiet_night_notify": "▶ Silenzia Telegram durante la notte"
+          "simple_quiet_night_notify": "▶ Silenzia Telegram durante la notte",
+          "simple_notify_tel_ac_off_fv": "▶ Spegnimento per FV insufficiente"
         },
         "data_description": {
           "tts_media_players": "Seleziona uno o più altoparlanti Google Home o Nest su cui il termostato parlerà. Lascia vuoto per non usare la voce.",
@@ -349,7 +350,8 @@
           "simple_notify_tel_door_close": "Telegram avvisa quando la porta si chiude. Solo informativo.",
           "simple_notify_tel_night_start": "Telegram avvisa all'inizio della modalità notturna.",
           "simple_notify_tel_night_end": "Telegram avvisa alla fine della modalità notturna.",
-          "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna."
+          "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna.",
+          "simple_notify_tel_ac_off_fv": "Telegram avvisa quando il clima si spegne perché il fotovoltaico non produce abbastanza. Il messaggio indica che si tratta di uno spegnimento automatico FV, non per temperatura raggiunta."
         }
       },
       "protezione_potenza": {
@@ -408,12 +410,14 @@
         "title": "Emergenza caldo",
         "description": "Configura il comportamento dello switch 'Emergenza caldo'. Quando attivato manualmente, il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura, come se fosse in modalità semplice. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra.",
         "data": {
+          "emergency_heat_active": "▶ Attiva emergenza caldo adesso",
           "emergency_heat_threshold": "Temperatura sopra il target per accendere in emergenza (°C)",
           "emergency_heat_end_threshold": "Temperatura sopra il target per considerare l'emergenza rientrata (°C)",
           "emergency_notify_tts": "▶ Avviso vocale Google Home",
           "emergency_notify_telegram": "▶ Avviso Telegram"
         },
         "data_description": {
+          "emergency_heat_active": "Attiva o disattiva lo switch emergenza caldo direttamente da qui. Quando attivo il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra nella soglia configurata.",
           "emergency_heat_threshold": "Di quanti gradi la temperatura deve superare il target per accendere il clima in modalità emergenza. Esempio: 1.5°C con target 25°C → accende da 26.5°C ignorando il fotovoltaico.",
           "emergency_heat_end_threshold": "Quando la temperatura scende entro questo margine dal target, l'emergenza si considera rientrata e lo switch si disattiva automaticamente. Esempio: 0.7°C con target 25°C → emergenza finisce quando scende sotto 25.7°C.",
           "emergency_notify_tts": "Se attivato: Google Home annuncia quando inizia e finisce l'emergenza caldo.",
@@ -424,6 +428,7 @@
         "title": "Emergenza caldo",
         "description": "Configura il comportamento dello switch 'Emergenza caldo'. Quando attivato manualmente, il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura, come se fosse in modalità semplice. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra.",
         "data": {
+          "emergency_heat_active": "▶ Attiva emergenza caldo adesso",
           "emergency_heat_threshold": "Temperatura sopra il target per accendere in emergenza (°C)",
           "emergency_heat_end_threshold": "Temperatura sopra il target per considerare l'emergenza rientrata (°C)",
           "emergency_notify_tts": "▶ Avviso vocale Google Home",
@@ -432,12 +437,23 @@
           "emergency_msg_off": "Messaggio fine emergenza (template)"
         },
         "data_description": {
+          "emergency_heat_active": "Attiva o disattiva lo switch emergenza caldo direttamente da qui. Quando attivo il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra nella soglia configurata.",
           "emergency_heat_threshold": "Di quanti gradi la temperatura deve superare il target per accendere il clima in modalità emergenza. Esempio: 1.5°C con target 25°C → accende da 26.5°C ignorando il fotovoltaico.",
           "emergency_heat_end_threshold": "Quando la temperatura scende entro questo margine dal target, l'emergenza si considera rientrata e lo switch si disattiva automaticamente. Esempio: 0.7°C con target 25°C → emergenza finisce quando scende sotto 25.7°C.",
           "emergency_notify_tts": "Se attivato: Google Home annuncia quando inizia e finisce l'emergenza caldo.",
           "emergency_notify_telegram": "Se attivato: Telegram avvisa quando inizia e finisce l'emergenza caldo.",
           "emergency_msg_on": "Messaggio inviato quando inizia l'emergenza caldo. Variabili: {{ name }} = nome termostato, {{ temp }} = temperatura attuale, {{ target }} = temperatura target.",
           "emergency_msg_off": "Messaggio inviato quando l'emergenza caldo termina. Stesse variabili disponibili."
+        }
+      },
+      "cambia_modalita": {
+        "title": "Modifica modalità di configurazione",
+        "description": "Puoi cambiare la modalità di configurazione. Attenzione: cambiando modalità i parametri della vecchia modalità vengono mantenuti ma potresti dover riconfigurare alcune impostazioni.",
+        "data": {
+          "config_mode": "Modalità di configurazione"
+        },
+        "data_description": {
+          "config_mode": "🟢 SEMPLIFICATO — Pochi campi essenziali, logica automatica.\n🔵 SEMPLIFICATO CON FOTOVOLTAICO — Come il semplificato + gestione FV.\n⚙️ COMPLETO — Tutti i parametri avanzati."
         }
       }
     },
@@ -734,7 +750,8 @@
           "simple_notify_tel_door_close": "▶ Porta chiusa",
           "simple_notify_tel_night_start": "▶ Inizio modalità notturna",
           "simple_notify_tel_night_end": "▶ Fine modalità notturna",
-          "simple_quiet_night_notify": "▶ Silenzia Telegram durante la notte"
+          "simple_quiet_night_notify": "▶ Silenzia Telegram durante la notte",
+          "simple_notify_tel_ac_off_fv": "▶ Spegnimento per FV insufficiente"
         },
         "data_description": {
           "tts_media_players": "Seleziona uno o più altoparlanti Google Home o Nest su cui il termostato parlerà. Lascia vuoto per non usare la voce.",
@@ -760,7 +777,8 @@
           "simple_notify_tel_door_close": "Telegram avvisa quando la porta si chiude. Solo informativo.",
           "simple_notify_tel_night_start": "Telegram avvisa all'inizio della modalità notturna.",
           "simple_notify_tel_night_end": "Telegram avvisa alla fine della modalità notturna.",
-          "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna."
+          "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna.",
+          "simple_notify_tel_ac_off_fv": "Telegram avvisa quando il clima si spegne perché il fotovoltaico non produce abbastanza. Il messaggio indica che si tratta di uno spegnimento automatico FV, non per temperatura raggiunta."
         }
       },
       "cambia_modalita": {
@@ -829,12 +847,14 @@
         "title": "Emergenza caldo",
         "description": "Configura il comportamento dello switch 'Emergenza caldo'. Quando attivato manualmente, il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura, come se fosse in modalità semplice. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra.",
         "data": {
+          "emergency_heat_active": "▶ Attiva emergenza caldo adesso",
           "emergency_heat_threshold": "Temperatura sopra il target per accendere in emergenza (°C)",
           "emergency_heat_end_threshold": "Temperatura sopra il target per considerare l'emergenza rientrata (°C)",
           "emergency_notify_tts": "▶ Avviso vocale Google Home",
           "emergency_notify_telegram": "▶ Avviso Telegram"
         },
         "data_description": {
+          "emergency_heat_active": "Attiva o disattiva lo switch emergenza caldo direttamente da qui. Quando attivo il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra nella soglia configurata.",
           "emergency_heat_threshold": "Di quanti gradi la temperatura deve superare il target per accendere il clima in modalità emergenza. Esempio: 1.5°C con target 25°C → accende da 26.5°C ignorando il fotovoltaico.",
           "emergency_heat_end_threshold": "Quando la temperatura scende entro questo margine dal target, l'emergenza si considera rientrata e lo switch si disattiva automaticamente. Esempio: 0.7°C con target 25°C → emergenza finisce quando scende sotto 25.7°C.",
           "emergency_notify_tts": "Se attivato: Google Home annuncia quando inizia e finisce l'emergenza caldo.",
@@ -845,6 +865,7 @@
         "title": "Emergenza caldo",
         "description": "Configura il comportamento dello switch 'Emergenza caldo'. Quando attivato manualmente, il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura, come se fosse in modalità semplice. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra.",
         "data": {
+          "emergency_heat_active": "▶ Attiva emergenza caldo adesso",
           "emergency_heat_threshold": "Temperatura sopra il target per accendere in emergenza (°C)",
           "emergency_heat_end_threshold": "Temperatura sopra il target per considerare l'emergenza rientrata (°C)",
           "emergency_notify_tts": "▶ Avviso vocale Google Home",
@@ -853,6 +874,7 @@
           "emergency_msg_off": "Messaggio fine emergenza (template)"
         },
         "data_description": {
+          "emergency_heat_active": "Attiva o disattiva lo switch emergenza caldo direttamente da qui. Quando attivo il termostato ignora completamente il fotovoltaico e accende il clima solo in base alla temperatura. Si disattiva automaticamente 5 minuti prima della modalità notturna o quando la temperatura rientra nella soglia configurata.",
           "emergency_heat_threshold": "Di quanti gradi la temperatura deve superare il target per accendere il clima in modalità emergenza. Esempio: 1.5°C con target 25°C → accende da 26.5°C ignorando il fotovoltaico.",
           "emergency_heat_end_threshold": "Quando la temperatura scende entro questo margine dal target, l'emergenza si considera rientrata e lo switch si disattiva automaticamente. Esempio: 0.7°C con target 25°C → emergenza finisce quando scende sotto 25.7°C.",
           "emergency_notify_tts": "Se attivato: Google Home annuncia quando inizia e finisce l'emergenza caldo.",
