@@ -10,6 +10,30 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     DOMAIN,
+    DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
+    DEFAULT_EMERGENCY_HEAT_THRESHOLD,
+    DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
+    DEFAULT_EMERGENCY_NOTIFY_TTS,
+    DEFAULT_FV_MARGIN_W,
+    DEFAULT_FV_PRIORITY,
+    DEFAULT_FV_SHUTOFF_DELAY_MIN,
+    DEFAULT_FV_SHUTOFF_ENABLED,
+    DEFAULT_FV_SHUTOFF_THRESHOLD,
+    DEFAULT_FV_STAGGER_MIN,
+    DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY,
+    DEFAULT_NIGHT_END_SHUTOFF_ENABLED,
+    DEFAULT_POWER_LIMIT_ENABLED,
+    DEFAULT_POWER_LIMIT_HYSTERESIS_W,
+    DEFAULT_POWER_LIMIT_MAX_W,
+    DEFAULT_POWER_LIMIT_MODE,
+    DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM,
+    DEFAULT_POWER_LIMIT_NOTIFY_TTS,
+    DEFAULT_POWER_LIMIT_RESTORE_MIN,
+    DEFAULT_SIMPLE_DRY_ENABLED,
+    DEFAULT_SIMPLE_DRY_MAX_MIN,
+    DEFAULT_SIMPLE_NIGHT_END,
+    DEFAULT_SIMPLE_NIGHT_START,
+    DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
     DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF,
     DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON,
     DEFAULT_SIMPLE_NOTIFY_TEL_DOOR_CLOSE,
@@ -28,13 +52,13 @@ from .const import (
     DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE,
     DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_CLOSE,
     DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN,
-    DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
+    DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY,
+    DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
+    DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
+    DEFAULT_SIMPLE_TARGET_DAY,
+    DEFAULT_SIMPLE_TARGET_NIGHT,
     DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
-    DEFAULT_POWER_LIMIT_ENABLED,
-    DEFAULT_EMERGENCY_HEAT_THRESHOLD,
-    DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
-    DEFAULT_EMERGENCY_NOTIFY_TTS,
-    DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
+    DEFAULT_SOC_MIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +96,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
 
     # Campi aggiunti nella v0.5.5 — notifiche separate TTS/Telegram
     notify_defaults = {
+        # Notifiche Telegram separate (v0.5.5)
         "simple_notify_tel_ac_on": DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON,
         "simple_notify_tel_ac_off": DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF,
         "simple_notify_tel_temp_change": DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE,
@@ -90,12 +115,38 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         "simple_notify_tts_door_close": DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_CLOSE,
         "simple_notify_tts_night_start": DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START,
         "simple_notify_tts_night_end": DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END,
-        # Campi aggiunti nella v0.6.0
+        "simple_quiet_night_tts": DEFAULT_SIMPLE_QUIET_NIGHT_TTS,
+        "simple_quiet_night_notify": DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY,
+        # Campi v0.6.0
         "simple_no_auto_on_night": DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT,
         "simple_turn_on_offset": DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
-        # Campi aggiunti nella v0.6.2
+        "simple_dry_enabled": DEFAULT_SIMPLE_DRY_ENABLED,
+        "simple_dry_max_min": DEFAULT_SIMPLE_DRY_MAX_MIN,
+        "simple_target_day": DEFAULT_SIMPLE_TARGET_DAY,
+        "simple_target_night": DEFAULT_SIMPLE_TARGET_NIGHT,
+        "simple_night_start": DEFAULT_SIMPLE_NIGHT_START,
+        "simple_night_end": DEFAULT_SIMPLE_NIGHT_END,
+        "simple_sunset_anticipate_h": DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
+        "night_end_shutoff_enabled": DEFAULT_NIGHT_END_SHUTOFF_ENABLED,
+        "night_end_shutoff_auto_only": DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY,
+        "update_interval": 1,
+        # Campi FV
+        "fv_margin_w": DEFAULT_FV_MARGIN_W,
+        "fv_priority": DEFAULT_FV_PRIORITY,
+        "fv_shutoff_delay_min": DEFAULT_FV_SHUTOFF_DELAY_MIN,
+        "fv_shutoff_enabled": DEFAULT_FV_SHUTOFF_ENABLED,
+        "fv_shutoff_threshold": DEFAULT_FV_SHUTOFF_THRESHOLD,
+        "fv_stagger_minutes": DEFAULT_FV_STAGGER_MIN,
+        "soc_min": DEFAULT_SOC_MIN,
+        # Campi v0.6.2 protezione potenza
         "power_limit_enabled": DEFAULT_POWER_LIMIT_ENABLED,
-        # Campi aggiunti nella v0.6.4
+        "power_limit_mode": DEFAULT_POWER_LIMIT_MODE,
+        "power_limit_max_w": DEFAULT_POWER_LIMIT_MAX_W,
+        "power_limit_hysteresis_w": DEFAULT_POWER_LIMIT_HYSTERESIS_W,
+        "power_limit_restore_min": DEFAULT_POWER_LIMIT_RESTORE_MIN,
+        "power_limit_notify_tts": DEFAULT_POWER_LIMIT_NOTIFY_TTS,
+        "power_limit_notify_telegram": DEFAULT_POWER_LIMIT_NOTIFY_TELEGRAM,
+        # Campi v0.6.4 emergenza caldo
         "emergency_heat_threshold": DEFAULT_EMERGENCY_HEAT_THRESHOLD,
         "emergency_heat_end_threshold": DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
         "emergency_notify_tts": DEFAULT_EMERGENCY_NOTIFY_TTS,

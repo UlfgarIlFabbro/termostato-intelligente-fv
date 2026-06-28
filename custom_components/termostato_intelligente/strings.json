@@ -323,7 +323,8 @@
           "simple_notify_tel_door_close": "▶ Door closes",
           "simple_notify_tel_night_start": "▶ Night mode starts",
           "simple_notify_tel_night_end": "▶ Night mode ends",
-          "simple_quiet_night_notify": "▶ Silence Telegram during night hours"
+          "simple_quiet_night_notify": "▶ Silence Telegram during night hours",
+          "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar"
         },
         "data_description": {
           "tts_media_players": "Select Google Home or Nest speakers. Leave empty to disable voice.",
@@ -349,7 +350,8 @@
           "simple_notify_tel_door_close": "Telegram alerts when door closes. Informational only.",
           "simple_notify_tel_night_start": "Telegram alerts at start of night mode.",
           "simple_notify_tel_night_end": "Telegram alerts at end of night mode.",
-          "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours."
+          "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours.",
+          "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached."
         }
       },
       "protezione_potenza": {
@@ -408,12 +410,14 @@
         "title": "Heat emergency",
         "description": "Configure the 'Heat emergency' switch behavior. When manually activated, the thermostat completely ignores solar production and turns on the AC based only on temperature, like simple mode. It auto-deactivates 5 minutes before night mode or when temperature returns to normal.",
         "data": {
+          "emergency_heat_active": "▶ Activate heat emergency now",
           "emergency_heat_threshold": "Temperature above target to turn on in emergency (°C)",
           "emergency_heat_end_threshold": "Temperature above target to consider emergency over (°C)",
           "emergency_notify_tts": "▶ Google Home voice alert",
           "emergency_notify_telegram": "▶ Telegram alert"
         },
         "data_description": {
+          "emergency_heat_active": "Activate or deactivate the heat emergency switch directly from here. When active the thermostat completely ignores solar production and turns on the AC based only on temperature. Deactivates automatically 5 minutes before night mode or when temperature returns within the configured threshold.",
           "emergency_heat_threshold": "How many degrees above target to turn on in emergency mode. Example: 1.5°C with target 25°C → turns on from 26.5°C ignoring solar.",
           "emergency_heat_end_threshold": "When temperature drops within this margin of target, emergency is considered over and switch deactivates automatically. Example: 0.7°C with target 25°C → emergency ends when it drops below 25.7°C.",
           "emergency_notify_tts": "If enabled: Google Home announces when heat emergency starts and ends.",
@@ -424,6 +428,7 @@
         "title": "Heat emergency",
         "description": "Configure the 'Heat emergency' switch behavior. When manually activated, the thermostat completely ignores solar production and turns on the AC based only on temperature, like simple mode. It auto-deactivates 5 minutes before night mode or when temperature returns to normal.",
         "data": {
+          "emergency_heat_active": "▶ Activate heat emergency now",
           "emergency_heat_threshold": "Temperature above target to turn on in emergency (°C)",
           "emergency_heat_end_threshold": "Temperature above target to consider emergency over (°C)",
           "emergency_notify_tts": "▶ Google Home voice alert",
@@ -432,12 +437,23 @@
           "emergency_msg_off": "Emergency end message (template)"
         },
         "data_description": {
+          "emergency_heat_active": "Activate or deactivate the heat emergency switch directly from here. When active the thermostat completely ignores solar production and turns on the AC based only on temperature. Deactivates automatically 5 minutes before night mode or when temperature returns within the configured threshold.",
           "emergency_heat_threshold": "How many degrees above target to turn on in emergency mode. Example: 1.5°C with target 25°C → turns on from 26.5°C ignoring solar.",
           "emergency_heat_end_threshold": "When temperature drops within this margin of target, emergency is considered over and switch deactivates automatically. Example: 0.7°C with target 25°C → emergency ends when it drops below 25.7°C.",
           "emergency_notify_tts": "If enabled: Google Home announces when heat emergency starts and ends.",
           "emergency_notify_telegram": "If enabled: Telegram alerts when heat emergency starts and ends.",
           "emergency_msg_on": "Message sent when heat emergency starts. Variables: {{ name }} = thermostat name, {{ temp }} = current temperature, {{ target }} = target temperature.",
           "emergency_msg_off": "Message sent when heat emergency ends. Same variables available."
+        }
+      },
+      "cambia_modalita": {
+        "title": "Change configuration mode",
+        "description": "You can change the configuration mode. Note: changing mode keeps the old parameters but you may need to reconfigure some settings.",
+        "data": {
+          "config_mode": "Configuration mode"
+        },
+        "data_description": {
+          "config_mode": "🟢 SIMPLE — Few essential fields, automatic logic.\n🔵 SIMPLE WITH SOLAR — Like Simple + solar management.\n⚙️ FULL — All advanced parameters."
         }
       }
     },
@@ -734,7 +750,8 @@
           "simple_notify_tel_door_close": "▶ Door closes",
           "simple_notify_tel_night_start": "▶ Night mode starts",
           "simple_notify_tel_night_end": "▶ Night mode ends",
-          "simple_quiet_night_notify": "▶ Silence Telegram during night hours"
+          "simple_quiet_night_notify": "▶ Silence Telegram during night hours",
+          "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar"
         },
         "data_description": {
           "tts_media_players": "Select Google Home or Nest speakers. Leave empty to disable voice.",
@@ -760,7 +777,8 @@
           "simple_notify_tel_door_close": "Telegram alerts when door closes. Informational only.",
           "simple_notify_tel_night_start": "Telegram alerts at start of night mode.",
           "simple_notify_tel_night_end": "Telegram alerts at end of night mode.",
-          "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours."
+          "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours.",
+          "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached."
         }
       },
       "cambia_modalita": {
@@ -829,12 +847,14 @@
         "title": "Heat emergency",
         "description": "Configure the 'Heat emergency' switch behavior. When manually activated, the thermostat completely ignores solar production and turns on the AC based only on temperature, like simple mode. It auto-deactivates 5 minutes before night mode or when temperature returns to normal.",
         "data": {
+          "emergency_heat_active": "▶ Activate heat emergency now",
           "emergency_heat_threshold": "Temperature above target to turn on in emergency (°C)",
           "emergency_heat_end_threshold": "Temperature above target to consider emergency over (°C)",
           "emergency_notify_tts": "▶ Google Home voice alert",
           "emergency_notify_telegram": "▶ Telegram alert"
         },
         "data_description": {
+          "emergency_heat_active": "Activate or deactivate the heat emergency switch directly from here. When active the thermostat completely ignores solar production and turns on the AC based only on temperature. Deactivates automatically 5 minutes before night mode or when temperature returns within the configured threshold.",
           "emergency_heat_threshold": "How many degrees above target to turn on in emergency mode. Example: 1.5°C with target 25°C → turns on from 26.5°C ignoring solar.",
           "emergency_heat_end_threshold": "When temperature drops within this margin of target, emergency is considered over and switch deactivates automatically. Example: 0.7°C with target 25°C → emergency ends when it drops below 25.7°C.",
           "emergency_notify_tts": "If enabled: Google Home announces when heat emergency starts and ends.",
@@ -845,6 +865,7 @@
         "title": "Heat emergency",
         "description": "Configure the 'Heat emergency' switch behavior. When manually activated, the thermostat completely ignores solar production and turns on the AC based only on temperature, like simple mode. It auto-deactivates 5 minutes before night mode or when temperature returns to normal.",
         "data": {
+          "emergency_heat_active": "▶ Activate heat emergency now",
           "emergency_heat_threshold": "Temperature above target to turn on in emergency (°C)",
           "emergency_heat_end_threshold": "Temperature above target to consider emergency over (°C)",
           "emergency_notify_tts": "▶ Google Home voice alert",
@@ -853,6 +874,7 @@
           "emergency_msg_off": "Emergency end message (template)"
         },
         "data_description": {
+          "emergency_heat_active": "Activate or deactivate the heat emergency switch directly from here. When active the thermostat completely ignores solar production and turns on the AC based only on temperature. Deactivates automatically 5 minutes before night mode or when temperature returns within the configured threshold.",
           "emergency_heat_threshold": "How many degrees above target to turn on in emergency mode. Example: 1.5°C with target 25°C → turns on from 26.5°C ignoring solar.",
           "emergency_heat_end_threshold": "When temperature drops within this margin of target, emergency is considered over and switch deactivates automatically. Example: 0.7°C with target 25°C → emergency ends when it drops below 25.7°C.",
           "emergency_notify_tts": "If enabled: Google Home announces when heat emergency starts and ends.",

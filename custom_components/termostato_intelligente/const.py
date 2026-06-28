@@ -428,6 +428,7 @@ DEFAULT_SIMPLE_MSG_WINDOW_OPEN = (
 )
 DEFAULT_SIMPLE_MSG_WINDOW_CLOSE = "\u2705 {{ name }}: finestra chiusa, climatizzatore riacceso."
 DEFAULT_SIMPLE_MSG_AC_ON = "\u2600\ufe0f {{ name }}: climatizzatore acceso ({{ temp }}\u00b0C)."
-DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento ({{ temp }}\u00b0C \u2264 target {{ target }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — temperatura raggiunta ({{ temp }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_START = "\U0001f319 {{ name }}: inizio modalità notturna (target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_END = "\U0001f305 {{ name }}: fine modalità notturna, climatizzatore spento."

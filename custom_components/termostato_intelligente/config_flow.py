@@ -79,6 +79,7 @@ from .const import (
     DEFAULT_SIMPLE_TARGET_DAY,
     DEFAULT_SIMPLE_TARGET_NIGHT,
     CONF_EMERGENCY_HEAT_END_THRESHOLD,
+    SWITCH_KEY_EMERGENCY,
     CONF_EMERGENCY_HEAT_THRESHOLD,
     CONF_EMERGENCY_MSG_OFF,
     CONF_EMERGENCY_MSG_ON,
@@ -346,6 +347,7 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
 def _schema_emergenza_simple(defaults: dict) -> vol.Schema:
     """Schema emergenza caldo per modo semplificato FV."""
     return vol.Schema({
+        _f(vol.Optional, "emergency_heat_active", defaults, False): selector.BooleanSelector(),
         _f(vol.Optional, CONF_EMERGENCY_HEAT_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_EMERGENCY_HEAT_END_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_EMERGENCY_NOTIFY_TTS, defaults, DEFAULT_EMERGENCY_NOTIFY_TTS): selector.BooleanSelector(),
@@ -356,6 +358,7 @@ def _schema_emergenza_simple(defaults: dict) -> vol.Schema:
 def _schema_emergenza_completo(defaults: dict) -> vol.Schema:
     """Schema emergenza caldo per modo completo — aggiunge messaggi personalizzabili."""
     return vol.Schema({
+        _f(vol.Optional, "emergency_heat_active", defaults, False): selector.BooleanSelector(),
         _f(vol.Optional, CONF_EMERGENCY_HEAT_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_EMERGENCY_HEAT_END_THRESHOLD, defaults, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_EMERGENCY_NOTIFY_TTS, defaults, DEFAULT_EMERGENCY_NOTIFY_TTS): selector.BooleanSelector(),
@@ -661,12 +664,26 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
 
     async def async_step_emergenza_simple(self, user_input=None):
         if user_input is not None:
+            # Gestisci attivazione/disattivazione switch emergenza
+            emergency_active = user_input.pop("emergency_heat_active", False)
             self._data.update(user_input)
+            # Attiva/disattiva lo switch tramite HA
+            entry_id = getattr(self, "config_entry", None) and self.config_entry.entry_id
+            if entry_id:
+                entry_data = self.hass.data.get(DOMAIN, {}).get(entry_id, {})
+                switch = entry_data.get(SWITCH_KEY_EMERGENCY)
+                if switch is not None:
+                    if emergency_active:
+                        await switch.async_turn_on()
+                    else:
+                        await switch.async_turn_off()
             return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
         mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         if mode != CONFIG_MODE_SIMPLE_FV:
             return self.async_create_entry(title=self._data.get(CONF_NAME, DEFAULT_NAME), data=self._data)
-        return self.async_show_form(step_id="emergenza_simple", data_schema=_schema_emergenza_simple(self._data))
+        # Leggi stato attuale dello switch per pre-popolare il campo
+        defaults = dict(self._data)
+        return self.async_show_form(step_id="emergenza_simple", data_schema=_schema_emergenza_simple(defaults))
 
     @staticmethod
     @callback
@@ -797,9 +814,23 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_emergenza_simple(self, user_input=None):
         if user_input is not None:
+            emergency_active = user_input.pop("emergency_heat_active", False)
             self._data.update(user_input)
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id, {})
+            switch = entry_data.get(SWITCH_KEY_EMERGENCY)
+            if switch is not None:
+                if emergency_active:
+                    await switch.async_turn_on()
+                else:
+                    await switch.async_turn_off()
             return self.async_create_entry(data=self._data)
         mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         if mode != CONFIG_MODE_SIMPLE_FV:
             return self.async_create_entry(data=self._data)
-        return self.async_show_form(step_id="emergenza_simple", data_schema=_schema_emergenza_simple(self._data))
+        # Leggi stato attuale switch per pre-popolare
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id, {})
+        switch = entry_data.get(SWITCH_KEY_EMERGENCY)
+        defaults = dict(self._data)
+        if switch is not None:
+            defaults["emergency_heat_active"] = switch.is_on
+        return self.async_show_form(step_id="emergenza_simple", data_schema=_schema_emergenza_simple(defaults))
