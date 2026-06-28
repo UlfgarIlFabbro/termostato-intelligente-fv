@@ -277,6 +277,7 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| v0.6.5 | Fix SOC batteria, fix logica termica non accende in modo FV, messaggi accensione distinti per tipo con parametri, debounce porta |
 | v0.6.4 | Switch emergenza caldo: accensione ignorando FV con disattivazione automatica, notifiche separate Google/Telegram |
 | v0.6.3 | Riscrittura soglie termiche semplificato, fix _async_simple_notify_ac_on mancante, fix import CONF_SIMPLE_TURN_ON_OFFSET |
 | v0.6.2 | Protezione potenza: spegnimento automatico per evitare distacco contatore, riaccensione automatica, cascata multi-clima |
