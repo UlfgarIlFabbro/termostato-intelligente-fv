@@ -484,14 +484,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._simple_was_night = self._simple_is_night()
 
         # Se HA si riavvia mentre il clima è in modalità dry,
-        # inizializza il timer così il passaggio a COOL avviene regolarmente
+        # Se HA si riavvia con clima in DRY, recupera il timestamp originale
         real_state = self.hass.states.get(self._climate_entity)
         if real_state and real_state.state == "dry" and self._simple_dry_since is None:
-            _LOGGER.info(
-                "%s: riavvio con clima in DRY — inizializzo timer dry_since",
-                self._attr_name,
-            )
-            self._schedule_dry_timer()
+            stored = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get("dry_since")
+            if stored:
+                try:
+                    self._simple_dry_since = dt_util.parse_datetime(stored)
+                    _LOGGER.info("%s: riavvio con DRY — recuperato dry_since=%s", self._attr_name, self._simple_dry_since)
+                except Exception:
+                    self._schedule_dry_timer()
+            else:
+                # Nessun timestamp salvato — parte da ora
+                self._schedule_dry_timer()
+                _LOGGER.info("%s: riavvio con DRY — timer ripartito da ora", self._attr_name)
         interval_min = int(get_conf(self.entry, CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN))
         self.async_on_remove(
             async_track_time_interval(self.hass, self._async_periodic_update, timedelta(minutes=interval_min))
@@ -890,6 +896,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 _LOGGER.info("%s: [semplificato] DRY→COOL (elapsed=%s)", self._attr_name, dry_elapsed)
                 await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                 self._simple_dry_since = None
+                self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).pop("dry_since", None)
                 if self._dry_cancel_timer is not None:
                     self._dry_cancel_timer()
                     self._dry_cancel_timer = None
@@ -991,6 +998,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 _LOGGER.info("%s: [semplificato] DRY→COOL (elapsed=%s)", self._attr_name, dry_elapsed)
                 await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                 self._simple_dry_since = None
+                self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).pop("dry_since", None)
                 if self._dry_cancel_timer is not None:
                     self._dry_cancel_timer()
                     self._dry_cancel_timer = None
@@ -2010,19 +2018,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
 
     def _schedule_dry_timer(self) -> None:
-        """Schedula il passaggio DRY→COOL dopo dry_max_min minuti."""
-        # Cancella timer esistente se presente
+        """Registra il timestamp di inizio DRY.
+        Il passaggio a COOL viene gestito dal loop periodico ogni minuto.
+        Non usa async_call_later perché non funziona in questo contesto.
+        """
         if self._dry_cancel_timer is not None:
             self._dry_cancel_timer()
             self._dry_cancel_timer = None
+        now = dt_util.utcnow()
+        self._simple_dry_since = now
+        # Salva in hass.data per recuperare dopo riavvio
+        self.hass.data.setdefault(DOMAIN, {}).setdefault(self.entry.entry_id, {})["dry_since"] = now.isoformat()
         dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
-        _LOGGER.info("%s: [DRY] timer schedulato per %s minuti", self._attr_name, dry_max_min)
-        self._dry_cancel_timer = async_call_later(
-            self.hass,
-            timedelta(minutes=dry_max_min),
-            self._async_dry_to_cool
-        )
-        self._simple_dry_since = dt_util.utcnow()
+        _LOGGER.info("%s: [DRY] avviato, passerà a COOL in %s minuti", self._attr_name, dry_max_min)
 
     async def _async_dry_to_cool(self, *_) -> None:
         """Callback schedulato: passa da DRY a COOL dopo il tempo configurato."""
