@@ -427,7 +427,10 @@ DEFAULT_SIMPLE_MSG_WINDOW_OPEN = (
     "Il clima si spegnerà tra {{ delay }} minuti se non viene chiusa."
 )
 DEFAULT_SIMPLE_MSG_WINDOW_CLOSE = "\u2705 {{ name }}: finestra chiusa, climatizzatore riacceso."
-DEFAULT_SIMPLE_MSG_AC_ON = "\u2600\ufe0f {{ name }}: climatizzatore acceso ({{ temp }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_ON = "\u2600\ufe0f {{ name }}: acceso per temperatura ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_ON_FV = "\u26a1 {{ name }}: acceso dal FV ({{ temp }}\u00b0C, FV {{ fv }}W, surplus {{ surplus }}W, batteria {{ soc }}%)."
+DEFAULT_SIMPLE_MSG_AC_ON_NIGHT = "\U0001f319 {{ name }}: acceso modalità notturna ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY = "\U0001f525 {{ name }}: acceso emergenza caldo ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — temperatura raggiunta ({{ temp }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_START = "\U0001f319 {{ name }}: inizio modalità notturna (target {{ target }}\u00b0C)."

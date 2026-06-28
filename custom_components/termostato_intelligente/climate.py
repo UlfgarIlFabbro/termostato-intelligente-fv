@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import logging
 import math
 from datetime import datetime, time as dt_time, timedelta
@@ -251,6 +253,9 @@ from .const import (
     DEFAULT_SIMPLE_MSG_AC_OFF,
     DEFAULT_SIMPLE_MSG_AC_OFF_FV,
     DEFAULT_SIMPLE_MSG_AC_ON,
+    DEFAULT_SIMPLE_MSG_AC_ON_FV,
+    DEFAULT_SIMPLE_MSG_AC_ON_NIGHT,
+    DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY,
     DEFAULT_SIMPLE_MSG_DOOR_CLOSE,
     DEFAULT_SIMPLE_MSG_DOOR_OPEN,
     DEFAULT_SIMPLE_MSG_NIGHT_END,
@@ -805,6 +810,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         use_internal=True  → sonda interna (valori interi, soglie intere)
         use_internal=False → sonda esterna (valori decimali, soglie decimali)
+
+        Nel modo semplificato con FV: se il clima è spento non accende —
+        ci pensa solo la logica FV. La logica termica regola solo se già acceso.
         """
         real_state = self.hass.states.get(self._climate_entity)
         internal_temp: float | None = None
@@ -819,9 +827,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
         no_auto_on_night = bool(get_conf(self.entry, CONF_SIMPLE_NO_AUTO_ON_NIGHT, DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT))
 
+        # Nel modo semplificato con FV: non accendere se spento — ci pensa il FV
+        config_mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        current_state = real_state.state if real_state else "off"
+        is_on = self.hvac_mode == HVACMode.COOL or current_state == "dry"
+        if config_mode == CONFIG_MODE_SIMPLE_FV and not is_on:
+            return
+
         # Se siamo di notte e l'accensione notturna automatica è disabilitata,
         # non accendere — ma se il clima è già acceso continua a regolarlo
-        if no_auto_on_night and self._simple_is_night() and self.hvac_mode == HVACMode.OFF:
+        if no_auto_on_night and self._simple_is_night() and not is_on:
             return
 
         if use_internal:
@@ -893,7 +908,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._simple_dry_since = None
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
-                await self._async_simple_notify_ac_on(temp)
+                ac_type_int = "notturna" if self._simple_is_night() else "termica"
+                await self._async_simple_notify_ac_on(temp, target, ac_type=ac_type_int)
             return
 
         # --- Regolazione COOL ---
@@ -993,7 +1009,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._simple_dry_since = None
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
-                await self._async_simple_notify_ac_on(temp)
+                ac_type_ext = "notturna" if self._simple_is_night() else "termica"
+                await self._async_simple_notify_ac_on(temp, target, ac_type=ac_type_ext)
             return
 
         # --- Regolazione COOL ---
@@ -1076,7 +1093,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # Check SOC solo se la batteria è configurata
         if self._battery_sensor:
             soc = self._read_float(self._battery_sensor)
-            if soc is not None and soc < soc_min:
+            if soc is None:
+                return  # Sensore batteria non disponibile — aspetta
+            if soc < soc_min:
                 return  # Batteria sotto soglia — riprova al prossimo ciclo
 
         if not (fv > consumo + margin):
@@ -1104,7 +1123,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         coord["last_fv_turn_on"] = now
         self._fv_auto_on = True
         self._simple_night_auto_on = False
-        await self._async_simple_notify_ac_on(temp)
+        soc_val = self._read_float(self._battery_sensor) or 0
+        await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv, consumo=consumo, soc=soc_val)
 
     # ------------------------------------------------------------------
     # Notifiche modo semplificato
@@ -1193,7 +1213,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_dry_since = None
                 self._fv_surplus_buffer = []
-                await self._async_simple_notify_ac_on(temp)
+                soc_val2 = self._read_float(self._battery_sensor) or 0
+                fv2 = self._read_float(self._fv_sensor) or 0
+                consumo2 = self._read_float(self._consumption_sensor) or 0
+                await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv2, consumo=consumo2, soc=soc_val2)
             return
 
         if not is_on:
@@ -1245,8 +1268,30 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
 
 
-    async def _async_simple_notify_ac_on(self, temp: float) -> None:
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_ON, {"name": self._attr_name, "temp": round(temp, 1)})
+    async def _async_simple_notify_ac_on(
+        self, temp: float, target: float = 0,
+        ac_type: str = "termica",
+        fv: float = 0, consumo: float = 0, soc: float = 0
+    ) -> None:
+        """Notifica accensione con parametri distinti per tipo.
+
+        ac_type: 'termica', 'fv', 'notturna', 'emergenza'
+        """
+        surplus = round(fv - consumo) if fv and consumo else 0
+        if ac_type == "fv":
+            tpl = DEFAULT_SIMPLE_MSG_AC_ON_FV
+            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1),
+                    "fv": round(fv), "surplus": surplus, "soc": round(soc, 1)}
+        elif ac_type == "notturna":
+            tpl = DEFAULT_SIMPLE_MSG_AC_ON_NIGHT
+            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+        elif ac_type == "emergenza":
+            tpl = DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY
+            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+        else:
+            tpl = DEFAULT_SIMPLE_MSG_AC_ON
+            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+        msg = await self._async_render(tpl, vars)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_ON, DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_ON, DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON)):
@@ -1388,6 +1433,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 _LOGGER.info("%s: [emergenza] accensione COOL (temp=%.1f)", self._attr_name, temp)
                 await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                 self._simple_dry_since = None
+            await self._async_simple_notify_ac_on(temp, target, ac_type="emergenza")
 
         # Regolazione termica normale (come semplificato puro)
         if is_on:
@@ -2063,6 +2109,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_door(self, new_state: State | None, old_state: State | None) -> None:
         if new_state is None:
             return
+
+        # Debounce 1 secondo — ignora rimbalzi del sensore reed
+        # (es. porta scorrevole che passa davanti alla calamita)
+        await asyncio.sleep(1)
+        # Rileggi lo stato dopo 1 secondo — se è cambiato di nuovo ignora
+        current = self.hass.states.get(self._door_sensor)
+        if current is None or current.state != new_state.state:
+            return  # stato cambiato entro 1s — rimbalzo, ignora
+
         mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
 
