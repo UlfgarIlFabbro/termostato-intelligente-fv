@@ -466,32 +466,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-        # Fix config_mode per istanze create con versioni vecchie
-        raw_mode = self.entry.data.get(CONF_CONFIG_MODE)
-        if not raw_mode or raw_mode not in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV, CONFIG_MODE_FULL):
-            fixed_mode = CONFIG_MODE_SIMPLE_FV if self.entry.data.get(CONF_FV_SENSOR) else CONFIG_MODE_SIMPLE
-            new_data = {**self.entry.data, CONF_CONFIG_MODE: fixed_mode}
-            self.hass.config_entries.async_update_entry(self.entry, data=new_data)
-            _LOGGER.info("%s: config_mode corretto da '%s' a '%s'", self._attr_name, raw_mode, fixed_mode)
-        last_state = await self.async_get_last_state()
-        if last_state is not None:
-            temp_attr = last_state.attributes.get(ATTR_TEMPERATURE)
-            if temp_attr is not None:
-                try:
-                    self._target_temperature = float(temp_attr)
-                except (TypeError, ValueError):
-                    pass
-        if self._presence_sensor:
-            presence_state = self.hass.states.get(self._presence_sensor)
-            if presence_state and presence_state.state == "on":
-                self._presence_since = presence_state.last_changed
-        # Inizializza _was_night_mode con lo stato attuale così al primo ciclo
-        # non scatta uno spegnimento fasullo se HA si riavvia durante la notte
-        self._was_night_mode = self._is_night_mode_active()
-        # Stesso per il modo semplificato
-        self._simple_was_night = self._simple_is_night()
-
-        # Se HA si riavvia mentre il clima è in modalità dry,
+                # Se HA si riavvia mentre il clima è in modalità dry,
         # Se HA si riavvia con clima in DRY, recupera il timestamp originale
         real_state = self.hass.states.get(self._climate_entity)
         if real_state and real_state.state == "dry" and self._simple_dry_since is None:
@@ -588,7 +563,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if self._is_window_open():
             return
 
-        mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        mode = self._get_config_mode()
 
         if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
             await self._async_periodic_update_simple(now)
@@ -676,7 +651,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self._async_handle_thermal_simple(temp, target, use_internal)
 
         # Accensione e spegnimento automatico (solo modo semplificato con FV)
-        mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        mode = self._get_config_mode()
         if mode == CONFIG_MODE_SIMPLE_FV:
             # Gestione emergenza caldo — ha precedenza sul FV normale
             await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
@@ -709,6 +684,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return float(raw)
         except (TypeError, ValueError):
             return None
+
+    def _get_config_mode(self) -> str:
+        """Restituisce config_mode corretto, deducendolo dal fv_sensor se necessario."""
+        VALID = (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV, CONFIG_MODE_FULL)
+        mode = get_conf(self.entry, CONF_CONFIG_MODE, None)
+        if mode not in VALID:
+            # Deduce dalla presenza del sensore FV
+            return CONFIG_MODE_SIMPLE_FV if self._fv_sensor else CONFIG_MODE_SIMPLE
+        return mode
 
     def _simple_is_night(self) -> bool:
         return self._in_time_window(
@@ -1910,7 +1894,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         # Nel modo semplificato la notifica fine notte è gestita da
         # _async_simple_notify_night_end — non inviare duplicati
-        mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        mode = self._get_config_mode()
         if mode not in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
             await self._async_notify_night_end_shutoff()
 
@@ -1971,7 +1955,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 pass
         if current_temp_rounded is None or current_temp_rounded != new_temp_rounded:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_temp_rounded}, blocking=True)
-            mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+            mode = self._get_config_mode()
             if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
                 await self._async_simple_notify_temp_change(temp, target)
             else:
@@ -2001,7 +1985,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_window(self, new_state: State | None, old_state: State | None) -> None:
         if new_state is None:
             return
-        mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
 
         if self._is_real_transition(old_state, new_state, "off", "on"):
@@ -2125,7 +2109,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_door(self, new_state: State | None, old_state: State | None) -> None:
         if new_state is None:
             return
-        mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
+        mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
 
         if self._is_real_transition(old_state, new_state, "off", "on"):

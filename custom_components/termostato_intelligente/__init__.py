@@ -67,7 +67,6 @@ PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SWITCH]
 SCHEMA_VERSION = 2
 VALID_MODES = ("simple", "simple_fv", "full")
 
-# Valori di default per campi aggiunti nelle versioni recenti
 _FIELD_DEFAULTS = {
     "simple_notify_tel_ac_on": DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON,
     "simple_notify_tel_ac_off": DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF,
@@ -122,42 +121,9 @@ _FIELD_DEFAULTS = {
 }
 
 
-def _fix_entry_data(data: dict) -> dict:
-    """Corregge i dati di una entry:
-    - config_mode: tabella conversione vecchi valori → nuovi
-    - Aggiunge campi mancanti con valori di default
-    NON sovrascrive mai campi già presenti.
-    """
-    new_data = dict(data)
-
-    # TABELLA CONVERSIONE config_mode
-    # Vecchi valori: None, "semplificato", "semplificato_fv" → nuovi valori corretti
-    current_mode = new_data.get("config_mode")
-    if current_mode not in VALID_MODES:
-        new_data["config_mode"] = "simple_fv" if new_data.get("fv_sensor") else "simple"
-
-    # Aggiunge solo i campi MANCANTI
-    for key, default in _FIELD_DEFAULTS.items():
-        if key not in new_data:
-            new_data[key] = default
-
-    return new_data
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Configura una entry. Corregge automaticamente i dati se necessario."""
+    """Configura una entry. NON chiama async_update_entry per evitare loop."""
     hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})
-
-    # Corregge config_mode ad ogni avvio — gestisce istanze create con versioni vecchie
-    fixed = _fix_entry_data(entry.data)
-    if fixed != dict(entry.data):
-        hass.config_entries.async_update_entry(entry, data=fixed)
-        _LOGGER.info(
-            "%s: dati corretti — config_mode='%s'",
-            entry.title,
-            fixed.get("config_mode"),
-        )
-
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -172,22 +138,48 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Migra le entry alla versione più recente."""
+    """Migra le entry — scatta solo quando version < SCHEMA_VERSION.
+    
+    TABELLA CONVERSIONE config_mode:
+    - None / "semplificato" / "semplificato_fv" / qualsiasi valore non valido:
+      → "simple_fv" se fv_sensor presente, altrimenti "simple"
+    - "simple" / "simple_fv" / "full": mantieni invariato
+    
+    NON chiama async_update_entry dentro async_setup_entry per evitare loop.
+    """
     _LOGGER.info(
         "Migrazione %s v%s → v%s",
         config_entry.title,
         config_entry.version,
         SCHEMA_VERSION,
     )
-    fixed = _fix_entry_data(config_entry.data)
+
+    new_data = dict(config_entry.data)
+
+    # TABELLA CONVERSIONE config_mode
+    current_mode = new_data.get("config_mode")
+    if current_mode not in VALID_MODES:
+        new_data["config_mode"] = "simple_fv" if new_data.get("fv_sensor") else "simple"
+        _LOGGER.info(
+            "%s: config_mode '%s' → '%s'",
+            config_entry.title,
+            current_mode,
+            new_data["config_mode"],
+        )
+
+    # Aggiunge solo i campi MANCANTI — non sovrascrive mai
+    for key, default in _FIELD_DEFAULTS.items():
+        if key not in new_data:
+            new_data[key] = default
+
     hass.config_entries.async_update_entry(
         config_entry,
-        data=fixed,
+        data=new_data,
         version=SCHEMA_VERSION,
     )
     return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Ricarica l'integrazione quando le opzioni vengono modificate."""
+    """Ricarica l'integrazione quando le opzioni vengono modificate dall'utente."""
     await hass.config_entries.async_reload(entry.entry_id)
