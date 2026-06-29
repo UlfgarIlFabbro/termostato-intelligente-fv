@@ -278,7 +278,8 @@
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
           "sunset_info": "🌅 Orario tramonto oggi (informativo)",
           "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
-          "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto"
+          "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto",
+          "fv_shutoff_manual": "Spegni anche se acceso manualmente"
         },
         "data_description": {
           "fv_sensor": "Watt prodotti dai pannelli in tempo reale. Esempio: sensor.somma_sensori_zcs_pannelli.",
@@ -293,7 +294,8 @@
           "fv_shutoff_threshold": "Il surplus deve restare sotto questo valore in tutti gli ultimi N campioni. Valore 0 = spegne quando FV < consumo. Esempio: 500W → spegne quando il surplus scende sotto 500W.",
           "sunset_info": "Orario in cui il sole tramonta oggi nella tua posizione, calcolato automaticamente da Home Assistant. Si aggiorna ogni volta che apri queste impostazioni.",
           "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente e non accende più automaticamente dal FV. Si aggiorna ogni volta che apri queste impostazioni.",
-          "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire. L'accensione automatica dal FV è attiva dalla fine della modalità notturna fino a questo orario — calcolato automaticamente ogni giorno in base alla stagione. Minimo 2 ore. Esempio: tramonto 19:40 con 2 ore → automazione attiva fino alle 17:40."
+          "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire. L'accensione automatica dal FV è attiva dalla fine della modalità notturna fino a questo orario — calcolato automaticamente ogni giorno in base alla stagione. Minimo 2 ore. Esempio: tramonto 19:40 con 2 ore → automazione attiva fino alle 17:40.",
+          "fv_shutoff_manual": "Se attivo, il termostato spegnerà il clima anche quando è stato acceso manualmente dall'utente e il FV non produce abbastanza."
         }
       },
       "simple_notifiche": {
@@ -705,7 +707,8 @@
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
           "sunset_info": "🌅 Orario tramonto oggi (informativo)",
           "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
-          "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto"
+          "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto",
+          "fv_shutoff_manual": "Spegni anche se acceso manualmente"
         },
         "data_description": {
           "fv_sensor": "Watt prodotti dai pannelli in tempo reale. Esempio: sensor.somma_sensori_zcs_pannelli.",
@@ -720,7 +723,8 @@
           "fv_shutoff_threshold": "Il surplus deve restare sotto questo valore in tutti gli ultimi N campioni. Valore 0 = spegne quando FV < consumo. Esempio: 500W → spegne quando il surplus scende sotto 500W.",
           "sunset_info": "Orario in cui il sole tramonta oggi nella tua posizione, calcolato automaticamente da Home Assistant. Si aggiorna ogni volta che apri queste impostazioni.",
           "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente e non accende più automaticamente dal FV. Si aggiorna ogni volta che apri queste impostazioni.",
-          "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire. L'accensione automatica dal FV è attiva dalla fine della modalità notturna fino a questo orario — calcolato automaticamente ogni giorno in base alla stagione. Minimo 2 ore. Esempio: tramonto 19:40 con 2 ore → automazione attiva fino alle 17:40."
+          "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire. L'accensione automatica dal FV è attiva dalla fine della modalità notturna fino a questo orario — calcolato automaticamente ogni giorno in base alla stagione. Minimo 2 ore. Esempio: tramonto 19:40 con 2 ore → automazione attiva fino alle 17:40.",
+          "fv_shutoff_manual": "Se attivo, il termostato spegnerà il clima anche quando è stato acceso manualmente dall'utente e il FV non produce abbastanza."
         }
       },
       "simple_notifiche": {
