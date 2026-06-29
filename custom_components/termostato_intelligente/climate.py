@@ -466,7 +466,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-                # Se HA si riavvia mentre il clima è in modalità dry,
         # Se HA si riavvia con clima in DRY, recupera il timestamp originale
         real_state = self.hass.states.get(self._climate_entity)
         if real_state and real_state.state == "dry" and self._simple_dry_since is None:
@@ -478,7 +477,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 except Exception:
                     self._schedule_dry_timer()
             else:
-                # Nessun timestamp salvato — parte da ora
+                # Nessun timestamp salvato — parte da zero
                 self._schedule_dry_timer()
                 _LOGGER.info("%s: riavvio con DRY — timer ripartito da ora", self._attr_name)
         interval_min = int(get_conf(self.entry, CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN))

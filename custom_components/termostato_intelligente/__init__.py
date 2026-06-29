@@ -99,7 +99,7 @@ _FIELD_DEFAULTS = {
     "simple_sunset_anticipate_h": DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
     "night_end_shutoff_enabled": DEFAULT_NIGHT_END_SHUTOFF_ENABLED,
     "night_end_shutoff_auto_only": DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY,
-    "update_interval": 1,
+    "update_interval_minutes": 1,
     "fv_margin_w": DEFAULT_FV_MARGIN_W,
     "fv_priority": DEFAULT_FV_PRIORITY,
     "fv_shutoff_delay_min": DEFAULT_FV_SHUTOFF_DELAY_MIN,
