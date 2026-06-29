@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 
 import logging
 import math
@@ -2126,15 +2125,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_door(self, new_state: State | None, old_state: State | None) -> None:
         if new_state is None:
             return
-
-        # Debounce 1 secondo — ignora rimbalzi del sensore reed
-        # (es. porta scorrevole che passa davanti alla calamita)
-        await asyncio.sleep(1)
-        # Rileggi lo stato dopo 1 secondo — se è cambiato di nuovo ignora
-        current = self.hass.states.get(self._door_sensor)
-        if current is None or current.state != new_state.state:
-            return  # stato cambiato entro 1s — rimbalzo, ignora
-
         mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
 
