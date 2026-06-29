@@ -18,6 +18,7 @@ from .const import (
     DEFAULT_FV_PRIORITY,
     DEFAULT_FV_SHUTOFF_DELAY_MIN,
     DEFAULT_FV_SHUTOFF_ENABLED,
+    DEFAULT_FV_SHUTOFF_MANUAL,
     DEFAULT_FV_SHUTOFF_THRESHOLD,
     DEFAULT_FV_STAGGER_MIN,
     DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY,
@@ -104,6 +105,7 @@ _FIELD_DEFAULTS = {
     "fv_priority": DEFAULT_FV_PRIORITY,
     "fv_shutoff_delay_min": DEFAULT_FV_SHUTOFF_DELAY_MIN,
     "fv_shutoff_enabled": DEFAULT_FV_SHUTOFF_ENABLED,
+        "fv_shutoff_manual": DEFAULT_FV_SHUTOFF_MANUAL,
     "fv_shutoff_threshold": DEFAULT_FV_SHUTOFF_THRESHOLD,
     "fv_stagger_minutes": DEFAULT_FV_STAGGER_MIN,
     "soc_min": DEFAULT_SOC_MIN,
@@ -157,8 +159,15 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     new_data = dict(config_entry.data)
 
     # TABELLA CONVERSIONE config_mode
+    # Vecchi valori: None, "semplificato", "semplificato_fv" → nuovi
+    CONVERSION = {
+        "semplificato_fv": "simple_fv",
+        "semplificato": "simple",
+    }
     current_mode = new_data.get("config_mode")
-    if current_mode not in VALID_MODES:
+    if current_mode in CONVERSION:
+        new_data["config_mode"] = CONVERSION[current_mode]
+    elif current_mode not in VALID_MODES:
         new_data["config_mode"] = "simple_fv" if new_data.get("fv_sensor") else "simple"
         _LOGGER.info(
             "%s: config_mode '%s' → '%s'",

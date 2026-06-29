@@ -46,6 +46,7 @@ from .const import (
     CONF_FV_SENSOR,
     CONF_FV_SHUTOFF_DELAY_MIN,
     CONF_FV_SHUTOFF_ENABLED,
+    CONF_FV_SHUTOFF_MANUAL,
     CONF_FV_SHUTOFF_EXTRA_HOURS,
     CONF_FV_SHUTOFF_THRESHOLD,
     CONF_FV_STAGGER_MIN,
@@ -107,6 +108,7 @@ from .const import (
     DEFAULT_FV_PRIORITY,
     DEFAULT_FV_SHUTOFF_DELAY_MIN,
     DEFAULT_FV_SHUTOFF_ENABLED,
+    DEFAULT_FV_SHUTOFF_MANUAL,
     DEFAULT_FV_SHUTOFF_EXTRA_HOURS,
     DEFAULT_FV_SHUTOFF_THRESHOLD,
     DEFAULT_FV_STAGGER_MIN,
@@ -396,6 +398,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._simple_night_auto_on: bool = False             # acceso automaticamente di notte
         self._simple_dry_since: datetime | None = None       # da quando è in modalità dry
         self._dry_cancel_timer: callable | None = None          # timer per passaggio DRY→COOL
+        self._door_debounce_cancel = None                          # timer debounce porta
         self._fv_auto_on: bool = False                       # acceso automaticamente dal FV
 
         hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})["climate"] = self
@@ -685,13 +688,27 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return None
 
     def _get_config_mode(self) -> str:
-        """Restituisce config_mode corretto, deducendolo dal fv_sensor se necessario."""
+        """Restituisce config_mode corretto, deducendolo dal fv_sensor se necessario.
+        
+        Tabella conversione valori vecchi → nuovi:
+        - "semplificato_fv" → CONFIG_MODE_SIMPLE_FV
+        - "semplificato"    → CONFIG_MODE_SIMPLE
+        - None / altro      → deduce da fv_sensor
+        """
         VALID = (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV, CONFIG_MODE_FULL)
+        # Tabella conversione vecchi valori
+        CONVERSION = {
+            "semplificato_fv": CONFIG_MODE_SIMPLE_FV,
+            "semplificato": CONFIG_MODE_SIMPLE,
+            "simple": CONFIG_MODE_SIMPLE,
+            "simple_fv": CONFIG_MODE_SIMPLE_FV,
+            "full": CONFIG_MODE_FULL,
+        }
         mode = get_conf(self.entry, CONF_CONFIG_MODE, None)
-        if mode not in VALID:
-            # Deduce dalla presenza del sensore FV
-            return CONFIG_MODE_SIMPLE_FV if self._fv_sensor else CONFIG_MODE_SIMPLE
-        return mode
+        if mode in CONVERSION:
+            return CONVERSION[mode]
+        # Valore sconosciuto — deduce dalla presenza del sensore FV
+        return CONFIG_MODE_SIMPLE_FV if self._fv_sensor else CONFIG_MODE_SIMPLE
 
     def _simple_is_night(self) -> bool:
         return self._in_time_window(
@@ -1228,7 +1245,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         # Caso 2/3/4: verifica se può spegnere
-        if not self._fv_auto_on and not self._simple_can_control_manual():
+        shutoff_manual = bool(get_conf(self.entry, CONF_FV_SHUTOFF_MANUAL, DEFAULT_FV_SHUTOFF_MANUAL))
+        if not self._fv_auto_on and not self._simple_can_control_manual() and not shutoff_manual:
             self._fv_surplus_buffer = []
             return
 
@@ -2108,6 +2126,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_door(self, new_state: State | None, old_state: State | None) -> None:
         if new_state is None:
             return
+        # Debounce 1 secondo — ignora rimbalzi sensore reed
+        if hasattr(self, '_door_debounce_cancel') and self._door_debounce_cancel:
+            self._door_debounce_cancel()
+            self._door_debounce_cancel = None
+        _new_state = new_state
+        _old_state = old_state
+        async def _process_door(_now=None):
+            self._door_debounce_cancel = None
+            current = self.hass.states.get(self._door_sensor)
+            if current is None or current.state != _new_state.state:
+                return
+            await self._async_handle_door_debounced(_new_state, _old_state)
+        self._door_debounce_cancel = async_call_later(
+            self.hass, timedelta(seconds=1),
+            lambda _: self.hass.async_create_task(_process_door())
+        )
+
+    async def _async_handle_door_debounced(self, new_state: State | None, old_state: State | None) -> None:
+        """Gestisce l'evento porta dopo il debounce di 1 secondo."""
         mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
 

@@ -23,6 +23,7 @@ CONF_FV_STAGGER_MIN = "fv_stagger_minutes"
 
 # --- Spegnimento diurno da FV ---
 CONF_FV_SHUTOFF_ENABLED = "fv_shutoff_enabled"
+CONF_FV_SHUTOFF_MANUAL = "fv_shutoff_manual"  # spegni anche se acceso manualmente
 CONF_FV_SHUTOFF_DELAY_MIN = "fv_shutoff_delay_min"
 CONF_FV_SHUTOFF_EXTRA_HOURS = "fv_shutoff_extra_hours"
 CONF_FV_SHUTOFF_THRESHOLD = "fv_shutoff_threshold"
