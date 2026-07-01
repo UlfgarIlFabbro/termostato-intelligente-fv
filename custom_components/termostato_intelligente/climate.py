@@ -675,12 +675,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             real_state_dry = self.hass.states.get(self._climate_entity)
             if real_state_dry and real_state_dry.state == "dry":
                 if dt_util.utcnow() >= self._simple_dry_end:
-                    _LOGGER.info(
-                        "%s: [DRY→COOL] fallback polling — timer già scaduto, transizione ora",
+                    _LOGGER.warning(
+                        "%s: [DRY-TRACE] fallback polling — timer già scaduto, transizione ora (set_hvac_mode cool)",
                         self._attr_name,
                     )
                     await self.hass.services.async_call(
-                        "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
+                        "climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "cool"}, blocking=True
                     )
                     self._cancel_dry_timer("fallback_polling_dry_end_scaduto")
 
@@ -2138,10 +2138,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._dry_cancel_timer = None  # già scattato, non serve più cancellare
         real_state = self.hass.states.get(self._climate_entity)
         if real_state and real_state.state == "dry":
-            _LOGGER.info("%s: [DRY→COOL] timer scattato — passo a raffreddamento", self._attr_name)
+            _LOGGER.warning("%s: [DRY-TRACE] timer scattato — passo a raffreddamento (set_hvac_mode cool)", self._attr_name)
             await self.hass.services.async_call(
-                "climate", "turn_on",
-                {"entity_id": self._climate_entity},
+                "climate", "set_hvac_mode",
+                {"entity_id": self._climate_entity, "hvac_mode": "cool"},
                 blocking=True,
             )
             self._simple_dry_end = None
