@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers import area_registry as ar, entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_call_later,
@@ -1388,9 +1389,21 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_NIGHT_END, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END)):
             await self._async_simple_notify(msg, bypass_quiet=True)
 
+    def _get_display_name(self) -> str:
+        """Nome da usare nei messaggi: nome area se assegnata, altrimenti nome entità."""
+        try:
+            entity_entry = er.async_get(self.hass).async_get(self.entity_id)
+            if entity_entry and entity_entry.area_id:
+                area = ar.async_get(self.hass).async_get_area(entity_entry.area_id)
+                if area and area.name:
+                    return area.name
+        except Exception as exc:
+            _LOGGER.debug("%s: errore lettura area, uso nome entità: %s", self._attr_name, exc)
+        return self._attr_name
+
     async def _async_simple_notify_door(self, is_open: bool) -> None:
-        tpl = DEFAULT_SIMPLE_MSG_DOOR_OPEN if is_open else DEFAULT_SIMPLE_MSG_DOOR_CLOSE
-        msg = await self._async_render(tpl, {"name": self._attr_name})
+        name = self._get_display_name()
+        msg = f"{name} porta aperta" if is_open else f"{name} porta chiusa"
         if is_open:
             if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_DOOR_OPEN, DEFAULT_SIMPLE_NOTIFY_TTS_DOOR_OPEN)):
                 await self._async_simple_speak(msg)
@@ -1405,21 +1418,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_simple_notify_window(self, is_open: bool, delay_min: int = 0, ac_was_on: bool = True) -> None:
         """Notifica apertura/chiusura finestra.
 
-        Il messaggio cambia se il climatizzatore era acceso o spento nel
-        momento dell'evento: se era già spento non ha senso dire
-        "spengo tra X minuti" perché non c'è nulla da spegnere.
+        Se il climatizzatore era acceso: messaggio completo originale (con
+        minuti di attesa) usando il nome area. Se era già spento: messaggio
+        ridotto a "{area} finestra aperta/chiusa" senza altro testo.
         """
-        if is_open:
-            if ac_was_on:
-                tpl = DEFAULT_SIMPLE_MSG_WINDOW_OPEN
-            else:
-                tpl = "{{ name }}: finestra aperta (climatizzatore già spento)"
+        name = self._get_display_name()
+        if ac_was_on:
+            tpl = DEFAULT_SIMPLE_MSG_WINDOW_OPEN if is_open else DEFAULT_SIMPLE_MSG_WINDOW_CLOSE
+            msg = await self._async_render(tpl, {"name": name, "delay": delay_min})
         else:
-            if ac_was_on:
-                tpl = DEFAULT_SIMPLE_MSG_WINDOW_CLOSE
-            else:
-                tpl = "{{ name }}: finestra chiusa (climatizzatore era spento)"
-        msg = await self._async_render(tpl, {"name": self._attr_name, "delay": delay_min})
+            msg = f"{name} finestra aperta" if is_open else f"{name} finestra chiusa"
         if is_open:
             if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN, DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN)):
                 await self._async_simple_speak(msg)
