@@ -20,6 +20,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_call_later,
+    async_track_point_in_time,
     async_track_state_change_event,
     async_track_time_interval,
 )
@@ -396,8 +397,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._simple_shutoff_since: datetime | None = None  # timer spegnimento per target raggiunto
         self._simple_was_night: bool = False                 # per rilevare transizione notte→giorno
         self._simple_night_auto_on: bool = False             # acceso automaticamente di notte
-        self._simple_dry_since: datetime | None = None       # da quando è in modalità dry
-        self._dry_cancel_timer: callable | None = None          # timer per passaggio DRY→COOL
+        self._simple_dry_since: datetime | None = None       # da quando è in modalità dry (diagnostica)
+        self._simple_dry_end: datetime | None = None         # timestamp UTC di fine DRY (assoluto)
+        self._dry_cancel_timer: callable | None = None       # cancel function async_track_point_in_time
         self._door_debounce_cancel = None                          # timer debounce porta
         self._fv_auto_on: bool = False                       # acceso automaticamente dal FV
 
@@ -460,6 +462,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "fv_surplus_buffer": self._fv_surplus_buffer,
             "notte_sotto_target_da": self._night_below_since.isoformat() if self._night_below_since else None,
             "fascia_silenzio_attiva": self._is_quiet_time(),
+            # --- diagnostica DRY ---
+            "dry_since": self._simple_dry_since.isoformat() if self._simple_dry_since else None,
+            "dry_end": self._simple_dry_end.isoformat() if self._simple_dry_end else None,
+            "dry_elapsed_min": round((dt_util.utcnow() - self._simple_dry_since).total_seconds() / 60, 1) if self._simple_dry_since else None,
         }
 
     # ------------------------------------------------------------------
@@ -469,20 +475,36 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
-        # Se HA si riavvia con clima in DRY, recupera il timestamp originale
-        real_state = self.hass.states.get(self._climate_entity)
-        if real_state and real_state.state == "dry" and self._simple_dry_since is None:
-            stored = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get("dry_since")
-            if stored:
-                try:
-                    self._simple_dry_since = dt_util.parse_datetime(stored)
-                    _LOGGER.info("%s: riavvio con DRY — recuperato dry_since=%s", self._attr_name, self._simple_dry_since)
-                except Exception:
-                    self._schedule_dry_timer()
-            else:
-                # Nessun timestamp salvato — parte da zero
-                self._schedule_dry_timer()
-                _LOGGER.info("%s: riavvio con DRY — timer ripartito da ora", self._attr_name)
+        # Recupera dry_end dall'ultimo stato salvato (RestoreEntity).
+        # Se il clima era in DRY prima del riavvio, rischeduliamo il timer
+        # a partire dal timestamp assoluto salvato.
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.attributes.get("dry_end"):
+            try:
+                dry_end = dt_util.parse_datetime(last_state.attributes["dry_end"])
+                if dry_end is not None:
+                    real_state = self.hass.states.get(self._climate_entity)
+                    if real_state and real_state.state == "dry":
+                        dry_since_str = last_state.attributes.get("dry_since")
+                        if dry_since_str:
+                            try:
+                                self._simple_dry_since = dt_util.parse_datetime(dry_since_str)
+                            except Exception:
+                                self._simple_dry_since = dt_util.utcnow()
+                        self._simple_dry_end = dry_end
+                        # async_track_point_in_time scatta alla data indicata; se è già
+                        # nel passato scatta al prossimo tick dell'event loop — perfetto
+                        # per gestire il caso "HA spento durante il countdown DRY".
+                        self._dry_cancel_timer = async_track_point_in_time(
+                            self.hass, self._async_dry_to_cool, dry_end
+                        )
+                        _LOGGER.info(
+                            "%s: riavvio con DRY — timer ripristinato, scade alle %s",
+                            self._attr_name, dry_end.isoformat(),
+                        )
+            except Exception as exc:
+                _LOGGER.warning("%s: errore recupero dry_end dopo riavvio: %s", self._attr_name, exc)
+
         interval_min = int(get_conf(self.entry, CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN))
         self.async_on_remove(
             async_track_time_interval(self.hass, self._async_periodic_update, timedelta(minutes=interval_min))
@@ -508,48 +530,35 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._presence_since = None
         elif entity_id == self._climate_entity:
             if new_state and new_state.state == "off":
-                # Spegnimento reale (intenzionale) — reset completo
+                # Spegnimento reale (intenzionale) — cancel timer DRY e reset completo
+                self._cancel_dry_timer()
                 self._fv_surplus_buffer = []
                 self._night_below_since = None
                 self._night_auto_on = False
                 self._fv_auto_on = False
                 self._simple_night_auto_on = False
-                self._simple_dry_since = None
                 self._simple_shutoff_since = None
                 self._power_limit_high_since = None
                 self._power_limit_low_since = None
-                self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).pop("dry_since", None)
-                # Non resettiamo _power_limit_off qui — lo gestiamo nel metodo dedicato
             elif new_state and new_state.state in ("unknown", "unavailable"):
-                # Blip transitorio (es. errori di rete Gree/Tuya) — NON azzeriamo
-                # il timer DRY: il climatizzatore tornerà presto disponibile e
-                # vogliamo che il conteggio dei minuti prosegua normalmente.
+                # Blip transitorio — NON toccare il timer DRY, prosegue normalmente
                 _LOGGER.debug(
-                    "%s: climatizzatore temporaneamente %s — stato DRY/timer preservato",
+                    "%s: climatizzatore temporaneamente %s — timer DRY preservato",
                     self._attr_name, new_state.state,
                 )
-            elif new_state and new_state.state == "dry" and self._simple_dry_since is None:
-                # Il climatizzatore è tornato disponibile in DRY ma non avevamo
-                # un timer attivo (es. dopo un blip unknown/unavailable, o un
-                # riavvio gestito altrove). Recuperiamo il timestamp salvato
-                # se presente, altrimenti ripartiamo da ora per evitare che
-                # resti bloccato in DRY indefinitamente.
-                stored = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).get("dry_since")
-                if stored:
-                    try:
-                        self._simple_dry_since = dt_util.parse_datetime(stored)
-                        _LOGGER.info("%s: DRY ripristinato dopo blip — dry_since=%s", self._attr_name, self._simple_dry_since)
-                    except Exception:
-                        self._schedule_dry_timer()
-                else:
-                    self._schedule_dry_timer()
-                    _LOGGER.info("%s: DRY senza timer attivo — timer ripartito da ora", self._attr_name)
+            elif new_state and new_state.state == "dry" and self._simple_dry_end is None:
+                # Tornato in DRY senza timer attivo (es. set manuale da UI) — riarma
+                _LOGGER.info("%s: rilevato DRY senza timer — riavvio timer", self._attr_name)
+                self._schedule_dry_timer()
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
         if self._window_cancel_timer is not None:
             self._window_cancel_timer()
             self._window_cancel_timer = None
+        if self._dry_cancel_timer is not None:
+            self._dry_cancel_timer()
+            self._dry_cancel_timer = None
         data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
         if data.get("climate") is self:
             data.pop("climate", None)
@@ -649,6 +658,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def _async_periodic_update_simple(self, now: datetime | None = None) -> None:
         """Loop periodico per modo semplificato e semplificato con FV."""
+        # --- Fallback DRY→COOL ---
+        # Il meccanismo primario è async_track_point_in_time schedulato da _schedule_dry_timer.
+        # Questo fallback copre il caso raro in cui il Gree era unavailable al momento
+        # esatto dello scatto del timer (il callback ha trovato stato != "dry" e non ha
+        # transitato). Ogni 5 minuti verifichiamo: se dry_end è nel passato e il clima
+        # è ancora in DRY, transitiamo a COOL adesso.
+        if self._simple_dry_end is not None:
+            real_state_dry = self.hass.states.get(self._climate_entity)
+            if real_state_dry and real_state_dry.state == "dry":
+                if dt_util.utcnow() >= self._simple_dry_end:
+                    _LOGGER.info(
+                        "%s: [DRY→COOL] fallback polling — timer già scaduto, transizione ora",
+                        self._attr_name,
+                    )
+                    await self.hass.services.async_call(
+                        "climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True
+                    )
+                    self._cancel_dry_timer()
+
         use_internal = not bool(self._temp_sensor)
         temp = self._simple_read_temp()
         if temp is None:
@@ -880,12 +908,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         if use_internal:
-            await self._async_thermal_simple_internal(temp, target, internal_temp, real_state, dry_enabled)
+            await self._async_thermal_simple_internal(temp, target, internal_temp, real_state, dry_enabled, is_night)
         else:
-            await self._async_thermal_simple_external(temp, target, internal_temp, real_state, dry_enabled)
+            await self._async_thermal_simple_external(temp, target, internal_temp, real_state, dry_enabled, is_night)
 
     async def _async_thermal_simple_internal(
-        self, temp: float, target: float, internal_temp: float | None, real_state, dry_enabled: bool
+        self, temp: float, target: float, internal_temp: float | None, real_state, dry_enabled: bool, is_night: bool = False
     ) -> None:
         """Logica termica con sonda interna (interi).
 
@@ -914,7 +942,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f < target=%.0f)", self._attr_name, temp, target)
                     await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_shutoff_since = None
-                    self._simple_dry_since = None
+                    self._cancel_dry_timer()
                     self._simple_night_auto_on = False
                     self._fv_auto_on = False
                     await self._async_simple_notify_ac_off(temp, target)
@@ -922,18 +950,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 self._simple_shutoff_since = None
 
-        # --- Passaggio da DRY a COOL dopo timer ---
+        # --- In DRY: il timer async_track_point_in_time gestisce il passaggio a COOL ---
         if current_mode == "dry":
-            dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
-            dry_elapsed = (now - self._simple_dry_since) if self._simple_dry_since else timedelta(0)
-            if dry_elapsed >= timedelta(minutes=dry_max_min):
-                _LOGGER.info("%s: [semplificato] DRY→COOL (elapsed=%s)", self._attr_name, dry_elapsed)
-                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_dry_since = None
-                self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).pop("dry_since", None)
-                if self._dry_cancel_timer is not None:
-                    self._dry_cancel_timer()
-                    self._dry_cancel_timer = None
+            if self._simple_dry_end is None:
+                _LOGGER.warning("%s: [int] DRY senza timer schedulato — riavvio timer", self._attr_name)
+                self._schedule_dry_timer()
             return
 
         # --- Accensione (clima spento) ---
@@ -946,7 +967,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 else:
                     _LOGGER.info("%s: [semplificato] accensione COOL (int, temp=%.0f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                    self._simple_dry_since = None
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
                 ac_type_int = "notturna" if self._simple_is_night() else "termica"
@@ -967,7 +987,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             fan = "medium"
         elif temp >= target + 1:
             new_setpoint = internal_int - 1
-            fan = "medium"
+            fan = "low" if is_night else "medium"
         else:
             # temp = target o leggermente sopra — ventola bassa, setpoint = interna
             new_setpoint = internal_int
@@ -986,7 +1006,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
 
     async def _async_thermal_simple_external(
-        self, temp: float, target: float, internal_temp: float | None, real_state, dry_enabled: bool
+        self, temp: float, target: float, internal_temp: float | None, real_state, dry_enabled: bool, is_night: bool = False
     ) -> None:
         """Logica termica con sonda esterna (decimali).
 
@@ -1016,7 +1036,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f < target=%.1f)", self._attr_name, temp, target)
                     await self.hass.services.async_call("climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True)
                     self._simple_shutoff_since = None
-                    self._simple_dry_since = None
+                    self._cancel_dry_timer()
                     self._simple_night_auto_on = False
                     self._fv_auto_on = False
                     await self._async_simple_notify_ac_off(temp, target)
@@ -1026,16 +1046,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         # --- Passaggio da DRY a COOL dopo timer ---
         if current_mode == "dry":
-            dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
-            dry_elapsed = (now - self._simple_dry_since) if self._simple_dry_since else timedelta(0)
-            if dry_elapsed >= timedelta(minutes=dry_max_min):
-                _LOGGER.info("%s: [semplificato] DRY→COOL (elapsed=%s)", self._attr_name, dry_elapsed)
-                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_dry_since = None
-                self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {}).pop("dry_since", None)
-                if self._dry_cancel_timer is not None:
-                    self._dry_cancel_timer()
-                    self._dry_cancel_timer = None
+            if self._simple_dry_end is None:
+                _LOGGER.warning("%s: [ext] DRY senza timer schedulato — riavvio timer", self._attr_name)
+                self._schedule_dry_timer()
             return
 
         # --- Accensione (clima spento) ---
@@ -1048,7 +1061,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 else:
                     _LOGGER.info("%s: [semplificato] accensione COOL (ext, temp=%.1f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                    self._simple_dry_since = None
                 self._simple_night_auto_on = self._simple_is_night()
                 self._fv_auto_on = False
                 ac_type_ext = "notturna" if self._simple_is_night() else "termica"
@@ -1067,7 +1079,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             fan = "medium"
         elif temp >= target + 0.7:
             new_setpoint = internal_temp - 1.0
-            fan = "medium"
+            fan = "low" if is_night else "medium"
         elif temp >= target + 0.1:
             new_setpoint = internal_temp - 1.0
             fan = "low"
@@ -1160,7 +1172,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         else:
             _LOGGER.info("%s: [semplificato FV] accensione COOL (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
             await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-            self._simple_dry_since = None
+            self._cancel_dry_timer()
 
         coord["last_fv_turn_on"] = now
         self._fv_auto_on = True
@@ -1253,7 +1265,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 else:
                     _LOGGER.info("%s: [semplificato FV] riaccensione COOL dopo calo FV", self._attr_name)
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                    self._simple_dry_since = None
+                    self._cancel_dry_timer()
                 self._fv_surplus_buffer = []
                 soc_val2 = self._read_float(self._battery_sensor) or 0
                 fv2 = self._read_float(self._fv_sensor) or 0
@@ -1490,7 +1502,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 _LOGGER.info("%s: [emergenza] accensione COOL (temp=%.1f)", self._attr_name, temp)
                 await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_dry_since = None
+                self._cancel_dry_timer()
             await self._async_simple_notify_ac_on(temp, target, ac_type="emergenza")
 
         # Regolazione termica normale (come semplificato puro)
@@ -2069,33 +2081,76 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
 
 
-    def _schedule_dry_timer(self) -> None:
-        """Registra il timestamp di inizio DRY.
-        Il passaggio a COOL viene gestito dal loop periodico ogni minuto.
-        Non usa async_call_later perché non funziona in questo contesto.
-        """
+    def _cancel_dry_timer(self) -> None:
+        """Cancella il timer DRY→COOL e resetta le variabili di stato."""
         if self._dry_cancel_timer is not None:
             self._dry_cancel_timer()
             self._dry_cancel_timer = None
+        self._simple_dry_end = None
+        self._simple_dry_since = None
+
+    def _schedule_dry_timer(self) -> None:
+        """Avvia il timer DRY→COOL usando async_track_point_in_time.
+
+        Calcola il timestamp assoluto di scadenza (now + dry_max_min) e
+        schedula la callback a quell'ora esatta. Al riavvio di HA, il
+        timestamp viene recuperato da RestoreEntity (attributo dry_end) e
+        il timer viene rischedulato — se il timestamp è già nel passato,
+        HA lo fa scattare immediatamente al prossimo tick dell'event loop.
+        """
+        # Cancella eventuale timer precedente
+        if self._dry_cancel_timer is not None:
+            self._dry_cancel_timer()
+            self._dry_cancel_timer = None
+
         now = dt_util.utcnow()
-        self._simple_dry_since = now
-        # Salva in hass.data per recuperare dopo riavvio
-        self.hass.data.setdefault(DOMAIN, {}).setdefault(self.entry.entry_id, {})["dry_since"] = now.isoformat()
         dry_max_min = int(get_conf(self.entry, CONF_SIMPLE_DRY_MAX_MIN, DEFAULT_SIMPLE_DRY_MAX_MIN))
-        _LOGGER.info("%s: [DRY] avviato, passerà a COOL in %s minuti", self._attr_name, dry_max_min)
+        dry_end = now + timedelta(minutes=dry_max_min)
+
+        self._simple_dry_since = now
+        self._simple_dry_end = dry_end
+
+        self._dry_cancel_timer = async_track_point_in_time(
+            self.hass, self._async_dry_to_cool, dry_end
+        )
+        _LOGGER.info(
+            "%s: [DRY] timer avviato — scadrà alle %s (%s min)",
+            self._attr_name, dry_end.isoformat(), dry_max_min,
+        )
 
     async def _async_dry_to_cool(self, *_) -> None:
-        """Callback schedulato: passa da DRY a COOL dopo il tempo configurato."""
+        """Callback di async_track_point_in_time: passa da DRY a COOL.
+
+        Se il Gree è unavailable al momento dello scatto, non fa niente —
+        il fallback nel loop periodico (ogni 5 min) rileverà che dry_end
+        è nel passato e completerà la transizione al ciclo successivo.
+        """
+        self._dry_cancel_timer = None  # già scattato, non serve più cancellare
         real_state = self.hass.states.get(self._climate_entity)
         if real_state and real_state.state == "dry":
             _LOGGER.info("%s: [DRY→COOL] timer scattato — passo a raffreddamento", self._attr_name)
             await self.hass.services.async_call(
                 "climate", "turn_on",
                 {"entity_id": self._climate_entity},
-                blocking=True
+                blocking=True,
             )
-        self._simple_dry_since = None
-        self._dry_cancel_timer = None
+            self._simple_dry_end = None
+            self._simple_dry_since = None
+        elif real_state and real_state.state in ("unknown", "unavailable"):
+            # Gree non raggiungibile in questo momento — il fallback del loop
+            # periodico ci pensa al prossimo ciclo (dry_end rimane settato)
+            _LOGGER.warning(
+                "%s: [DRY→COOL] timer scattato ma Gree è %s — il fallback periodico completerà la transizione",
+                self._attr_name, real_state.state,
+            )
+        else:
+            # Clima già spento o in COOL — nessuna azione, pulisci
+            _LOGGER.debug(
+                "%s: [DRY→COOL] timer scattato ma stato=%s — nessuna azione",
+                self._attr_name, real_state.state if real_state else "None",
+            )
+            self._simple_dry_end = None
+            self._simple_dry_since = None
 
     async def _async_window_opened_simple(self) -> None:
         """Apertura finestra in modo semplificato — delay fisso 5 minuti."""
