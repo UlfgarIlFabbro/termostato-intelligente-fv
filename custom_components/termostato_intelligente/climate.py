@@ -220,6 +220,8 @@ from .const import (
     CONF_SIMPLE_DRY_MAX_MIN,
     CONF_SIMPLE_NO_AUTO_ON_NIGHT,
     CONF_SIMPLE_NO_REON_MANUAL_OFF,
+    CONF_FV_SHUTOFF_TOTAL_MINUTES,
+    DEFAULT_FV_SHUTOFF_TOTAL_MINUTES,
     CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF,
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
@@ -320,6 +322,8 @@ from .const import (
 from .util import get_conf
 
 _LOGGER = logging.getLogger(__name__)
+
+FV_SHUTOFF_SAMPLES_FIXED = 4  # campioni fissi per la sliding window di spegnimento FV (modo semplificato)
 
 # Stati considerati "non validi" per le transizioni sensori
 _INVALID_STATES = {"unknown", "unavailable"}
@@ -517,6 +521,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         interval_min = int(get_conf(self.entry, CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN))
         self.async_on_remove(
             async_track_time_interval(self.hass, self._async_periodic_update, timedelta(minutes=interval_min))
+        )
+        fv_total_minutes = float(get_conf(self.entry, CONF_FV_SHUTOFF_TOTAL_MINUTES, DEFAULT_FV_SHUTOFF_TOTAL_MINUTES))
+        fv_check_interval_min = max(1.0, fv_total_minutes / FV_SHUTOFF_SAMPLES_FIXED)
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._async_periodic_fv_check, timedelta(minutes=fv_check_interval_min))
         )
         tracked = [e for e in (self._climate_entity, self._temp_sensor, self._window_sensor, self._presence_sensor, self._door_sensor) if e]
         if tracked:
@@ -745,19 +754,34 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # Regolazione termica
         await self._async_handle_thermal_simple(temp, target, use_internal)
 
-        # Accensione e spegnimento automatico (solo modo semplificato con FV)
+        # NOTA: accensione/spegnimento FV (emergenza, turn-on, shutoff) non è
+        # più gestita qui — ha un ciclo dedicato più veloce, vedi
+        # _async_periodic_fv_check() e CONF_FV_SHUTOFF_TOTAL_MINUTES.
+
+    async def _async_periodic_fv_check(self, now: datetime | None = None) -> None:
+        """Ciclo dedicato e più rapido per la logica FV (emergenza, accensione,
+        spegnimento). Separato dal loop principale (regolazione termica, DRY,
+        notte) che gira più lentamente — così il rilevamento di un surplus
+        insufficiente può essere confermato in pochi minuti invece di dover
+        aspettare N cicli lunghi del loop generale.
+        """
         mode = self._get_config_mode()
-        if mode == CONFIG_MODE_SIMPLE_FV:
-            dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
-            # Gestione emergenza caldo — ha precedenza sul FV normale
-            await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
-            # Se emergenza attiva salta logica FV normale
-            if self._switch_state(SWITCH_KEY_EMERGENCY, False):
-                return
-            if self._switch_state(SWITCH_KEY_FV, True) and self._simple_within_fv_window():
-                await self._async_handle_fv_turn_on_simple(temp, target)
-            if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
-                await self._async_handle_fv_shutoff_simple(temp, target)
+        if mode != CONFIG_MODE_SIMPLE_FV:
+            return
+        use_internal = not bool(self._temp_sensor)
+        temp = self._simple_read_temp()
+        if temp is None:
+            return
+        target = self._simple_current_target()
+        dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+        # Gestione emergenza caldo — ha precedenza sul FV normale
+        await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
+        if self._switch_state(SWITCH_KEY_EMERGENCY, False):
+            return
+        if self._switch_state(SWITCH_KEY_FV, True) and self._simple_within_fv_window():
+            await self._async_handle_fv_turn_on_simple(temp, target)
+        if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
+            await self._async_handle_fv_shutoff_simple(temp, target)
 
     def _simple_read_temp(self) -> float | None:
         """Legge la temperatura: sonda esterna se configurata, altrimenti sonda interna del clima."""
@@ -1328,10 +1352,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._fv_surplus_buffer = []
             return
 
-        # Sliding window
+        # Sliding window — campioni fissi a 4 (il tempo totale è regolato
+        # tramite l'intervallo del ciclo dedicato, calcolato da CONF_FV_SHUTOFF_TOTAL_MINUTES)
         surplus = fv - consumo
         threshold = float(get_conf(self.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
-        delay_min = int(get_conf(self.entry, CONF_FV_SHUTOFF_DELAY_MIN, DEFAULT_FV_SHUTOFF_DELAY_MIN))
+        delay_min = FV_SHUTOFF_SAMPLES_FIXED
 
         self._fv_surplus_buffer.append(surplus)
         if len(self._fv_surplus_buffer) > delay_min:

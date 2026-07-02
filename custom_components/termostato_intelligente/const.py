@@ -26,6 +26,7 @@ CONF_FV_SHUTOFF_ENABLED = "fv_shutoff_enabled"
 CONF_FV_SHUTOFF_MANUAL = "fv_shutoff_manual"  # spegni anche se acceso manualmente
 DEFAULT_FV_SHUTOFF_MANUAL = False  # default: non spegnere se acceso manualmente
 CONF_FV_SHUTOFF_DELAY_MIN = "fv_shutoff_delay_min"
+CONF_FV_SHUTOFF_TOTAL_MINUTES = "fv_shutoff_total_minutes"  # minuti totali di calo FV confermato prima di spegnere
 CONF_FV_SHUTOFF_EXTRA_HOURS = "fv_shutoff_extra_hours"
 CONF_FV_SHUTOFF_THRESHOLD = "fv_shutoff_threshold"
 
@@ -194,6 +195,7 @@ DEFAULT_FV_PRIORITY = 50
 DEFAULT_FV_STAGGER_MIN = 5
 DEFAULT_FV_SHUTOFF_ENABLED = False
 DEFAULT_FV_SHUTOFF_DELAY_MIN = 5
+DEFAULT_FV_SHUTOFF_TOTAL_MINUTES = 20  # minuti totali (4 campioni fissi → intervallo = totale/4)
 DEFAULT_FV_SHUTOFF_EXTRA_HOURS = 1.0
 DEFAULT_FV_SHUTOFF_THRESHOLD = 0
 DEFAULT_PRESENCE_BOOST_MIN = 10

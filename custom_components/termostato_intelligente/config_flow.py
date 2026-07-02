@@ -129,6 +129,8 @@ from .const import (
     CONF_FV_PRIORITY,
     CONF_FV_SENSOR,
     CONF_FV_SHUTOFF_DELAY_MIN,
+    CONF_FV_SHUTOFF_TOTAL_MINUTES,
+    DEFAULT_FV_SHUTOFF_TOTAL_MINUTES,
     CONF_FV_SHUTOFF_ENABLED,
     CONF_FV_SHUTOFF_MANUAL,
     CONF_SIMPLE_NO_REON_MANUAL_OFF,
@@ -315,7 +317,7 @@ def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str
         _f(vol.Optional, CONF_FV_SHUTOFF_MANUAL, defaults, DEFAULT_FV_SHUTOFF_MANUAL): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NO_REON_MANUAL_OFF, defaults, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS, defaults, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=24, step=0.5, unit_of_measurement="ore", mode="box")),
-        _f(vol.Optional, CONF_FV_SHUTOFF_DELAY_MIN, defaults, DEFAULT_FV_SHUTOFF_DELAY_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=60, step=1, unit_of_measurement="campioni", mode="box")),
+        _f(vol.Optional, CONF_FV_SHUTOFF_TOTAL_MINUTES, defaults, DEFAULT_FV_SHUTOFF_TOTAL_MINUTES): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=60, step=1, unit_of_measurement="min", mode="box")),
         _f(vol.Optional, CONF_FV_SHUTOFF_THRESHOLD, defaults, DEFAULT_FV_SHUTOFF_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=-5000, max=5000, step=50, unit_of_measurement="W", mode="box")),
     })
 

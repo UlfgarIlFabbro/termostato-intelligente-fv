@@ -97,7 +97,7 @@
           "fv_priority": "With multiple thermostats, lower number turns on first and off last. Example: bedroom=10, living=20.",
           "fv_stagger_minutes": "Pause between successive turn-ons to avoid consumption peaks. Example: 5 minutes.",
           "fv_shutoff_enabled": "If enabled: turns off the AC when solar surplus stays below threshold for N consecutive samples. With multiple thermostats, turns off the highest priority number first.",
-          "fv_shutoff_delay_min": "Number of consecutive samples below threshold before turning off. The window is sliding: one high value does not reset the buffer, it just shifts it. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
+          "fv_shutoff_delay_min": "How many consecutive samples (one per general update cycle) of insufficient surplus must accumulate before turning off. Example: 5 samples with a 5-minute update cycle = 25 confirmed minutes. The window is sliding: one high value does not reset the buffer, it just shifts it.",
           "fv_shutoff_threshold": "The surplus (production - consumption) must be below this value in ALL the last N samples to trigger turn-off. Value 0 = turns off when solar no longer covers consumption. Positive value = turns off earlier, when surplus drops below X Watts. Example: 500W → turns off when surplus is below 500W for N consecutive samples.",
           "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends at 16:00, extra 1h → can turn off until 17:00."
         }
@@ -274,7 +274,7 @@
           "fv_priority": "Turn-on priority (lower number = first)",
           "fv_stagger_minutes": "Minimum gap between turn-ons/offs (min)",
           "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
-          "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
+          "fv_shutoff_total_minutes": "Total minutes of FV drop before turning off",
           "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
           "sunset_info": "🌅 Today's sunset time (informational)",
           "cutoff_info": "⏱️ Manual control cutoff time (informational)",
@@ -292,7 +292,7 @@
           "fv_priority": "With multiple ACs, lower number turns on first and off last. Example: bedroom=10, living=20.",
           "fv_stagger_minutes": "Pause between successive turn-ons to avoid peaks. Example: 5 minutes.",
           "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
-          "fv_shutoff_delay_min": "Consecutive samples below threshold before turning off. Sliding window. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
+          "fv_shutoff_total_minutes": "For how many consecutive minutes the solar surplus must remain insufficient before the thermostat turns off the AC. The check always uses 4 fixed samples: the interval between samples is calculated automatically by dividing this value by 4 (example: 20 minutes → a check every 5 minutes; 12 minutes → a check every 3 minutes). A lower value makes shutoff more responsive; a higher value better protects against temporary consumption spikes (e.g. stove use). Minimum 5 minutes.",
           "fv_shutoff_threshold": "Surplus must stay below this for all N samples. Value 0 = turns off when FV < consumption. Example: 500W.",
           "sunset_info": "Time the sun sets today at your location, calculated automatically by Home Assistant. Updates every time you open these settings.",
           "cutoff_info": "Automatically calculated: sunset minus the configured hours. After this time the automation stops controlling the AC turned on manually and stops automatic solar turn-ons. Updates every time you open these settings.",
@@ -550,7 +550,7 @@
           "fv_priority": "Lower number = turns on first and off last.",
           "fv_stagger_minutes": "Pause between successive turn-ons to avoid peaks.",
           "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
-          "fv_shutoff_delay_min": "Number of consecutive samples below threshold before turning off. Sliding window: one high value shifts the buffer rather than resetting it.",
+          "fv_shutoff_delay_min": "How many consecutive samples (one per general update cycle) of insufficient surplus must accumulate before turning off. Example: 5 samples with a 5-minute update cycle = 25 confirmed minutes. The window is sliding: one high value does not reset the buffer, it just shifts it.",
           "fv_shutoff_threshold": "Minimum surplus (production - consumption) required. Below this for N samples → turns off. Value 0 = turns off when solar no longer covers consumption.",
           "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off."
         }
@@ -707,7 +707,7 @@
           "fv_priority": "Turn-on priority (lower number = first)",
           "fv_stagger_minutes": "Minimum gap between turn-ons/offs (min)",
           "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
-          "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
+          "fv_shutoff_total_minutes": "Total minutes of FV drop before turning off",
           "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
           "sunset_info": "🌅 Today's sunset time (informational)",
           "cutoff_info": "⏱️ Manual control cutoff time (informational)",
@@ -725,7 +725,7 @@
           "fv_priority": "With multiple ACs, lower number turns on first and off last. Example: bedroom=10, living=20.",
           "fv_stagger_minutes": "Pause between successive turn-ons to avoid peaks. Example: 5 minutes.",
           "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
-          "fv_shutoff_delay_min": "Consecutive samples below threshold before turning off. Sliding window. Example: 5 samples at 1-min interval = 5 confirmed minutes.",
+          "fv_shutoff_total_minutes": "For how many consecutive minutes the solar surplus must remain insufficient before the thermostat turns off the AC. The check always uses 4 fixed samples: the interval between samples is calculated automatically by dividing this value by 4 (example: 20 minutes → a check every 5 minutes; 12 minutes → a check every 3 minutes). A lower value makes shutoff more responsive; a higher value better protects against temporary consumption spikes (e.g. stove use). Minimum 5 minutes.",
           "fv_shutoff_threshold": "Surplus must stay below this for all N samples. Value 0 = turns off when FV < consumption. Example: 500W.",
           "sunset_info": "Time the sun sets today at your location, calculated automatically by Home Assistant. Updates every time you open these settings.",
           "cutoff_info": "Automatically calculated: sunset minus the configured hours. After this time the automation stops controlling the AC turned on manually and stops automatic solar turn-ons. Updates every time you open these settings.",
