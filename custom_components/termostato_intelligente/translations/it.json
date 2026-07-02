@@ -97,7 +97,7 @@
           "fv_priority": "Con più termostati, quello col numero più basso accende prima e spegne per ultimo. Esempio: camera=10, sala=20.",
           "fv_stagger_minutes": "Pausa tra l'accensione di un clima e il successivo per evitare picchi di consumo. Esempio: 5 minuti.",
           "fv_shutoff_enabled": "Se attivato: spegne il clima quando il surplus FV resta sotto soglia per N campioni consecutivi. Con più termostati spegne prima quello con priorità numerica più alta.",
-          "fv_shutoff_delay_min": "Quanti campioni consecutivi (uno per ogni ciclo di aggiornamento) di surplus sotto soglia devono accumularsi prima di spegnere. Esempio: 5 campioni con ciclo di 1 min = 5 minuti confermati. La finestra è scorrevole: un singolo valore alto non azzera tutto, ma fa slittare il buffer.",
+          "fv_shutoff_delay_min": "Quanti campioni consecutivi (uno per ogni ciclo di aggiornamento generale) di surplus sotto soglia devono accumularsi prima di spegnere. Esempio: 5 campioni con ciclo di aggiornamento di 5 minuti = 25 minuti confermati. La finestra è scorrevole: un singolo valore alto non azzera tutto, ma fa slittare il buffer.",
           "fv_shutoff_threshold": "Il surplus (produzione - consumo) deve essere sotto questo valore in TUTTI gli ultimi N campioni per far scattare lo spegnimento. Valore 0 = spegne quando FV non copre il consumo. Valore positivo = spegne prima, quando il surplus scende sotto X Watt. Esempio: 500W → spegne quando stai producendo meno di 500W di surplus per N campioni consecutivi.",
           "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00."
         }
@@ -274,7 +274,7 @@
           "fv_priority": "Priorità accensione (numero più basso = prima)",
           "fv_stagger_minutes": "Distanza minima tra accensioni/spegnimenti (min)",
           "fv_shutoff_enabled": "▶ Spegnimento automatico quando il FV cala",
-          "fv_shutoff_delay_min": "Campioni insufficienti consecutivi prima di spegnere",
+          "fv_shutoff_total_minutes": "Minuti totali di calo FV prima di spegnere",
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
           "sunset_info": "🌅 Orario tramonto oggi (informativo)",
           "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
@@ -292,7 +292,7 @@
           "fv_priority": "Con più climatizzatori, quello col numero più basso accende prima e spegne per ultimo. Esempio: camera=10, sala=20.",
           "fv_stagger_minutes": "Pausa tra l'accensione di un clima e il successivo per evitare picchi. Esempio: 5 minuti.",
           "fv_shutoff_enabled": "Se attivato: spegne il clima quando il surplus FV resta sotto soglia per N campioni consecutivi. Con più termostati spegne prima quello con priorità numerica più alta.",
-          "fv_shutoff_delay_min": "Quanti campioni consecutivi di surplus sotto soglia prima di spegnere. Finestra scorrevole. Esempio: 5 campioni con ciclo 1 min = 5 minuti confermati.",
+          "fv_shutoff_total_minutes": "Per quanti minuti consecutivi il surplus fotovoltaico deve restare insufficiente prima che il termostato spenga il climatizzatore. Il controllo usa sempre 4 campioni fissi: l'intervallo tra un campione e l'altro viene calcolato automaticamente dividendo questo valore per 4 (esempio: 20 minuti → un controllo ogni 5 minuti; 12 minuti → un controllo ogni 3 minuti). Un valore più basso rende lo spegnimento più reattivo; un valore più alto protegge meglio da picchi di consumo temporanei (es. piano cottura). Minimo 5 minuti.",
           "fv_shutoff_threshold": "Il surplus deve restare sotto questo valore in tutti gli ultimi N campioni. Valore 0 = spegne quando FV < consumo. Esempio: 500W → spegne quando il surplus scende sotto 500W.",
           "sunset_info": "Orario in cui il sole tramonta oggi nella tua posizione, calcolato automaticamente da Home Assistant. Si aggiorna ogni volta che apri queste impostazioni.",
           "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente e non accende più automaticamente dal FV. Si aggiorna ogni volta che apri queste impostazioni.",
@@ -550,7 +550,7 @@
           "fv_priority": "Con più termostati, numero più basso = accende prima e spegne per ultimo.",
           "fv_stagger_minutes": "Pausa tra accensioni successive per evitare picchi.",
           "fv_shutoff_enabled": "Se attivato: spegne quando il surplus resta sotto soglia per N campioni consecutivi.",
-          "fv_shutoff_delay_min": "Numero di campioni consecutivi sotto soglia prima di spegnere. La finestra è scorrevole: un valore alto non azzera il buffer ma lo fa slittare.",
+          "fv_shutoff_delay_min": "Quanti campioni consecutivi (uno per ogni ciclo di aggiornamento generale) di surplus sotto soglia devono accumularsi prima di spegnere. Esempio: 5 campioni con ciclo di aggiornamento di 5 minuti = 25 minuti confermati. La finestra è scorrevole: un singolo valore alto non azzera tutto, ma fa slittare il buffer.",
           "fv_shutoff_threshold": "Surplus minimo (produzione - consumo) richiesto. Sotto questo valore per N campioni → spegne. Valore 0 = spegne quando FV non copre il consumo.",
           "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può ancora spegnere."
         }
@@ -707,7 +707,7 @@
           "fv_priority": "Priorità accensione (numero più basso = prima)",
           "fv_stagger_minutes": "Distanza minima tra accensioni/spegnimenti (min)",
           "fv_shutoff_enabled": "▶ Spegnimento automatico quando il FV cala",
-          "fv_shutoff_delay_min": "Campioni insufficienti consecutivi prima di spegnere",
+          "fv_shutoff_total_minutes": "Minuti totali di calo FV prima di spegnere",
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
           "sunset_info": "🌅 Orario tramonto oggi (informativo)",
           "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
@@ -725,7 +725,7 @@
           "fv_priority": "Con più climatizzatori, quello col numero più basso accende prima e spegne per ultimo. Esempio: camera=10, sala=20.",
           "fv_stagger_minutes": "Pausa tra l'accensione di un clima e il successivo per evitare picchi. Esempio: 5 minuti.",
           "fv_shutoff_enabled": "Se attivato: spegne il clima quando il surplus FV resta sotto soglia per N campioni consecutivi. Con più termostati spegne prima quello con priorità numerica più alta.",
-          "fv_shutoff_delay_min": "Quanti campioni consecutivi di surplus sotto soglia prima di spegnere. Finestra scorrevole. Esempio: 5 campioni con ciclo 1 min = 5 minuti confermati.",
+          "fv_shutoff_total_minutes": "Per quanti minuti consecutivi il surplus fotovoltaico deve restare insufficiente prima che il termostato spenga il climatizzatore. Il controllo usa sempre 4 campioni fissi: l'intervallo tra un campione e l'altro viene calcolato automaticamente dividendo questo valore per 4 (esempio: 20 minuti → un controllo ogni 5 minuti; 12 minuti → un controllo ogni 3 minuti). Un valore più basso rende lo spegnimento più reattivo; un valore più alto protegge meglio da picchi di consumo temporanei (es. piano cottura). Minimo 5 minuti.",
           "fv_shutoff_threshold": "Il surplus deve restare sotto questo valore in tutti gli ultimi N campioni. Valore 0 = spegne quando FV < consumo. Esempio: 500W → spegne quando il surplus scende sotto 500W.",
           "sunset_info": "Orario in cui il sole tramonta oggi nella tua posizione, calcolato automaticamente da Home Assistant. Si aggiorna ogni volta che apri queste impostazioni.",
           "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente e non accende più automaticamente dal FV. Si aggiorna ogni volta che apri queste impostazioni.",
