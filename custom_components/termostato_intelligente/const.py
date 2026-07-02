@@ -399,10 +399,14 @@ SIMPLE_INT_SHUTOFF_MIN = 15        # minuti sotto soglia prima di spegnere
 
 # --- Modo semplificato — deumidificatore ---
 CONF_SIMPLE_NO_AUTO_ON_NIGHT = "simple_no_auto_on_night"  # blocca accensione automatica di notte
+CONF_SIMPLE_NO_REON_MANUAL_OFF = "simple_no_reon_manual_off"  # non riaccendere se spento manualmente
+CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS = "simple_no_reon_manual_off_hours"  # ore di blocco riaccensione
 CONF_SIMPLE_TURN_ON_OFFSET = "simple_turn_on_offset"  # soglia accensione configurabile
 CONF_SIMPLE_DRY_ENABLED = "simple_dry_enabled"
 CONF_SIMPLE_DRY_MAX_MIN = "simple_dry_max_min"
 DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT = False
+DEFAULT_SIMPLE_NO_REON_MANUAL_OFF = False
+DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS = 2
 DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT = 0.8  # sonda esterna: accende da target + 0.8°C
 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT = 1.0  # sonda interna: accende da target + 1°C
 DEFAULT_SIMPLE_DRY_ENABLED = False
