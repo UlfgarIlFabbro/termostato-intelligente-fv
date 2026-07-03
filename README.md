@@ -21,6 +21,26 @@ Sviluppata e mantenuta da [UlfgarIlFabbro](https://github.com/UlfgarIlFabbro).
 
 ---
 
+## 🃏 Card diagnostica
+
+Dalla v0.7.3-beta16 l'integrazione include e registra **automaticamente** una
+card Lovelace ("Termostato Diag Card") con editor grafico integrato — nessun
+file da copiare, nessuna risorsa da aggiungere manualmente.
+
+Dopo l'aggiornamento e il riavvio di Home Assistant:
+1. Aggiungi una nuova card sulla dashboard
+2. Cerca **"Termostato Diag Card"**
+3. Scegli l'entità del termostato, il titolo, lo stile (righe o badge) e gli
+   attributi diagnostici da mostrare (notte, DRY, blocco riaccensione
+   manuale, FV, ultimo evento notifica, ecc.) — tutto da interfaccia, senza
+   scrivere YAML
+
+Lo sfondo della card cambia colore in base allo stato del climatizzatore
+(blu per raffreddamento, azzurro per deumidificatore, ecc.), opzione
+disattivabile dall'editor.
+
+---
+
 ## 📦 Installazione
 
 ### Tramite HACS (consigliato)
@@ -164,6 +184,8 @@ Con più climatizzatori gestiti da istanze separate:
 - **Priorità più alta** (numero più grande) = si accende per **ultima** e si spegne per **prima**
 - Lo **stagger** impone una pausa tra l'accensione/spegnimento di un clima e il successivo
 
+> 💡 Dalla v0.7.3-beta15 la priorità funziona anche nel modo Semplificato con Fotovoltaico, non solo nel modo Completo.
+
 ---
 
 ### ⚙️ Modo Completo
@@ -251,6 +273,14 @@ Ogni istanza espone tre switch in Home Assistant:
 | `spegnimento_fv_abilitato` | Stato dello spegnimento FV |
 | `fv_surplus_buffer` | Buffer corrente della sliding window (utile per debug) |
 | `fascia_silenzio_attiva` | Se siamo nella fascia di silenzio |
+| `dry_since` | Timestamp UTC di inizio del timer DRY→COOL corrente (o `null`) |
+| `dry_end` | Timestamp UTC assoluto di scadenza del timer DRY→COOL (o `null`) |
+| `dry_elapsed_min` | Minuti trascorsi dall'inizio del DRY corrente |
+| `spento_manualmente_da` | Timestamp dell'ultimo spegnimento non fatto dall'integrazione (o `null`) |
+| `blocco_riaccensione_attivo` | Se il blocco riaccensione dopo spegnimento manuale è attivo ora |
+| `soglia_accensione_fv` | Temperatura (target + offset) sopra la quale scatta l'accensione |
+| `fv_basso_da` | Da quando il surplus FV è insufficiente in modo continuativo (o `null`) |
+| `ultimo_evento_notifica` | Ultimo messaggio Telegram/notify inviato realmente, con timestamp |
 
 ---
 
@@ -277,6 +307,16 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| v0.7.3-beta16 | Nuova card diagnostica ("Termostato Diag Card") con editor grafico integrato, registrata automaticamente dall'integrazione — nessun file da copiare manualmente |
+| v0.7.3-beta15 | Priorità FV implementata anche nel modo Semplificato (prima presente in configurazione ma inattiva), nuovi attributi diagnostici (`soglia_accensione_fv`, `fv_basso_da`, `ultimo_evento_notifica`) |
+| v0.7.3-beta14 | Fix critico: il master switch "termostato abilitato" non veniva rispettato da gestione finestra, porta e timeout finestra — ora tutte le azioni automatiche rispettano la disattivazione del termostato |
+| v0.7.3-beta13 | Fix critico: il ciclo dedicato FV e il timer DRY→COOL non rispettavano il master switch |
+| v0.7.3-beta12 | Spegnimento FV semplificato a un solo campo "minuti totali" (4 campioni fissi, intervallo calcolato automaticamente) al posto di due campi separati |
+| v0.7.3-beta9 | Nome area (invece del nome entità) nei messaggi porta/finestra, anche se l'area è assegnata al device; nuova opzione "non accendere se spento manualmente" con blocco a tempo configurabile |
+| v0.7.3-beta7 | Fix definitivo DRY→COOL: sostituito `climate.turn_on` (che non forza la modalità se già acceso) con `climate.set_hvac_mode` esplicito |
+| v0.7.3-beta5 | Ventola forzata a bassa in modalità notturna con differenziale medio-basso, per funzionamento più silenzioso |
+| v0.7.3-beta4 | Riscritto il timer DRY→COOL con `async_track_point_in_time` (timestamp assoluto, persistente al riavvio tramite RestoreEntity) al posto del solo polling |
+| v0.7.3-beta1 | Fix spegnimento fine modalità notturna (bloccato dal controllo limbo), fix reset timer DRY su blip di rete del climatizzatore, messaggio finestra differenziato in base allo stato del clima |
 | v0.6.5 | Fix SOC batteria, fix logica termica non accende in modo FV, messaggi accensione distinti per tipo con parametri, debounce porta |
 | v0.6.4 | Switch emergenza caldo: accensione ignorando FV con disattivazione automatica, notifiche separate Google/Telegram |
 | v0.6.3 | Riscrittura soglie termiche semplificato, fix _async_simple_notify_ac_on mancante, fix import CONF_SIMPLE_TURN_ON_OFFSET |
