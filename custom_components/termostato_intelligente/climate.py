@@ -768,6 +768,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         mode = self._get_config_mode()
         if mode != CONFIG_MODE_SIMPLE_FV:
             return
+        if not self._switch_state(SWITCH_KEY_MASTER, True):
+            # Termostato disabilitato dall'utente — non fare assolutamente nulla
+            return
         use_internal = not bool(self._temp_sensor)
         temp = self._simple_read_temp()
         if temp is None:
@@ -2140,6 +2143,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_window(self, new_state: State | None, old_state: State | None) -> None:
         if new_state is None:
             return
+        if not self._switch_state(SWITCH_KEY_MASTER, True):
+            return
         mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
         real_state = self.hass.states.get(self._climate_entity)
@@ -2247,6 +2252,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         è nel passato e completerà la transizione al ciclo successivo.
         """
         self._dry_cancel_timer = None  # già scattato, non serve più cancellare
+        if not self._switch_state(SWITCH_KEY_MASTER, True):
+            _LOGGER.info("%s: [DRY→COOL] timer scattato ma termostato disabilitato — nessuna azione", self._attr_name)
+            self._simple_dry_end = None
+            self._simple_dry_since = None
+            return
         real_state = self.hass.states.get(self._climate_entity)
         if real_state and real_state.state == "dry":
             _LOGGER.warning("%s: [DRY-TRACE] timer scattato — passo a raffreddamento (set_hvac_mode cool)", self._attr_name)
@@ -2319,6 +2329,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def _async_window_timeout(self, now: datetime | None = None) -> None:
         self._window_cancel_timer = None
+        if not self._switch_state(SWITCH_KEY_MASTER, True):
+            return
         if not self._is_window_open():
             return
         await self._async_turn_off_climate()
@@ -2364,6 +2376,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def _async_handle_door_debounced(self, new_state: State | None, old_state: State | None) -> None:
         """Gestisce l'evento porta dopo il debounce di 1 secondo."""
+        if not self._switch_state(SWITCH_KEY_MASTER, True):
+            return
         mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
 
