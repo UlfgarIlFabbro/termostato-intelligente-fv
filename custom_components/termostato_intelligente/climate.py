@@ -410,6 +410,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._simple_dry_end: datetime | None = None         # timestamp UTC di fine DRY (assoluto)
         self._programmatic_off: bool = False                 # True mentre stiamo spegnendo noi stessi (per distinguerlo da spegnimento manuale)
         self._manual_off_since: datetime | None = None        # da quando è stato spento manualmente (se rilevato)
+        self._fv_low_since: datetime | None = None             # da quando il surplus FV è insufficiente in modo continuativo (diagnostica)
+        self._last_notify_event: dict | None = None             # ultima notifica Telegram inviata (diagnostica)
         self._dry_cancel_timer: callable | None = None       # cancel function async_track_point_in_time
         self._door_debounce_cancel = None                          # timer debounce porta
         self._fv_auto_on: bool = False                       # acceso automaticamente dal FV
@@ -479,6 +481,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "dry_elapsed_min": round((dt_util.utcnow() - self._simple_dry_since).total_seconds() / 60, 1) if self._simple_dry_since else None,
             "spento_manualmente_da": self._manual_off_since.isoformat() if self._manual_off_since else None,
             "blocco_riaccensione_attivo": self._is_manual_off_block_active(),
+            "soglia_accensione_fv": round(
+                (self.target_temperature or 0) + float(get_conf(
+                    self.entry, CONF_SIMPLE_TURN_ON_OFFSET,
+                    DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if not self._temp_sensor else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT,
+                )), 1,
+            ),
+            "fv_basso_da": self._fv_low_since.isoformat() if self._fv_low_since else None,
+            "ultimo_evento_notifica": self._last_notify_event,
         }
 
     # ------------------------------------------------------------------
@@ -551,6 +561,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 # Spegnimento reale — cancel timer DRY e reset completo
                 self._cancel_dry_timer("off_state_change")
                 self._fv_surplus_buffer = []
+                self._fv_low_since = None
                 self._night_below_since = None
                 self._night_auto_on = False
                 self._fv_auto_on = False
@@ -1229,6 +1240,39 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
             return
 
+        # Priorità: se un'altra istanza (sorella) ha priorità più alta (numero
+        # più basso) ed è ANCH'ESSA pronta ad accendersi in questo momento
+        # (clima spento, non in limbo, non bloccata manualmente, temperatura
+        # sopra la sua soglia), le cedo il turno rimandando la mia accensione
+        # al ciclo successivo.
+        my_priority = (float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)), self.entry.entry_id)
+        for entry_data in self.hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            sibling = entry_data.get("climate")
+            if sibling is None or sibling is self:
+                continue
+            if sibling._get_config_mode() != CONFIG_MODE_SIMPLE_FV:
+                continue
+            sib_real_state = self.hass.states.get(sibling._climate_entity)
+            if sib_real_state is None or sib_real_state.state not in ("off", "unknown", "unavailable"):
+                continue
+            if sibling._simple_is_in_limbo() or sibling._is_manual_off_block_active():
+                continue
+            sib_temp = sibling._simple_read_temp()
+            if sib_temp is None:
+                continue
+            sib_target = sibling._simple_current_target()
+            sib_use_internal = not bool(sibling._temp_sensor)
+            sib_offset = float(get_conf(sibling.entry, CONF_SIMPLE_TURN_ON_OFFSET,
+                DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if sib_use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
+            if sib_temp < sib_target + sib_offset:
+                continue  # il sibling non è comunque pronto ad accendersi ora
+            sib_priority = (float(get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)), sibling.entry.entry_id)
+            if sib_priority < my_priority:
+                _LOGGER.debug("%s: [semplificato FV] cedo il turno a %s (priorità più alta)", self._attr_name, sibling._attr_name)
+                return
+
         # Accensione — sempre DRY prima (se abilitato)
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
         now = dt_util.utcnow()
@@ -1285,6 +1329,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         elif chat_ids:
             ids = [c.strip() for c in str(chat_ids).split(",") if c.strip()]
             await self.hass.services.async_call("telegram_bot", "send_message", {"target": ids, "message": message}, blocking=True)
+        else:
+            return
+        self._last_notify_event = {
+            "timestamp": dt_util.utcnow().isoformat(),
+            "messaggio": message,
+        }
 
     async def _async_handle_fv_shutoff_simple(self, temp: float, target: float) -> None:
         """Spegnimento e riaccensione FV per il modo semplificato.
@@ -1334,6 +1384,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
                     self._cancel_dry_timer("riaccensione_fv_cool_no_dry")
                 self._fv_surplus_buffer = []
+                self._fv_low_since = None
                 soc_val2 = self._read_float(self._battery_sensor) or 0
                 fv2 = self._read_float(self._fv_sensor) or 0
                 consumo2 = self._read_float(self._consumption_sensor) or 0
@@ -1342,17 +1393,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         if not is_on:
             self._fv_surplus_buffer = []
+            self._fv_low_since = None
             return
 
         # Caso 1: acceso dalla modalità notturna → FV non interviene
         if self._simple_night_auto_on:
             self._fv_surplus_buffer = []
+            self._fv_low_since = None
             return
 
         # Caso 2/3/4: verifica se può spegnere
         shutoff_manual = bool(get_conf(self.entry, CONF_FV_SHUTOFF_MANUAL, DEFAULT_FV_SHUTOFF_MANUAL))
         if not self._fv_auto_on and not self._simple_can_control_manual() and not shutoff_manual:
             self._fv_surplus_buffer = []
+            self._fv_low_since = None
             return
 
         # Sliding window — campioni fissi a 4 (il tempo totale è regolato
@@ -1360,6 +1414,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         surplus = fv - consumo
         threshold = float(get_conf(self.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
         delay_min = FV_SHUTOFF_SAMPLES_FIXED
+
+        # Traccia da quando il surplus è insufficiente in modo continuativo
+        # (diagnostica — attributo fv_basso_da). Si azzera appena il surplus
+        # torna sopra soglia anche per un solo campione.
+        if surplus < threshold:
+            if self._fv_low_since is None:
+                self._fv_low_since = dt_util.utcnow()
+        else:
+            self._fv_low_since = None
 
         self._fv_surplus_buffer.append(surplus)
         if len(self._fv_surplus_buffer) > delay_min:
@@ -1387,6 +1450,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self._async_turn_off_climate()
         coord["last_fv_shutoff"] = now
         self._fv_surplus_buffer = []
+        self._fv_low_since = None
         # NON resettiamo _fv_auto_on così la riaccensione sa che era il FV ad averlo acceso
         await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
 

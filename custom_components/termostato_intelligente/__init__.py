@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -123,9 +124,52 @@ _FIELD_DEFAULTS = {
 }
 
 
+_FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
+_FRONTEND_VERSION_TAG = "beta16"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+
+
+async def _async_register_frontend_card(hass: HomeAssistant) -> None:
+    """Registra automaticamente la card diagnostica come risorsa frontend.
+
+    Serve il file JS direttamente dalla cartella www/ dell'integrazione
+    (nessun file da copiare manualmente in /config/www) e lo inietta nel
+    frontend tramite add_extra_js_url — l'utente non deve aggiungere nulla
+    da Impostazioni → Dashboard → Risorse.
+
+    Non deve mai bloccare il setup dell'integrazione: qualsiasi errore qui
+    viene solo loggato come warning.
+    """
+    try:
+        www_path = Path(__file__).parent / "www" / "termostato-diag-card.js"
+        if not www_path.exists():
+            _LOGGER.warning("Card frontend non trovata in %s — salto la registrazione", www_path)
+            return
+
+        try:
+            # HA moderno (2024.7+)
+            from homeassistant.components.http import StaticPathConfig
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(_FRONTEND_URL_PATH, str(www_path), cache_headers=False)]
+            )
+        except ImportError:
+            # HA più vecchio — API sincrona deprecata ma ancora funzionante
+            hass.http.register_static_path(_FRONTEND_URL_PATH, str(www_path), cache_headers=False)
+
+        from homeassistant.components.frontend import add_extra_js_url
+        add_extra_js_url(hass, f"{_FRONTEND_URL_PATH}?v={_FRONTEND_VERSION_TAG}")
+        _LOGGER.info("Card 'Termostato Diag Card' registrata automaticamente nel frontend")
+    except Exception as exc:
+        _LOGGER.warning("Impossibile registrare automaticamente la card frontend: %s", exc)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Configura una entry. NON chiama async_update_entry per evitare loop."""
     hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})
+    # Registra la card una sola volta, indipendentemente da quante istanze
+    # (termostati) sono configurate — evita registrazioni duplicate.
+    if not hass.data[DOMAIN].get("_frontend_card_registered"):
+        hass.data[DOMAIN]["_frontend_card_registered"] = True
+        await _async_register_frontend_card(hass)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
