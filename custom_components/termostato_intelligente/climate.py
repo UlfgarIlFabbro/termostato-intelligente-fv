@@ -583,17 +583,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 # Se lo spegnimento NON è avvenuto entro la finestra di
                 # tolleranza di un nostro _async_turn_off_climate() recente,
                 # E non è il primo evento generato al boot/riavvio (old_state
-                # is None — quello è solo la sincronizzazione iniziale dello
-                # stato che il dispositivo aveva già PRIMA del riavvio, non
-                # un nuovo spegnimento avvenuto ora), è uno spegnimento
-                # manuale (telecomando, app Gree, altra automazione) —
-                # registriamo il timestamp per l'eventuale blocco riaccensione.
+                # is None), E rappresenta una VERA transizione da uno stato
+                # acceso a "off" (non un secondo evento "off"→"off", es. per
+                # un aggiornamento di attributi durante la risincronizzazione
+                # dopo un riavvio, che non è un nuovo spegnimento), allora è
+                # uno spegnimento manuale (telecomando, app Gree, altra
+                # automazione) — registriamo il timestamp per l'eventuale
+                # blocco riaccensione temporizzato.
                 is_programmatic = (
                     self._programmatic_off_until is not None
                     and dt_util.utcnow() <= self._programmatic_off_until
                 )
                 is_initial_boot_event = old_state is None
-                if not is_programmatic and not is_initial_boot_event:
+                is_real_transition_to_off = old_state is not None and old_state.state != "off"
+                if not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
                     if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
                         self._manual_off_since = dt_util.utcnow()
                         _LOGGER.info(
@@ -603,6 +606,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 elif is_initial_boot_event:
                     _LOGGER.debug(
                         "%s: climatizzatore già spento al riavvio — non considerato spegnimento manuale",
+                        self._attr_name,
+                    )
+                elif not is_real_transition_to_off:
+                    _LOGGER.debug(
+                        "%s: evento off→off senza vera transizione (probabile risincronizzazione) — ignorato",
                         self._attr_name,
                     )
             elif new_state and new_state.state in ("unknown", "unavailable"):
