@@ -582,20 +582,29 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._power_limit_low_since = None
                 # Se lo spegnimento NON è avvenuto entro la finestra di
                 # tolleranza di un nostro _async_turn_off_climate() recente,
-                # è uno spegnimento manuale (telecomando, app Gree, altra
-                # automazione) — registriamo il timestamp per l'eventuale
-                # blocco riaccensione temporizzato.
+                # E non è il primo evento generato al boot/riavvio (old_state
+                # is None — quello è solo la sincronizzazione iniziale dello
+                # stato che il dispositivo aveva già PRIMA del riavvio, non
+                # un nuovo spegnimento avvenuto ora), è uno spegnimento
+                # manuale (telecomando, app Gree, altra automazione) —
+                # registriamo il timestamp per l'eventuale blocco riaccensione.
                 is_programmatic = (
                     self._programmatic_off_until is not None
                     and dt_util.utcnow() <= self._programmatic_off_until
                 )
-                if not is_programmatic:
+                is_initial_boot_event = old_state is None
+                if not is_programmatic and not is_initial_boot_event:
                     if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
                         self._manual_off_since = dt_util.utcnow()
                         _LOGGER.info(
                             "%s: spegnimento manuale rilevato — blocco riaccensione attivo",
                             self._attr_name,
                         )
+                elif is_initial_boot_event:
+                    _LOGGER.debug(
+                        "%s: climatizzatore già spento al riavvio — non considerato spegnimento manuale",
+                        self._attr_name,
+                    )
             elif new_state and new_state.state in ("unknown", "unavailable"):
                 # Blip transitorio — NON toccare il timer DRY, prosegue normalmente
                 _LOGGER.debug(
