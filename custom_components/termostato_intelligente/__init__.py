@@ -125,16 +125,22 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "beta22"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "beta24"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
-    """Registra automaticamente la card diagnostica come risorsa frontend.
+    """Rende disponibile il file JS della card diagnostica via HTTP, servendolo
+    direttamente dalla cartella www/ dell'integrazione, e la registra come
+    risorsa Lovelace senza richiedere alcuna azione manuale all'utente.
 
-    Serve il file JS direttamente dalla cartella www/ dell'integrazione
-    (nessun file da copiare manualmente in /config/www) e lo inietta nel
-    frontend tramite add_extra_js_url — l'utente non deve aggiungere nulla
-    da Impostazioni → Dashboard → Risorse.
+    NOTA storica: la prima versione usava add_extra_js_url per iniettare lo
+    script nel frontend, ma con molte altre custom card installate il picker
+    "Aggiungi card" a volte apriva prima che lo script avesse finito di
+    caricare, restando bloccato in caricamento perenne. Ora registriamo
+    direttamente una risorsa Lovelace nel resource storage collection —
+    lo stesso identico meccanismo usato quando l'utente aggiunge una
+    risorsa a mano — che ha il corretto sistema di attesa e funziona in
+    modo affidabile.
 
     Non deve mai bloccare il setup dell'integrazione: qualsiasi errore qui
     viene solo loggato come warning.
@@ -155,11 +161,57 @@ async def _async_register_frontend_card(hass: HomeAssistant) -> None:
             # HA più vecchio — API sincrona deprecata ma ancora funzionante
             hass.http.register_static_path(_FRONTEND_URL_PATH, str(www_path), cache_headers=False)
 
-        from homeassistant.components.frontend import add_extra_js_url
-        add_extra_js_url(hass, f"{_FRONTEND_URL_PATH}?v={_FRONTEND_VERSION_TAG}")
-        _LOGGER.info("Card 'Termostato Diag Card' registrata automaticamente nel frontend")
+        # Registra la risorsa Lovelace programmaticamente, usando lo stesso
+        # storage collection che usa l'interfaccia quando l'utente aggiunge
+        # una risorsa a mano da Impostazioni → Dashboard → Risorse — a
+        # differenza di add_extra_js_url, questo meccanismo ha il corretto
+        # sistema di attesa lato picker "Aggiungi card" e non causa il
+        # caricamento perenne osservato con l'iniezione diretta.
+        await _async_ensure_lovelace_resource(hass)
     except Exception as exc:
-        _LOGGER.warning("Impossibile registrare automaticamente la card frontend: %s", exc)
+        _LOGGER.warning("Impossibile rendere disponibile la card frontend: %s", exc)
+
+
+async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> None:
+    """Aggiunge (o aggiorna alla versione corrente) la risorsa Lovelace per la
+    card diagnostica, senza richiedere alcuna azione manuale all'utente.
+
+    Funziona solo se la dashboard è in modalità "storage" (quella di default
+    per la maggior parte degli utenti). Se è in modalità YAML, il resource
+    storage collection non esiste — in quel caso ci limitiamo a loggare
+    un'indicazione per l'aggiunta manuale, senza generare errori.
+    """
+    try:
+        lovelace_data = hass.data.get("lovelace")
+        resources = getattr(lovelace_data, "resources", None) if lovelace_data else None
+        if resources is None:
+            _LOGGER.info(
+                "Dashboard non in modalità storage — aggiungi manualmente la risorsa %s da "
+                "Impostazioni → Dashboard → Risorse (tipo: Modulo JavaScript) se la card non compare",
+                _FRONTEND_URL_PATH,
+            )
+            return
+
+        target_url = f"{_FRONTEND_URL_PATH}?v={_FRONTEND_VERSION_TAG}"
+        existing_items = resources.async_items()
+        match = next((item for item in existing_items if _FRONTEND_URL_PATH in item.get("url", "")), None)
+
+        if match is None:
+            await resources.async_create_item({"res_type": "module", "url": target_url})
+            _LOGGER.info("Risorsa frontend per la card diagnostica registrata automaticamente: %s", target_url)
+        elif match.get("url") != target_url:
+            # Versione precedente presente — aggiorniamo così anche dopo un
+            # aggiornamento dell'integrazione la card resta al passo senza
+            # dover intervenire manualmente sulla risorsa esistente.
+            await resources.async_update_item(match["id"], {"res_type": "module", "url": target_url})
+            _LOGGER.info("Risorsa frontend per la card diagnostica aggiornata alla nuova versione: %s", target_url)
+    except Exception as exc:
+        _LOGGER.warning(
+            "Impossibile registrare/aggiornare automaticamente la risorsa frontend — "
+            "aggiungila manualmente da Impostazioni → Dashboard → Risorse (URL: %s, "
+            "tipo: Modulo JavaScript) se la card non compare: %s",
+            _FRONTEND_URL_PATH, exc,
+        )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
