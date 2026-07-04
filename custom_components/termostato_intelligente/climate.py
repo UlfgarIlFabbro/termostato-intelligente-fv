@@ -834,6 +834,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not self._switch_state(SWITCH_KEY_MASTER, True):
             # Termostato disabilitato dall'utente — non fare assolutamente nulla
             return
+        if self._is_window_open():
+            # Finestra aperta — non accendere/spegnere per FV, non ha senso
+            # climatizzare con la finestra aperta. La gestione finestra ha
+            # la sua logica dedicata (notifica + eventuale spegnimento).
+            return
         use_internal = not bool(self._temp_sensor)
         temp = self._simple_read_temp()
         if temp is None:
