@@ -46,6 +46,10 @@ const KNOWN_ATTRIBUTES = [
   { key: "notte_sotto_target_da", label: "Sotto target notturno da", icon: "🌙", type: "timestamp" },
   { key: "snapshot_attivo", label: "Snapshot finestra attivo", icon: "📸", type: "bool" },
   { key: "climatizzatore_reale", label: "Entità climatizzatore reale", icon: "🔧", type: "text" },
+  { key: "modalita_configurazione", label: "Modalità configurazione", icon: "⚙️", type: "mode_label" },
+  { key: "protezione_potenza_attiva", label: "Protezione potenza attiva", icon: "⚡", type: "bool" },
+  { key: "protezione_potenza_da", label: "Protezione potenza da", icon: "⚡", type: "timestamp" },
+  { key: "emergenza_caldo_attiva", label: "Emergenza caldo attiva", icon: "🔥", type: "bool" },
 ];
 
 function findAttrDef(key) {
@@ -87,6 +91,10 @@ function formatValue(def, value) {
         return { text: `${formatTimestamp(value.timestamp)} — ${value.messaggio}`, positive: null };
       }
       return { text: "—", positive: null };
+    }
+    case "mode_label": {
+      const labels = { simple: "Semplificato", simple_fv: "Semplificato + FV", full: "Completo" };
+      return { text: labels[value] || String(value), positive: null };
     }
     default:
       return { text: String(value), positive: null };
@@ -139,18 +147,41 @@ class TermostatoDiagCard extends HTMLElement {
     const hvacLabel = hvacModeLabels[stateObj.state] || stateObj.state;
 
     const showAttrs = this._config.show_attributes || [];
+    const hideInactive = this._config.hide_inactive !== false; // default true
     let attrsHtml = "";
     if (showAttrs.length > 0) {
-      const items = showAttrs.map((key) => {
+      // Tipi che hanno un concetto naturale di "attivo/presente" — se
+      // hideInactive è true, li nascondiamo quando sono false/vuoti/null.
+      // Numeri e testo semplice non hanno uno stato "inattivo", restano
+      // sempre visibili.
+      const hasActiveState = (type) => ["bool", "timestamp", "array", "notify_event"].includes(type);
+
+      const visibleKeys = showAttrs.filter((key) => {
+        const def = findAttrDef(key);
+        const raw = stateObj.attributes[key];
+        if (!hideInactive || !hasActiveState(def.type)) return true;
+        if (def.type === "bool") return !!raw;
+        if (def.type === "array") return Array.isArray(raw) && raw.length > 0;
+        if (def.type === "notify_event") return !!(raw && raw.messaggio);
+        return raw !== null && raw !== undefined && raw !== ""; // timestamp
+      });
+
+      const items = visibleKeys.map((key) => {
         const def = findAttrDef(key);
         const val = formatValue(def, stateObj.attributes[key]);
         const colorStyle =
           val.positive === true ? "color:#2e7d32;font-weight:600;" :
           val.positive === false ? "color:var(--secondary-text-color);" : "";
         if (this._config.display_style === "badges") {
-          const bg = val.positive === true ? "rgba(46,125,50,0.15)" : val.positive === false ? "rgba(120,120,120,0.12)" : "rgba(120,120,120,0.12)";
+          const bg = val.positive === true ? "rgba(46,125,50,0.15)" : "rgba(120,120,120,0.12)";
+          // Booleano (mostrato solo se true, quindi l'icona basta da sola).
+          // Per timestamp/eventi/array mostriamo anche il valore, che porta
+          // un'informazione reale (orario, testo messaggio, numeri).
+          const content = def.type === "bool"
+            ? `<span title="${def.label}">${def.icon}</span>`
+            : `<span title="${def.label}">${def.icon}</span><span>${val.text}</span>`;
           return `<span style="display:inline-flex;align-items:center;gap:4px;background:${bg};border-radius:12px;padding:4px 10px;margin:3px;font-size:12px;${colorStyle}">
-            <span>${def.icon}</span><span>${def.label}: ${val.text}</span>
+            ${content}
           </span>`;
         }
         return `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.15);">
@@ -160,7 +191,7 @@ class TermostatoDiagCard extends HTMLElement {
       const wrapper = this._config.display_style === "badges"
         ? `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${items.join("")}</div>`
         : `<div style="margin-top:10px;">${items.join("")}</div>`;
-      attrsHtml = wrapper;
+      attrsHtml = items.length > 0 ? wrapper : "";
     }
 
     this.innerHTML = `
@@ -191,6 +222,7 @@ class TermostatoDiagCard extends HTMLElement {
       title: "",
       color_by_state: true,
       display_style: "rows",
+      hide_inactive: true,
       show_attributes: ["modalita_notturna_attiva", "blocco_riaccensione_attivo", "finestra_aperta", "porta_aperta"],
     };
   }
@@ -207,8 +239,15 @@ class TermostatoDiagCardEditor extends HTMLElement {
   }
 
   set hass(hass) {
+    const firstTime = !this._hass;
     this._hass = hass;
-    this._render();
+    // Ridisegna solo al primo arrivo di hass. Gli aggiornamenti successivi
+    // (che in HA arrivano molte volte al secondo per ogni cambio di stato
+    // in tutta la casa) NON devono ridisegnare l'editor, altrimenti ogni
+    // tendina aperta si chiude e lo scroll si resetta a metà interazione.
+    // I cambi espliciti (entità, checkbox, ecc.) chiamano già _render()
+    // da soli nei rispettivi handler più sotto.
+    if (firstTime) this._render();
   }
 
   _emitConfig() {
@@ -285,6 +324,13 @@ class TermostatoDiagCardEditor extends HTMLElement {
           </div>
         </div>
 
+        <div style="margin-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;">
+            <input id="hide-inactive-toggle" type="checkbox" ${this._config.hide_inactive !== false ? "checked" : ""} />
+            <span>Mostra solo attributi attivi/presenti (nascondi finestra chiusa, notte non attiva, DRY non in corso, ecc.)</span>
+          </label>
+        </div>
+
         <div>
           <label style="display:block;font-size:13px;margin-bottom:6px;color:var(--secondary-text-color);">Attributi da mostrare nella card</label>
           <div style="max-height:320px;overflow-y:auto;border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:8px 12px;">
@@ -307,6 +353,11 @@ class TermostatoDiagCardEditor extends HTMLElement {
 
     this.querySelector("#color-toggle")?.addEventListener("change", (e) => {
       this._config = { ...this._config, color_by_state: e.target.checked };
+      this._emitConfig();
+    });
+
+    this.querySelector("#hide-inactive-toggle")?.addEventListener("change", (e) => {
+      this._config = { ...this._config, hide_inactive: e.target.checked };
       this._emitConfig();
     });
 
