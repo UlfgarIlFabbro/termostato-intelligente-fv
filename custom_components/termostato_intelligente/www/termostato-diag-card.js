@@ -47,6 +47,7 @@ const KNOWN_ATTRIBUTES = [
   { key: "snapshot_attivo", label: "Snapshot finestra attivo", icon: "📸", type: "bool" },
   { key: "climatizzatore_reale", label: "Entità climatizzatore reale", icon: "🔧", type: "text" },
   { key: "modalita_configurazione", label: "Modalità configurazione", icon: "⚙️", type: "mode_label" },
+  { key: "fv_priorita", label: "Priorità FV", icon: "🔢", type: "number" },
   { key: "protezione_potenza_attiva", label: "Protezione potenza attiva", icon: "⚡", type: "bool" },
   { key: "protezione_potenza_da", label: "Protezione potenza da", icon: "⚡", type: "timestamp" },
   { key: "emergenza_caldo_attiva", label: "Emergenza caldo attiva", icon: "🔥", type: "bool" },
