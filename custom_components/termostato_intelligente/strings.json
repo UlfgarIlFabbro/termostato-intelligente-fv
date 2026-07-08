@@ -280,6 +280,7 @@
           "cutoff_info": "⏱️ Manual control cutoff time (informational)",
           "simple_sunset_anticipate_h": "Hours before sunset to stop automatic control",
           "fv_shutoff_manual": "Turn off even if manually turned on",
+          "fv_shutoff_manual_delay_min": "Delay before turning off a manual accension",
           "simple_no_reon_manual_off": "Do not turn on if manually turned off",
           "simple_no_reon_manual_off_hours": "Hours to block re-activation after manual shutoff"
         },
@@ -298,6 +299,7 @@
           "cutoff_info": "Automatically calculated: sunset minus the configured hours. After this time the automation stops controlling the AC turned on manually and stops automatic solar turn-ons. Updates every time you open these settings.",
           "simple_sunset_anticipate_h": "How many hours before sunset the automation stops intervening. Automatic solar turn-on is active from end of night mode until this time — calculated automatically every day based on the season. Minimum 2 hours. Example: sunset 19:40 with 2 hours → automation active until 17:40.",
           "fv_shutoff_manual": "If enabled, the thermostat will turn off the AC even when it was manually turned on by the user and solar production is insufficient.",
+          "fv_shutoff_manual_delay_min": "How many minutes to wait, after detecting insufficient solar surplus, before turning off an AC that was manually turned on — someone who turns it on manually is probably feeling hot and doesn't care much about solar in the short term. Minimum 10 minutes, at least 30 recommended. Does not apply to accensions triggered by solar surplus itself, which remain immediate.",
           "simple_no_reon_manual_off": "If enabled: when you turn off the AC manually (remote, Gree app, or anything other than the thermostat), the integration will not automatically turn it back on for the number of hours configured below — this applies to normal temperature-based turn-ons as well as solar-surplus turn-ons, both during the day and at night. Once the configured hours have passed, normal behavior resumes. Useful if you want to keep it off manually without the thermostat turning it back on right away.",
           "simple_no_reon_manual_off_hours": "How many hours, after a manual shutoff, the integration should refrain from automatically turning the AC back on. Applies both during the day and at night. Example: 2 hours → if you turn it off at 3:00 PM, the thermostat won't turn it back on before 5:00 PM, even if the temperature exceeds the threshold or solar surplus is available."
         }
@@ -713,6 +715,7 @@
           "cutoff_info": "⏱️ Manual control cutoff time (informational)",
           "simple_sunset_anticipate_h": "Hours before sunset to stop automatic control",
           "fv_shutoff_manual": "Turn off even if manually turned on",
+          "fv_shutoff_manual_delay_min": "Delay before turning off a manual accension",
           "simple_no_reon_manual_off": "Do not turn on if manually turned off",
           "simple_no_reon_manual_off_hours": "Hours to block re-activation after manual shutoff"
         },
@@ -731,6 +734,7 @@
           "cutoff_info": "Automatically calculated: sunset minus the configured hours. After this time the automation stops controlling the AC turned on manually and stops automatic solar turn-ons. Updates every time you open these settings.",
           "simple_sunset_anticipate_h": "How many hours before sunset the automation stops intervening. Automatic solar turn-on is active from end of night mode until this time — calculated automatically every day based on the season. Minimum 2 hours. Example: sunset 19:40 with 2 hours → automation active until 17:40.",
           "fv_shutoff_manual": "If enabled, the thermostat will turn off the AC even when it was manually turned on by the user and solar production is insufficient.",
+          "fv_shutoff_manual_delay_min": "How many minutes to wait, after detecting insufficient solar surplus, before turning off an AC that was manually turned on — someone who turns it on manually is probably feeling hot and doesn't care much about solar in the short term. Minimum 10 minutes, at least 30 recommended. Does not apply to accensions triggered by solar surplus itself, which remain immediate.",
           "simple_no_reon_manual_off": "If enabled: when you turn off the AC manually (remote, Gree app, or anything other than the thermostat), the integration will not automatically turn it back on for the number of hours configured below — this applies to normal temperature-based turn-ons as well as solar-surplus turn-ons, both during the day and at night. Once the configured hours have passed, normal behavior resumes. Useful if you want to keep it off manually without the thermostat turning it back on right away.",
           "simple_no_reon_manual_off_hours": "How many hours, after a manual shutoff, the integration should refrain from automatically turning the AC back on. Applies both during the day and at night. Example: 2 hours → if you turn it off at 3:00 PM, the thermostat won't turn it back on before 5:00 PM, even if the temperature exceeds the threshold or solar surplus is available."
         }

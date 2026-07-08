@@ -280,6 +280,7 @@
           "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
           "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto",
           "fv_shutoff_manual": "Spegni anche se acceso manualmente",
+          "fv_shutoff_manual_delay_min": "Ritardo prima di spegnere un'accensione manuale",
           "simple_no_reon_manual_off": "Non accendere se spento manualmente",
           "simple_no_reon_manual_off_hours": "Ore di blocco riaccensione dopo spegnimento manuale"
         },
@@ -298,6 +299,7 @@
           "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente e non accende più automaticamente dal FV. Si aggiorna ogni volta che apri queste impostazioni.",
           "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire. L'accensione automatica dal FV è attiva dalla fine della modalità notturna fino a questo orario — calcolato automaticamente ogni giorno in base alla stagione. Minimo 2 ore. Esempio: tramonto 19:40 con 2 ore → automazione attiva fino alle 17:40.",
           "fv_shutoff_manual": "Se attivo, il termostato spegnerà il clima anche quando è stato acceso manualmente dall'utente e il FV non produce abbastanza.",
+          "fv_shutoff_manual_delay_min": "Quanti minuti aspettare, dopo aver rilevato FV insufficiente, prima di spegnere un climatizzatore acceso manualmente — chi lo accende manualmente probabilmente sente caldo e non gli interessa il fotovoltaico nel breve termine. Minimo 10 minuti, consigliati almeno 30. Non si applica alle accensioni fatte dal fotovoltaico stesso, che restano immediate.",
           "simple_no_reon_manual_off": "Se attivo: quando spegni manualmente il climatizzatore (telecomando, app Gree, o qualsiasi altro mezzo diverso dal termostato), l'integrazione non lo riaccenderà automaticamente per il numero di ore impostato qui sotto — vale sia per accensioni normali per temperatura, sia per accensioni da surplus fotovoltaico, sia di giorno che di notte. Trascorse le ore configurate, torna a funzionare normalmente. Utile se vuoi tenerlo spento tu manualmente senza che il termostato lo riaccenda subito dopo.",
           "simple_no_reon_manual_off_hours": "Per quante ore, dopo uno spegnimento manuale, l'integrazione deve astenersi dal riaccendere automaticamente il climatizzatore. Vale sia di giorno che di notte. Esempio: 2 ore → se spegni alle 15:00, il termostato non lo riaccenderà prima delle 17:00, anche se la temperatura supera la soglia o c'è surplus FV disponibile."
         }
@@ -713,6 +715,7 @@
           "cutoff_info": "⏱️ Orario limite controllo manuale (informativo)",
           "simple_sunset_anticipate_h": "Ore di anticipo rispetto al tramonto",
           "fv_shutoff_manual": "Spegni anche se acceso manualmente",
+          "fv_shutoff_manual_delay_min": "Ritardo prima di spegnere un'accensione manuale",
           "simple_no_reon_manual_off": "Non accendere se spento manualmente",
           "simple_no_reon_manual_off_hours": "Ore di blocco riaccensione dopo spegnimento manuale"
         },
@@ -731,6 +734,7 @@
           "cutoff_info": "Orario calcolato automaticamente: tramonto meno le ore di anticipo configurate. Dopo quest'ora l'automazione non spegne più il clima acceso manualmente dall'utente e non accende più automaticamente dal FV. Si aggiorna ogni volta che apri queste impostazioni.",
           "simple_sunset_anticipate_h": "Quante ore prima del tramonto l'automazione smette di intervenire. L'accensione automatica dal FV è attiva dalla fine della modalità notturna fino a questo orario — calcolato automaticamente ogni giorno in base alla stagione. Minimo 2 ore. Esempio: tramonto 19:40 con 2 ore → automazione attiva fino alle 17:40.",
           "fv_shutoff_manual": "Se attivo, il termostato spegnerà il clima anche quando è stato acceso manualmente dall'utente e il FV non produce abbastanza.",
+          "fv_shutoff_manual_delay_min": "Quanti minuti aspettare, dopo aver rilevato FV insufficiente, prima di spegnere un climatizzatore acceso manualmente — chi lo accende manualmente probabilmente sente caldo e non gli interessa il fotovoltaico nel breve termine. Minimo 10 minuti, consigliati almeno 30. Non si applica alle accensioni fatte dal fotovoltaico stesso, che restano immediate.",
           "simple_no_reon_manual_off": "Se attivo: quando spegni manualmente il climatizzatore (telecomando, app Gree, o qualsiasi altro mezzo diverso dal termostato), l'integrazione non lo riaccenderà automaticamente per il numero di ore impostato qui sotto — vale sia per accensioni normali per temperatura, sia per accensioni da surplus fotovoltaico, sia di giorno che di notte. Trascorse le ore configurate, torna a funzionare normalmente. Utile se vuoi tenerlo spento tu manualmente senza che il termostato lo riaccenda subito dopo.",
           "simple_no_reon_manual_off_hours": "Per quante ore, dopo uno spegnimento manuale, l'integrazione deve astenersi dal riaccendere automaticamente il climatizzatore. Vale sia di giorno che di notte. Esempio: 2 ore → se spegni alle 15:00, il termostato non lo riaccenderà prima delle 17:00, anche se la temperatura supera la soglia o c'è surplus FV disponibile."
         }

@@ -49,6 +49,7 @@ from .const import (
     CONF_FV_SHUTOFF_DELAY_MIN,
     CONF_FV_SHUTOFF_ENABLED,
     CONF_FV_SHUTOFF_MANUAL,
+    CONF_FV_SHUTOFF_MANUAL_DELAY_MIN,
     CONF_FV_SHUTOFF_EXTRA_HOURS,
     CONF_FV_SHUTOFF_THRESHOLD,
     CONF_FV_STAGGER_MIN,
@@ -111,6 +112,7 @@ from .const import (
     DEFAULT_FV_SHUTOFF_DELAY_MIN,
     DEFAULT_FV_SHUTOFF_ENABLED,
     DEFAULT_FV_SHUTOFF_MANUAL,
+    DEFAULT_FV_SHUTOFF_MANUAL_DELAY_MIN,
     DEFAULT_FV_SHUTOFF_EXTRA_HOURS,
     DEFAULT_FV_SHUTOFF_THRESHOLD,
     DEFAULT_FV_STAGGER_MIN,
@@ -411,6 +413,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._programmatic_off_until: datetime | None = None  # finestra di tolleranza per distinguere spegnimento nostro da manuale
         self._manual_off_since: datetime | None = None        # da quando è stato spento manualmente (se rilevato)
         self._fv_low_since: datetime | None = None             # da quando il surplus FV è insufficiente in modo continuativo (diagnostica)
+        self._manual_accension_since: datetime | None = None  # da quando è stato acceso manualmente (non da FV né da notte) — usato per ignorare lo spegnimento FV per un periodo fisso
         self._last_notify_event: dict | None = None             # ultima notifica Telegram inviata (diagnostica)
         self._dry_cancel_timer: callable | None = None       # cancel function async_track_point_in_time
         self._door_debounce_cancel = None                          # timer debounce porta
@@ -513,6 +516,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 ), 1,
             ),
             "fv_basso_da": self._fv_low_since.isoformat() if self._fv_low_since else None,
+            "acceso_manualmente_da": self._manual_accension_since.isoformat() if self._manual_accension_since else None,
             "ultimo_evento_notifica": self._last_notify_event,
             # --- diagnostica specifica del modo Completo ---
             "modalita_configurazione": self._get_config_mode(),
@@ -544,6 +548,23 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     "%s: riavvio durante la notte — ripristinato flag accensione notturna automatica",
                     self._attr_name,
                 )
+
+        # Ripristina il timestamp di accensione manuale dopo un riavvio —
+        # senza questo, un riavvio durante il periodo di immunità (spegni
+        # anche se acceso manualmente + ritardo) fa perdere l'informazione
+        # e il clima rischia di essere spento subito al riavvio, perdendo
+        # la protezione residua a cui l'utente ha diritto.
+        if last_state and last_state.attributes.get("acceso_manualmente_da"):
+            real_state = self.hass.states.get(self._climate_entity)
+            if real_state and real_state.state in ("cool", "dry"):
+                try:
+                    self._manual_accension_since = dt_util.parse_datetime(last_state.attributes["acceso_manualmente_da"])
+                    _LOGGER.info(
+                        "%s: riavvio — ripristinato timestamp accensione manuale (%s)",
+                        self._attr_name, self._manual_accension_since,
+                    )
+                except Exception as exc:
+                    _LOGGER.warning("%s: errore ripristino acceso_manualmente_da: %s", self._attr_name, exc)
 
         # Recupera dry_end dall'ultimo stato salvato (RestoreEntity).
         # Se il clima era in DRY prima del riavvio, rischeduliamo il timer
@@ -608,6 +629,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._cancel_dry_timer("off_state_change")
                 self._fv_surplus_buffer = []
                 self._fv_low_since = None
+                self._manual_accension_since = None
                 self._night_below_since = None
                 self._night_auto_on = False
                 self._fv_auto_on = False
@@ -663,6 +685,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 if self._manual_off_since is not None:
                     self._manual_off_since = None
                     _LOGGER.info("%s: climatizzatore riacceso — blocco riaccensione manuale rimosso", self._attr_name)
+                # Rileva un'accensione MANUALE: vera transizione da "off" ad
+                # acceso (non solo un cambio dry->cool o simili), e non
+                # attribuibile alla logica FV o notturna di questa stessa
+                # integrazione (che impostano i rispettivi flag PRIMA di
+                # chiamare il servizio, quindi sono già True quando arriva
+                # questo evento se sono stati loro ad accendere).
+                if old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
+                    self._manual_accension_since = dt_util.utcnow()
+                    _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
                 if new_state.state == "dry":
                     if self._simple_dry_end is None:
                         # Tornato in DRY senza timer attivo (es. set manuale da UI/altra
@@ -1479,6 +1510,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._cancel_dry_timer("riaccensione_fv_cool_no_dry")
                 self._fv_surplus_buffer = []
                 self._fv_low_since = None
+                self._manual_accension_since = None
                 soc_val2 = self._read_float(self._battery_sensor) or 0
                 fv2 = self._read_float(self._fv_sensor) or 0
                 consumo2 = self._read_float(self._consumption_sensor) or 0
@@ -1488,12 +1520,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not is_on:
             self._fv_surplus_buffer = []
             self._fv_low_since = None
+            self._manual_accension_since = None
             return
 
         # Caso 1: acceso dalla modalità notturna → FV non interviene
         if self._simple_night_auto_on:
             self._fv_surplus_buffer = []
             self._fv_low_since = None
+            self._manual_accension_since = None
             return
 
         # Caso 2/3/4: verifica se può spegnere
@@ -1501,17 +1535,22 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not self._fv_auto_on and not self._simple_can_control_manual() and not shutoff_manual:
             self._fv_surplus_buffer = []
             self._fv_low_since = None
+            self._manual_accension_since = None
             return
 
         # Sliding window — campioni fissi a 4 (il tempo totale è regolato
         # tramite l'intervallo del ciclo dedicato, calcolato da CONF_FV_SHUTOFF_TOTAL_MINUTES)
+        # Usata SOLO per lo spegnimento di un'accensione fatta dal FV stesso.
         surplus = fv - consumo
         threshold = float(get_conf(self.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
         delay_min = FV_SHUTOFF_SAMPLES_FIXED
 
-        # Traccia da quando il surplus è insufficiente in modo continuativo
-        # (diagnostica — attributo fv_basso_da). Si azzera appena il surplus
-        # torna sopra soglia anche per un solo campione.
+        # Traccia da quando il surplus è insufficiente in modo continuativo.
+        # Si azzera appena il surplus torna sopra soglia anche per un solo
+        # campione — questo stesso timestamp è anche il riferimento per il
+        # ritardo di spegnimento di un'accensione MANUALE (vedi sotto): se
+        # resta impostato per tutta la durata configurata, vuol dire che il
+        # FV non si è mai ripreso nel frattempo.
         if surplus < threshold:
             if self._fv_low_since is None:
                 self._fv_low_since = dt_util.utcnow()
@@ -1527,13 +1566,34 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._attr_name, [round(s) for s in self._fv_surplus_buffer], threshold,
         )
 
-        if len(self._fv_surplus_buffer) < delay_min:
-            return
-        if not all(s < threshold for s in self._fv_surplus_buffer):
+        now = dt_util.utcnow()
+
+        # Se l'accensione era MANUALE (non fatta dal FV) e l'opzione "spegni
+        # anche se acceso manualmente" è attiva: per un periodo fisso dal
+        # momento dell'accensione (non da quando si rileva il calo FV),
+        # qualsiasi spegnimento automatico viene semplicemente IGNORATO —
+        # non rimandato, proprio ignorato, come se questa logica non
+        # esistesse per quella finestra di tempo. Passato quel periodo,
+        # il controllo standard riprende a funzionare normalmente, da capo,
+        # sui campioni più recenti.
+        if shutoff_manual and not self._fv_auto_on and self._manual_accension_since is not None:
+            manual_delay_min = float(get_conf(self.entry, CONF_FV_SHUTOFF_MANUAL_DELAY_MIN, DEFAULT_FV_SHUTOFF_MANUAL_DELAY_MIN))
+            elapsed = now - self._manual_accension_since
+            if elapsed < timedelta(minutes=manual_delay_min):
+                return  # dentro la finestra di immunità — ignora completamente
+
+        # Verifica standard: FV insufficiente confermato da 4 campioni pieni
+        # (lo stesso identico controllo usato per un'accensione fatta dal FV,
+        # e usato anche per un'accensione manuale una volta scaduta la
+        # finestra di immunità qui sopra).
+        should_shutoff = (
+            len(self._fv_surplus_buffer) >= delay_min
+            and all(s < threshold for s in self._fv_surplus_buffer)
+        )
+        if not should_shutoff:
             return
 
         # Coordinamento cascata
-        now = dt_util.utcnow()
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
         stagger_min = float(get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN))
         last_off = coord.get("last_fv_shutoff")
@@ -1545,6 +1605,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         coord["last_fv_shutoff"] = now
         self._fv_surplus_buffer = []
         self._fv_low_since = None
+        self._manual_accension_since = None
         # NON resettiamo _fv_auto_on così la riaccensione sa che era il FV ad averlo acceso
         await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
 
