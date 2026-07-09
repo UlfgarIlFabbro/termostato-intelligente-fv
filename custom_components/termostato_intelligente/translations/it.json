@@ -223,6 +223,7 @@
           "name": "Nome del termostato",
           "climate_entity": "Climatizzatore da pilotare",
           "temp_sensor": "Sensore temperatura stanza (opzionale)",
+          "simple_external_sensor_stale_min": "Minuti prima di considerare bloccata la sonda esterna",
           "window_sensor": "Sensore finestra (opzionale)",
           "door_sensor": "Sensore porta (opzionale)"
         },
@@ -230,6 +231,7 @@
           "name": "Il nome con cui questo termostato apparirà in Home Assistant. Esempio: 'Camera da letto'.",
           "climate_entity": "Il climatizzatore fisico da controllare. Esempio: climate.condizionatore_camera.",
           "temp_sensor": "Sensore di temperatura esterna alla stanza (es. sonda Zigbee). Se lasci vuoto, il termostato usa la sonda interna del climatizzatore. ⚠️ La sonda interna del clima legge solo valori interi (es. 25°C, non 25.3°C) quindi le soglie di accensione e spegnimento si adattano automaticamente. Esempio con sonda esterna: sensor.temperatura_camera_letto. Lascia vuoto per usare la sonda del clima.",
+          "simple_external_sensor_stale_min": "Se la sonda esterna (es. un sensore MQTT che dipende da un server remoto) smette di aggiornarsi per più di questi minuti, il termostato passa automaticamente alla sonda interna del climatizzatore, per evitare di regolare la temperatura basandosi su un dato vecchio. Torna da sola alla sonda esterna non appena questa riprende ad aggiornarsi. Default 45 minuti.",
           "window_sensor": "Sensore binario che diventa 'on' quando la finestra è aperta. Se configurato: il termostato avvisa all'apertura e dopo 5 minuti spegne il clima, poi lo riaccende automaticamente quando la finestra viene chiusa. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.finestra_camera.",
           "door_sensor": "Sensore binario che diventa 'on' quando la porta è aperta. Se configurato: invia un avviso quando la porta si apre o si chiude. Non agisce mai sul clima. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.porta_camera."
         }
@@ -658,6 +660,7 @@
           "name": "Nome del termostato",
           "climate_entity": "Climatizzatore da pilotare",
           "temp_sensor": "Sensore temperatura stanza (opzionale)",
+          "simple_external_sensor_stale_min": "Minuti prima di considerare bloccata la sonda esterna",
           "window_sensor": "Sensore finestra (opzionale)",
           "door_sensor": "Sensore porta (opzionale)"
         },
@@ -665,6 +668,7 @@
           "name": "Il nome con cui questo termostato apparirà in Home Assistant. Esempio: 'Camera da letto'.",
           "climate_entity": "Il climatizzatore fisico da controllare. Esempio: climate.condizionatore_camera.",
           "temp_sensor": "Sensore di temperatura esterna alla stanza (es. sonda Zigbee). Se lasci vuoto, il termostato usa la sonda interna del climatizzatore. ⚠️ La sonda interna del clima legge solo valori interi (es. 25°C, non 25.3°C) quindi le soglie di accensione e spegnimento si adattano automaticamente. Esempio con sonda esterna: sensor.temperatura_camera_letto. Lascia vuoto per usare la sonda del clima.",
+          "simple_external_sensor_stale_min": "Se la sonda esterna (es. un sensore MQTT che dipende da un server remoto) smette di aggiornarsi per più di questi minuti, il termostato passa automaticamente alla sonda interna del climatizzatore, per evitare di regolare la temperatura basandosi su un dato vecchio. Torna da sola alla sonda esterna non appena questa riprende ad aggiornarsi. Default 45 minuti.",
           "window_sensor": "Sensore binario che diventa 'on' quando la finestra è aperta. Se configurato: il termostato avvisa all'apertura e dopo 5 minuti spegne il clima, poi lo riaccende automaticamente quando la finestra viene chiusa. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.finestra_camera.",
           "door_sensor": "Sensore binario che diventa 'on' quando la porta è aperta. Se configurato: invia un avviso quando la porta si apre o si chiude. Non agisce mai sul clima. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.porta_camera."
         }

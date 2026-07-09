@@ -228,7 +228,8 @@ from .const import (
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF,
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
     CONF_SIMPLE_TURN_ON_OFFSET,
-    CONF_SIMPLE_TURN_ON_OFFSET,
+    CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
+    DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
     CONFIG_MODE_FULL,
     CONFIG_MODE_SIMPLE,
     DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
@@ -379,6 +380,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._snapshot: dict[str, Any] | None = None
         self._window_cancel_timer = None
         self._presence_since: datetime | None = None
+        self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
+        self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato — usato per una breve finestra di tolleranza al ritardo di sincronizzazione del dispositivo
+        self._external_sensor_fallback_active: bool = False  # True se stiamo usando la sonda interna perché quella esterna è bloccata
 
         # --- Sliding window FV shutoff ---
         self._fv_surplus_buffer: list[float] = []
@@ -517,6 +521,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             ),
             "fv_basso_da": self._fv_low_since.isoformat() if self._fv_low_since else None,
             "acceso_manualmente_da": self._manual_accension_since.isoformat() if self._manual_accension_since else None,
+            "sonda_esterna_bloccata": self._external_sensor_fallback_active,
             "ultimo_evento_notifica": self._last_notify_event,
             # --- diagnostica specifica del modo Completo ---
             "modalita_configurazione": self._get_config_mode(),
@@ -630,6 +635,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._fv_surplus_buffer = []
                 self._fv_low_since = None
                 self._manual_accension_since = None
+                self._last_sent_setpoint = None
+                self._last_sent_setpoint_at = None
                 self._night_below_since = None
                 self._night_auto_on = False
                 self._fv_auto_on = False
@@ -846,7 +853,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     )
                     self._cancel_dry_timer("fallback_polling_dry_end_scaduto")
 
-        use_internal = not bool(self._temp_sensor)
+        use_internal = self._should_use_internal_probe()
         temp = self._simple_read_temp()
         if temp is None:
             return
@@ -905,7 +912,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             # climatizzare con la finestra aperta. La gestione finestra ha
             # la sua logica dedicata (notifica + eventuale spegnimento).
             return
-        use_internal = not bool(self._temp_sensor)
+        use_internal = self._should_use_internal_probe()
         temp = self._simple_read_temp()
         if temp is None:
             return
@@ -920,9 +927,52 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
             await self._async_handle_fv_shutoff_simple(temp, target)
 
+    def _external_sensor_is_stale(self) -> bool:
+        """True se la sonda esterna è configurata ma non si aggiorna da
+        troppo tempo (probabile problema di connettività — es. sensori MQTT
+        che dipendono da un server esterno che può andare offline).
+        """
+        if not self._temp_sensor:
+            return False
+        state = self.hass.states.get(self._temp_sensor)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return True
+        last_changed = state.last_changed
+        if last_changed is None:
+            return False
+        stale_after_min = float(get_conf(self.entry, CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN, DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN))
+        return (dt_util.utcnow() - last_changed) > timedelta(minutes=stale_after_min)
+
+    def _should_use_internal_probe(self) -> bool:
+        """Decide se usare la sonda interna del climatizzatore.
+
+        True se non è configurata nessuna sonda esterna, OPPURE se è
+        configurata ma risulta bloccata da troppo tempo — in quel caso si
+        passa automaticamente alla sonda interna, e si torna alla esterna
+        da sola non appena questa riprende ad aggiornarsi.
+        """
+        if not self._temp_sensor:
+            return True
+        is_stale = self._external_sensor_is_stale()
+        if is_stale != self._external_sensor_fallback_active:
+            self._external_sensor_fallback_active = is_stale
+            if is_stale:
+                _LOGGER.warning(
+                    "%s: sonda esterna bloccata — passaggio automatico alla sonda interna del climatizzatore",
+                    self._attr_name,
+                )
+            else:
+                _LOGGER.info(
+                    "%s: sonda esterna ripristinata — torno a usarla normalmente",
+                    self._attr_name,
+                )
+        return is_stale
+
     def _simple_read_temp(self) -> float | None:
-        """Legge la temperatura: sonda esterna se configurata, altrimenti sonda interna del clima."""
-        if self._temp_sensor:
+        """Legge la temperatura: sonda esterna se configurata e aggiornata,
+        altrimenti sonda interna del clima (anche come fallback automatico
+        se la sonda esterna smette di aggiornarsi)."""
+        if self._temp_sensor and not self._should_use_internal_probe():
             return self._read_float(self._temp_sensor)
         # Usa current_temperature dagli attributi del climatizzatore reale
         state = self.hass.states.get(self._climate_entity)
@@ -1195,8 +1245,31 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         except (TypeError, ValueError):
             current_sp = None
 
-        if current_sp != new_setpoint:
+        # Se il dispositivo mostra già il valore che vogliamo, non c'è nulla
+        # da fare — indipendentemente da chi l'abbia impostato.
+        setpoint_needs_update = current_sp != new_setpoint
+        if setpoint_needs_update:
+            # Se il valore calcolato è lo STESSO che abbiamo già inviato noi
+            # di recente (pochi minuti fa), il disallineamento è quasi
+            # certamente solo un ritardo di sincronizzazione del dispositivo
+            # (comune sui climatizzatori WiFi) — non un vero cambio da
+            # notificare. Se invece è passato più tempo, o il dispositivo
+            # mostra ancora un valore diverso, potrebbe essere un cambio
+            # fatto dall'utente col telecomando: in quel caso vogliamo
+            # comunque riportarlo al target automatico e notificarlo.
+            now_sp_check = dt_util.utcnow()
+            recently_sent_same_value = (
+                self._last_sent_setpoint == new_setpoint
+                and self._last_sent_setpoint_at is not None
+                and (now_sp_check - self._last_sent_setpoint_at) < timedelta(minutes=10)
+            )
+            if recently_sent_same_value:
+                setpoint_needs_update = False
+
+        if setpoint_needs_update:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint}, blocking=True)
+            self._last_sent_setpoint = new_setpoint
+            self._last_sent_setpoint_at = dt_util.utcnow()
             await self._async_simple_notify_temp_change(temp, target)
         if current_fan != fan:
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
@@ -1295,8 +1368,24 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         except (TypeError, ValueError):
             current_sp_r = None
 
-        if current_sp_r != new_setpoint_r:
+        # Vedi commento nella versione "interna" — breve tolleranza al
+        # ritardo di sincronizzazione, ma rileva comunque un cambio reale
+        # (es. dal telecomando) dopo quella finestra.
+        setpoint_needs_update = current_sp_r != new_setpoint_r
+        if setpoint_needs_update:
+            now_sp_check = dt_util.utcnow()
+            recently_sent_same_value = (
+                self._last_sent_setpoint == new_setpoint_r
+                and self._last_sent_setpoint_at is not None
+                and (now_sp_check - self._last_sent_setpoint_at) < timedelta(minutes=10)
+            )
+            if recently_sent_same_value:
+                setpoint_needs_update = False
+
+        if setpoint_needs_update:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint_r}, blocking=True)
+            self._last_sent_setpoint = new_setpoint_r
+            self._last_sent_setpoint_at = dt_util.utcnow()
             await self._async_simple_notify_temp_change(temp, target)
         if current_fan != fan:
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
@@ -1323,7 +1412,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         # Check temperatura
-        use_internal = not bool(self._temp_sensor)
+        use_internal = self._should_use_internal_probe()
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET,
             DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
         if temp < target + turn_on_offset:
@@ -1338,7 +1427,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         # Check temperatura — deve fare abbastanza caldo per giustificare l'accensione
-        use_internal = not bool(self._temp_sensor)
+        use_internal = self._should_use_internal_probe()
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET,
             DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
         if temp < target + turn_on_offset:
@@ -1492,7 +1581,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
             soc_min = float(get_conf(self.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
             soc = self._read_float(self._battery_sensor)
-            use_internal = not bool(self._temp_sensor)
+            use_internal = self._should_use_internal_probe()
             turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET,
                 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
             fv_ok = fv > consumo + margin and (soc is None or soc > soc_min)

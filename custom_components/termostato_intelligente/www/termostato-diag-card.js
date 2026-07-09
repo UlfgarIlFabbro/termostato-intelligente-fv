@@ -42,6 +42,7 @@ const KNOWN_ATTRIBUTES = [
   { key: "soglia_accensione_fv", label: "Soglia accensione", icon: "🌡️", type: "number", unit: "°C" },
   { key: "fv_basso_da", label: "FV insufficiente da", icon: "📉", type: "timestamp" },
   { key: "acceso_manualmente_da", label: "Acceso manualmente da (immunità FV)", icon: "✋", type: "timestamp" },
+  { key: "sonda_esterna_bloccata", label: "Sonda esterna bloccata (fallback su interna)", icon: "📡", type: "bool" },
   { key: "ultimo_evento_notifica", label: "Ultimo evento notifica", icon: "🔔", type: "notify_event" },
   { key: "presenza_da", label: "Presenza rilevata da", icon: "🧍", type: "timestamp" },
   { key: "notte_sotto_target_da", label: "Sotto target notturno da", icon: "🌙", type: "timestamp" },

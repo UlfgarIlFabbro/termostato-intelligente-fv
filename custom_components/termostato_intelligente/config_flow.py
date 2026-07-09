@@ -181,6 +181,8 @@ from .const import (
     CONF_TARGET_TEMP_DEFAULT,
     CONF_TEMP_DELTA,
     CONF_TEMP_SENSOR,
+    CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
+    DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
     CONF_TTS_ENGINE,
     CONF_TTS_MESSAGE_OPEN,
     CONF_TTS_PLAYERS,
@@ -278,6 +280,7 @@ def _schema_simple_entita(defaults: dict) -> vol.Schema:
         _f(vol.Required, CONF_NAME, defaults, DEFAULT_NAME): selector.TextSelector(),
         _f(vol.Required, CONF_CLIMATE_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
         _f(vol.Optional, CONF_TEMP_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        _f(vol.Optional, CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN, defaults, DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=15, max=180, step=5, unit_of_measurement="min", mode="box")),
         _f(vol.Optional, CONF_WINDOW_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
         _f(vol.Optional, CONF_DOOR_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
     })

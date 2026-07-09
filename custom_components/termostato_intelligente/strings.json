@@ -223,6 +223,7 @@
           "name": "Thermostat name",
           "climate_entity": "Air conditioner to control",
           "temp_sensor": "Room temperature sensor (optional)",
+          "simple_external_sensor_stale_min": "Minutes before considering the external sensor stuck",
           "window_sensor": "Window sensor (optional)",
           "door_sensor": "Door sensor (optional)"
         },
@@ -230,6 +231,7 @@
           "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom'.",
           "climate_entity": "The physical AC to control. Example: climate.ac_bedroom.",
           "temp_sensor": "External room temperature sensor (e.g. Zigbee probe). If left empty, the thermostat uses the AC's internal sensor. ⚠️ The AC internal sensor reads only integer values (e.g. 25°C, not 25.3°C) so turn-on and turn-off thresholds adapt automatically. Example: sensor.temperature_bedroom. Leave empty to use the AC internal sensor.",
+          "simple_external_sensor_stale_min": "If the external sensor (e.g. an MQTT sensor depending on a remote server) stops updating for more than this many minutes, the thermostat automatically switches to the AC's internal sensor, to avoid regulating based on stale data. It switches back on its own as soon as the external sensor resumes updating. Default 45 minutes.",
           "window_sensor": "Binary sensor 'on' when window is open. If set: alerts on opening and turns off AC after 5 minutes if still open, then turns it back on when closed. Leave empty to disable.",
           "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable."
         }
@@ -658,6 +660,7 @@
           "name": "Thermostat name",
           "climate_entity": "Air conditioner to control",
           "temp_sensor": "Room temperature sensor (optional)",
+          "simple_external_sensor_stale_min": "Minutes before considering the external sensor stuck",
           "window_sensor": "Window sensor (optional)",
           "door_sensor": "Door sensor (optional)"
         },
@@ -665,6 +668,7 @@
           "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom'.",
           "climate_entity": "The physical AC to control. Example: climate.ac_bedroom.",
           "temp_sensor": "External room temperature sensor (e.g. Zigbee probe). If left empty, the thermostat uses the AC's internal sensor. ⚠️ The AC internal sensor reads only integer values (e.g. 25°C, not 25.3°C) so turn-on and turn-off thresholds adapt automatically. Example: sensor.temperature_bedroom. Leave empty to use the AC internal sensor.",
+          "simple_external_sensor_stale_min": "If the external sensor (e.g. an MQTT sensor depending on a remote server) stops updating for more than this many minutes, the thermostat automatically switches to the AC's internal sensor, to avoid regulating based on stale data. It switches back on its own as soon as the external sensor resumes updating. Default 45 minutes.",
           "window_sensor": "Binary sensor 'on' when window is open. If set: alerts on opening and turns off AC after 5 minutes if still open, then turns it back on when closed. Leave empty to disable.",
           "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable."
         }
