@@ -431,7 +431,7 @@ SIMPLE_WINDOW_DELAY_MIN = 5
 SIMPLE_NIGHT_END_LIMBO_H = 1
 
 # Messaggi modo semplificato
-DEFAULT_SIMPLE_MSG_TEMP_CHANGE = "🌡️ {{ name }}: temperatura {{ temp }}°C (target {{ target }}°C)."
+DEFAULT_SIMPLE_MSG_TEMP_CHANGE = "🌡️ {{ name }}: temperatura {{ temp }}°C (target {{ target }}°C){% if fan %}, ventola {{ fan }}{% endif %}."
 DEFAULT_SIMPLE_MSG_DOOR_OPEN = "\U0001f6aa {{ name }}: porta aperta."
 DEFAULT_SIMPLE_MSG_DOOR_CLOSE = "\u2705 {{ name }}: porta chiusa."
 DEFAULT_SIMPLE_MSG_WINDOW_OPEN = (

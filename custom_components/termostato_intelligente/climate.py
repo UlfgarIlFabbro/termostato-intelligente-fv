@@ -381,7 +381,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._window_cancel_timer = None
         self._presence_since: datetime | None = None
         self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
-        self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato — usato per una breve finestra di tolleranza al ritardo di sincronizzazione del dispositivo
+        self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
+        self._last_sent_fan: str | None = None  # ultima velocità ventola che ABBIAMO inviato noi — stesso principio del setpoint, evita comandi/beep ripetuti
         self._external_sensor_fallback_active: bool = False  # True se stiamo usando la sonda interna perché quella esterna è bloccata
 
         # --- Sliding window FV shutoff ---
@@ -637,6 +638,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._manual_accension_since = None
                 self._last_sent_setpoint = None
                 self._last_sent_setpoint_at = None
+                self._last_sent_fan = None
                 self._night_below_since = None
                 self._night_auto_on = False
                 self._fv_auto_on = False
@@ -931,17 +933,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         """True se la sonda esterna è configurata ma non si aggiorna da
         troppo tempo (probabile problema di connettività — es. sensori MQTT
         che dipendono da un server esterno che può andare offline).
+
+        Usiamo last_updated, non last_changed: quest'ultimo si aggiorna
+        SOLO quando il valore riportato cambia davvero, mentre last_updated
+        si aggiorna ad ogni singolo report del sensore anche se il valore è
+        identico al precedente. Con una stanza che si raffredda lentamente,
+        il valore può restare invariato per lunghi periodi pur continuando
+        a funzionare — usare last_changed avrebbe fatto scattare falsi
+        allarmi di "sonda bloccata" anche con il sensore perfettamente vivo.
         """
         if not self._temp_sensor:
             return False
         state = self.hass.states.get(self._temp_sensor)
         if state is None or state.state in ("unknown", "unavailable"):
             return True
-        last_changed = state.last_changed
-        if last_changed is None:
+        last_updated = state.last_updated
+        if last_updated is None:
             return False
         stale_after_min = float(get_conf(self.entry, CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN, DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN))
-        return (dt_util.utcnow() - last_changed) > timedelta(minutes=stale_after_min)
+        return (dt_util.utcnow() - last_updated) > timedelta(minutes=stale_after_min)
 
     def _should_use_internal_probe(self) -> bool:
         """Decide se usare la sonda interna del climatizzatore.
@@ -1245,34 +1255,35 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         except (TypeError, ValueError):
             current_sp = None
 
-        # Se il dispositivo mostra già il valore che vogliamo, non c'è nulla
-        # da fare — indipendentemente da chi l'abbia impostato.
-        setpoint_needs_update = current_sp != new_setpoint
-        if setpoint_needs_update:
-            # Se il valore calcolato è lo STESSO che abbiamo già inviato noi
-            # di recente (pochi minuti fa), il disallineamento è quasi
-            # certamente solo un ritardo di sincronizzazione del dispositivo
-            # (comune sui climatizzatori WiFi) — non un vero cambio da
-            # notificare. Se invece è passato più tempo, o il dispositivo
-            # mostra ancora un valore diverso, potrebbe essere un cambio
-            # fatto dall'utente col telecomando: in quel caso vogliamo
-            # comunque riportarlo al target automatico e notificarlo.
-            now_sp_check = dt_util.utcnow()
-            recently_sent_same_value = (
-                self._last_sent_setpoint == new_setpoint
-                and self._last_sent_setpoint_at is not None
-                and (now_sp_check - self._last_sent_setpoint_at) < timedelta(minutes=10)
-            )
-            if recently_sent_same_value:
-                setpoint_needs_update = False
+        # Confrontiamo con l'ultimo valore che ABBIAMO calcolato e inviato
+        # noi, non con la lettura del dispositivo — che può restare
+        # temporaneamente disallineata per un ritardo di sincronizzazione
+        # (comune sui climatizzatori WiFi), causando altrimenti un nuovo
+        # comando (e il relativo beep) ad ogni ciclo anche se il valore
+        # desiderato non è affatto cambiato. Unico costo accettato: un
+        # cambio fatto dal telecomando non viene rilevato finché il nostro
+        # calcolo automatico non produce un valore diverso da quello già
+        # in memoria — scelta esplicitamente richiesta per evitare i beep
+        # ripetuti di notte o durante il riposo.
+        # Se non abbiamo ancora memoria in questa sessione (es. subito dopo
+        # un riavvio di Home Assistant col clima già acceso), usiamo la
+        # lettura del dispositivo come riferimento iniziale, per non
+        # forzare un invio/beep inutile se il valore era già corretto.
+        reference_sp = self._last_sent_setpoint if self._last_sent_setpoint is not None else current_sp
+        setpoint_needs_update = reference_sp != new_setpoint
+
+        reference_fan = self._last_sent_fan if self._last_sent_fan is not None else current_fan
+        fan_needs_update = reference_fan != fan
 
         if setpoint_needs_update:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint}, blocking=True)
             self._last_sent_setpoint = new_setpoint
             self._last_sent_setpoint_at = dt_util.utcnow()
-            await self._async_simple_notify_temp_change(temp, target)
-        if current_fan != fan:
+        if fan_needs_update:
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
+            self._last_sent_fan = fan
+        if setpoint_needs_update or fan_needs_update:
+            await self._async_simple_notify_temp_change(temp, target, fan)
 
     async def _async_thermal_simple_external(
         self, temp: float, target: float, internal_temp: float | None, real_state, dry_enabled: bool, is_night: bool = False
@@ -1368,27 +1379,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         except (TypeError, ValueError):
             current_sp_r = None
 
-        # Vedi commento nella versione "interna" — breve tolleranza al
-        # ritardo di sincronizzazione, ma rileva comunque un cambio reale
-        # (es. dal telecomando) dopo quella finestra.
-        setpoint_needs_update = current_sp_r != new_setpoint_r
-        if setpoint_needs_update:
-            now_sp_check = dt_util.utcnow()
-            recently_sent_same_value = (
-                self._last_sent_setpoint == new_setpoint_r
-                and self._last_sent_setpoint_at is not None
-                and (now_sp_check - self._last_sent_setpoint_at) < timedelta(minutes=10)
-            )
-            if recently_sent_same_value:
-                setpoint_needs_update = False
+        # Vedi commento nella versione "interna" — confronto puro col nostro
+        # ultimo valore inviato (nessun limite di tempo), con fallback alla
+        # lettura del dispositivo solo se non abbiamo ancora memoria in
+        # questa sessione (es. subito dopo un riavvio di Home Assistant).
+        reference_sp_r = self._last_sent_setpoint if self._last_sent_setpoint is not None else current_sp_r
+        setpoint_needs_update = reference_sp_r != new_setpoint_r
+
+        reference_fan = self._last_sent_fan if self._last_sent_fan is not None else current_fan
+        fan_needs_update = reference_fan != fan
 
         if setpoint_needs_update:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint_r}, blocking=True)
             self._last_sent_setpoint = new_setpoint_r
             self._last_sent_setpoint_at = dt_util.utcnow()
-            await self._async_simple_notify_temp_change(temp, target)
-        if current_fan != fan:
+        if fan_needs_update:
             await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
+            self._last_sent_fan = fan
+        if setpoint_needs_update or fan_needs_update:
+            await self._async_simple_notify_temp_change(temp, target, fan)
 
 
     async def _async_handle_fv_turn_on_simple(self, temp: float, target: float) -> None:
@@ -1740,8 +1749,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
             await self._async_simple_notify(msg)
 
-    async def _async_simple_notify_temp_change(self, temp: float, target: float) -> None:
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_TEMP_CHANGE, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
+    async def _async_simple_notify_temp_change(self, temp: float, target: float, fan: str | None = None) -> None:
+        fan_labels = {"low": "bassa", "medium": "media", "high": "alta", "auto": "automatica"}
+        fan_label = fan_labels.get(fan, fan) if fan else None
+        msg = await self._async_render(
+            DEFAULT_SIMPLE_MSG_TEMP_CHANGE,
+            {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1), "fan": fan_label},
+        )
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE, DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_TEMP_CHANGE, DEFAULT_SIMPLE_NOTIFY_TEL_TEMP_CHANGE)):
