@@ -1471,6 +1471,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             sib_real_state = self.hass.states.get(sibling._climate_entity)
             if sib_real_state is None or sib_real_state.state not in ("off", "unknown", "unavailable"):
                 continue
+            if not sibling._switch_state(SWITCH_KEY_MASTER, True):
+                continue  # sibling disabilitato — non può mai accendersi, non gli cedo il turno
+            if not sibling._switch_state(SWITCH_KEY_FV, True):
+                continue  # sibling con FV disattivato — non si accenderà mai da FV, non gli cedo il turno
             if sibling._simple_is_in_limbo() or sibling._is_manual_off_block_active():
                 continue
             sib_temp = sibling._simple_read_temp()
