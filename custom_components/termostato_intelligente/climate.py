@@ -383,6 +383,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
         self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
         self._last_sent_fan: str | None = None  # ultima velocità ventola che ABBIAMO inviato noi — stesso principio del setpoint, evita comandi/beep ripetuti
+        self._runtime_target_day_override: float | None = None  # target giorno regolato dalla card — ha precedenza sulla configurazione, persistito ai riavvii
+        self._runtime_target_night_override: float | None = None  # target notte regolato dalla card
+        self._runtime_priority_override: float | None = None  # priorità FV regolata dalla card
         self._external_sensor_fallback_active: bool = False  # True se stiamo usando la sonda interna perché quella esterna è bloccata
         self._external_sensor_last_value: float | None = None  # ultimo valore letto dalla sonda esterna mentre era considerata viva — usato come controllo extra di ripristino
         self._pending_probe_notification: str | None = None  # evento fallback/ripristino sonda da notificare al prossimo ciclo asincrono ("triggered" o "recovered")
@@ -455,6 +458,22 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return self._simple_current_target()
         return self._target_temperature
 
+    def _is_unmanaged_real_mode(self) -> bool:
+        """True se il climatizzatore reale è in una modalità che questa
+        integrazione non gestisce attivamente (riscaldamento, sola
+        ventilazione, auto...) — impostata da fuori (telecomando, app
+        ufficiale, altra automazione), mai da noi, dato che dichiariamo
+        solo off/cool/dry come modalità supportate.
+
+        Fondamentale per evitare che la regolazione automatica (pensata
+        solo per raffreddamento/deumidificazione) applichi formule di
+        raffreddamento a un dispositivo che in realtà sta riscaldando.
+        """
+        state = self.hass.states.get(self._climate_entity)
+        if state is None:
+            return False
+        return state.state not in ("off", "cool", "dry", "unknown", "unavailable")
+
     @property
     def hvac_mode(self) -> HVACMode:
         state = self.hass.states.get(self._climate_entity)
@@ -462,6 +481,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return HVACMode.OFF
         if state.state == "dry":
             return HVACMode.DRY
+        # Nota: se il dispositivo reale è in una modalità non gestita
+        # (riscaldamento, ventilazione, auto...) continuiamo a riportare
+        # COOL a Home Assistant per vincolo tecnico (dichiariamo solo
+        # off/cool/dry come hvac_modes supportati) — ma _is_unmanaged_real_mode()
+        # impedisce alla logica di regolazione di agire in quel caso, vedi
+        # l'attributo diagnostico "modalita_esterna_non_gestita".
         return HVACMode.COOL
 
     @property
@@ -533,10 +558,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "fv_basso_da": self._fv_low_since.isoformat() if self._fv_low_since else None,
             "acceso_manualmente_da": self._manual_accension_since.isoformat() if self._manual_accension_since else None,
             "sonda_esterna_bloccata": self._external_sensor_fallback_active,
+            "modalita_esterna_non_gestita": self._is_unmanaged_real_mode(),
             "ultimo_evento_notifica": self._last_notify_event,
             # --- diagnostica specifica del modo Completo ---
             "modalita_configurazione": self._get_config_mode(),
-            "fv_priorita": float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY)),
+            "fv_priorita": self._effective_priority(),
+            "target_giorno_override": self._runtime_target_day_override,
+            "target_notte_override": self._runtime_target_night_override,
             "protezione_potenza_attiva": self._power_limit_off,
             "protezione_potenza_da": self._power_limit_off_at.isoformat() if self._power_limit_off_at else None,
             "emergenza_caldo_attiva": self._switch_state(SWITCH_KEY_EMERGENCY, False),
@@ -581,6 +609,24 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     )
                 except Exception as exc:
                     _LOGGER.warning("%s: errore ripristino acceso_manualmente_da: %s", self._attr_name, exc)
+
+        # Ripristina gli override di target e priorità regolati dalla card
+        # dopo un riavvio — altrimenti tornerebbero silenziosamente al
+        # valore configurato nel wizard, perdendo una regolazione che
+        # l'utente aveva fatto apposta dall'interfaccia.
+        if last_state:
+            try:
+                if last_state.attributes.get("target_giorno_override") is not None:
+                    self._runtime_target_day_override = float(last_state.attributes["target_giorno_override"])
+                if last_state.attributes.get("target_notte_override") is not None:
+                    self._runtime_target_night_override = float(last_state.attributes["target_notte_override"])
+                if last_state.attributes.get("fv_priorita") is not None:
+                    configured_default = float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+                    saved_priority = float(last_state.attributes["fv_priorita"])
+                    if saved_priority != configured_default:
+                        self._runtime_priority_override = saved_priority
+            except (TypeError, ValueError) as exc:
+                _LOGGER.warning("%s: errore ripristino override target/priorità: %s", self._attr_name, exc)
 
         # Recupera dry_end dall'ultimo stato salvato (RestoreEntity).
         # Se il clima era in DRY prima del riavvio, rischeduliamo il timer
@@ -931,6 +977,15 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             # climatizzare con la finestra aperta. La gestione finestra ha
             # la sua logica dedicata (notifica + eventuale spegnimento).
             return
+        if self._power_limit_off:
+            # Spento per superamento potenza contrattuale — non riaccendere
+            # da qui, nemmeno se le condizioni FV sarebbero favorevoli. La
+            # riaccensione dopo un blocco potenza è gestita ESCLUSIVAMENTE
+            # da _async_handle_power_limit (con isteresi, minuti di attesa
+            # e stagger tra istanze) — riaccendere subito dal ciclo FV
+            # vanificherebbe la protezione, rischiando di far risuperare
+            # la soglia pochi istanti dopo lo spegnimento di sicurezza.
+            return
         use_internal = self._should_use_internal_probe()
         temp = self._simple_read_temp()
         if temp is None:
@@ -1154,9 +1209,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         return night_end_dt <= now_local <= cutoff_dt
 
+    def _effective_priority(self) -> float:
+        """Priorità FV effettiva: quella regolata dalla card se presente, altrimenti quella configurata."""
+        if self._runtime_priority_override is not None:
+            return self._runtime_priority_override
+        return float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+
     def _simple_current_target(self) -> float:
         if self._simple_is_night():
+            if self._runtime_target_night_override is not None:
+                return self._runtime_target_night_override
             return float(get_conf(self.entry, CONF_SIMPLE_TARGET_NIGHT, DEFAULT_SIMPLE_TARGET_NIGHT))
+        if self._runtime_target_day_override is not None:
+            return self._runtime_target_day_override
         return float(get_conf(self.entry, CONF_SIMPLE_TARGET_DAY, DEFAULT_SIMPLE_TARGET_DAY))
 
     def _simple_is_quiet_night(self) -> bool:
@@ -1220,7 +1285,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_INT))
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
-        is_on = self.hvac_mode == HVACMode.COOL or current_mode == "dry"
+        is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
         # --- Spegnimento per target raggiunto ---
         if is_on:
@@ -1357,7 +1422,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
-        is_on = self.hvac_mode == HVACMode.COOL or current_mode == "dry"
+        is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
         # --- Spegnimento per target raggiunto ---
         if is_on:
@@ -1520,7 +1585,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # (clima spento, non in limbo, non bloccata manualmente, temperatura
         # sopra la sua soglia), le cedo il turno rimandando la mia accensione
         # al ciclo successivo.
-        my_priority = float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+        my_priority = self._effective_priority()
         for entry_data in self.hass.data.get(DOMAIN, {}).values():
             if not isinstance(entry_data, dict):
                 continue
@@ -1547,7 +1612,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if sib_use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
             if sib_temp < sib_target + sib_offset:
                 continue  # il sibling non è comunque pronto ad accendersi ora
-            sib_priority = float(get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+            sib_priority = sibling._effective_priority()
             if sib_priority < my_priority:
                 _LOGGER.debug("%s: [semplificato FV] cedo il turno a %s (priorità più alta)", self._attr_name, sibling._attr_name)
                 return
@@ -1951,7 +2016,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_THRESHOLD, DEFAULT_EMERGENCY_HEAT_THRESHOLD))
         real_state = self.hass.states.get(self._climate_entity)
         current_mode = real_state.state if real_state else "off"
-        is_on = self.hvac_mode == HVACMode.COOL or current_mode == "dry"
+        is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
         # Notifica accensione emergenza (una sola volta)
         if not self._emergency_notified:
@@ -2249,7 +2314,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         last_on = coord.get("last_fv_turn_on")
         if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
             return
-        my_priority = float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+        my_priority = self._effective_priority()
         for entry_data in self.hass.data.get(DOMAIN, {}).values():
             if not isinstance(entry_data, dict):
                 continue
@@ -2258,7 +2323,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 continue
             if not sibling._fv_basic_eligible(sibling.current_temperature, sibling._effective_target()):
                 continue
-            sib_priority = float(get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+            sib_priority = sibling._effective_priority()
             if sib_priority < my_priority:
                 return
         fv = self._read_float(self._fv_sensor) or 0
@@ -2339,14 +2404,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         last_off = coord.get("last_fv_shutoff")
         if last_off is not None and (now - last_off) < timedelta(minutes=stagger_min):
             return
-        my_priority = float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+        my_priority = self._effective_priority()
         for entry_data in self.hass.data.get(DOMAIN, {}).values():
             if not isinstance(entry_data, dict):
                 continue
             sibling = entry_data.get("climate")
             if sibling is None or sibling is self or sibling.hvac_mode == HVACMode.OFF:
                 continue
-            sib_priority = float(get_conf(sibling.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
+            sib_priority = sibling._effective_priority()
             if sib_priority > my_priority:
                 return
         _LOGGER.info(

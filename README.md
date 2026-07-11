@@ -39,6 +39,7 @@ Dopo l'installazione:
 - In stile badge, un valore booleano attivo mostra solo l'icona (l'etichetta resta disponibile come tooltip), per un ingombro minimo
 - **Si adatta da sola al modo di configurazione**: su un'istanza in modo Completo mostra protezione potenza ed emergenza caldo; su un'istanza Semplice/Semplice+FV mostra DRY, blocco riaccensione, FV — senza bisogno di configurazioni diverse per ciascuna
 - L'editor non si ridisegna ad ogni aggiornamento di stato in casa (bug corretto nelle prime versioni), quindi tendine e scroll restano stabili durante la configurazione
+- **Controlli diretti dalla card** (modo Semplice/Semplice+FV): icone per cambiare modalità (raffreddamento/deumidificatore/spento), ventola con icona a step cliccabile, target regolabile con frecce `−`/`+`, priorità FV regolabile allo stesso modo — tutto applicato immediatamente, senza ricaricare l'integrazione
 
 ---
 

@@ -125,7 +125,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v074"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v079"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -214,14 +214,61 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> None:
         )
 
 
+async def _async_register_services(hass: HomeAssistant) -> None:
+    """Registra i servizi custom usati dalla card diagnostica per regolare
+    target e priorità direttamente, senza ricaricare l'integrazione (che
+    interromperebbe timer DRY attivi, immunità in corso, ecc. — a
+    differenza di una normale modifica delle opzioni via wizard).
+    """
+
+    def _find_climate_entities(call):
+        entity_ids = call.data.get("entity_id", [])
+        if isinstance(entity_ids, str):
+            entity_ids = [entity_ids]
+        found = []
+        for entry_data in hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            climate_entity = entry_data.get("climate")
+            if climate_entity is not None and climate_entity.entity_id in entity_ids:
+                found.append(climate_entity)
+        return found
+
+    async def _handle_adjust_target(call) -> None:
+        delta = float(call.data.get("delta", 0))
+        for climate_entity in _find_climate_entities(call):
+            current = climate_entity._simple_current_target()
+            new_value = round(current + delta, 1)
+            if climate_entity._simple_is_night():
+                climate_entity._runtime_target_night_override = new_value
+            else:
+                climate_entity._runtime_target_day_override = new_value
+            climate_entity.async_write_ha_state()
+
+    async def _handle_adjust_priority(call) -> None:
+        delta = float(call.data.get("delta", 0))
+        for climate_entity in _find_climate_entities(call):
+            current = climate_entity._effective_priority()
+            new_value = max(1, round(current + delta))
+            climate_entity._runtime_priority_override = new_value
+            climate_entity.async_write_ha_state()
+
+    hass.services.async_register(DOMAIN, "adjust_target", _handle_adjust_target)
+    hass.services.async_register(DOMAIN, "adjust_priority", _handle_adjust_priority)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Configura una entry. NON chiama async_update_entry per evitare loop."""
     hass.data.setdefault(DOMAIN, {}).setdefault(entry.entry_id, {})
-    # Registra la card una sola volta, indipendentemente da quante istanze
-    # (termostati) sono configurate — evita registrazioni duplicate.
+    # Registra la card e i servizi una sola volta, indipendentemente da
+    # quante istanze (termostati) sono configurate — evita registrazioni
+    # duplicate.
     if not hass.data[DOMAIN].get("_frontend_card_registered"):
         hass.data[DOMAIN]["_frontend_card_registered"] = True
         await _async_register_frontend_card(hass)
+    if not hass.data[DOMAIN].get("_services_registered"):
+        hass.data[DOMAIN]["_services_registered"] = True
+        await _async_register_services(hass)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
