@@ -384,6 +384,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
         self._last_sent_fan: str | None = None  # ultima velocità ventola che ABBIAMO inviato noi — stesso principio del setpoint, evita comandi/beep ripetuti
         self._external_sensor_fallback_active: bool = False  # True se stiamo usando la sonda interna perché quella esterna è bloccata
+        self._external_sensor_last_value: float | None = None  # ultimo valore letto dalla sonda esterna mentre era considerata viva — usato come controllo extra di ripristino
+        self._pending_probe_notification: str | None = None  # evento fallback/ripristino sonda da notificare al prossimo ciclo asincrono ("triggered" o "recovered")
 
         # --- Sliding window FV shutoff ---
         self._fv_surplus_buffer: list[float] = []
@@ -432,6 +434,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     @property
     def current_temperature(self) -> float | None:
+        if self._get_config_mode() in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
+            # Deve sempre corrispondere a quello che le decisioni interne
+            # usano davvero (_simple_read_temp), fallback su sonda interna
+            # incluso — altrimenti il grafico/dashboard mostrerebbe un
+            # valore diverso da quello che ha realmente guidato accensioni
+            # e regolazioni, generando confusione (es. un'accensione che
+            # sembra scattare "prima del previsto" guardando lo storico).
+            return self._simple_read_temp()
         return self._read_float(self._temp_sensor)
 
     @property
@@ -856,6 +866,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._cancel_dry_timer("fallback_polling_dry_end_scaduto")
 
         use_internal = self._should_use_internal_probe()
+        if self._pending_probe_notification is not None:
+            event = self._pending_probe_notification
+            self._pending_probe_notification = None
+            if event == "triggered":
+                await self._async_simple_notify(f"📡 {self._attr_name}: sonda esterna bloccata, passo alla sonda interna del climatizzatore.")
+            elif event == "recovered":
+                await self._async_simple_notify(f"📡 {self._attr_name}: sonda esterna ripristinata, torno a usarla.")
         temp = self._simple_read_temp()
         if temp is None:
             return
@@ -960,10 +977,28 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         configurata ma risulta bloccata da troppo tempo — in quel caso si
         passa automaticamente alla sonda interna, e si torna alla esterna
         da sola non appena questa riprende ad aggiornarsi.
+
+        Controllo extra di sicurezza: anche quando il timestamp indica
+        "bloccata", se il valore GREZZO attuale della sonda esterna risulta
+        diverso dall'ultimo che avevamo registrato mentre era viva, la
+        consideriamo comunque tornata online — un segnale indipendente dal
+        timestamp, utile come rete di sicurezza in caso di sensori MQTT che
+        non aggiornano last_updated in modo affidabile a parità di valore.
         """
         if not self._temp_sensor:
             return True
         is_stale = self._external_sensor_is_stale()
+
+        if is_stale:
+            fresh_value = self._read_float(self._temp_sensor)
+            if fresh_value is not None and self._external_sensor_last_value is not None and fresh_value != self._external_sensor_last_value:
+                is_stale = False  # controllo extra: il valore è cambiato, la sonda è viva
+
+        if not is_stale:
+            fresh_value = self._read_float(self._temp_sensor)
+            if fresh_value is not None:
+                self._external_sensor_last_value = fresh_value
+
         if is_stale != self._external_sensor_fallback_active:
             self._external_sensor_fallback_active = is_stale
             if is_stale:
@@ -971,11 +1006,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     "%s: sonda esterna bloccata — passaggio automatico alla sonda interna del climatizzatore",
                     self._attr_name,
                 )
+                self._pending_probe_notification = "triggered"
             else:
                 _LOGGER.info(
                     "%s: sonda esterna ripristinata — torno a usarla normalmente",
                     self._attr_name,
                 )
+                self._pending_probe_notification = "recovered"
         return is_stale
 
     def _simple_read_temp(self) -> float | None:
@@ -1213,6 +1250,21 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not is_on:
             if self._is_manual_off_block_active():
                 _LOGGER.debug("%s: accensione (int) bloccata — spento manualmente di recente", self._attr_name)
+                return
+            if self._temp_sensor and self._external_sensor_fallback_active:
+                # La sonda esterna è configurata ma bloccata: la lettura
+                # "temp" qui è quella della sonda INTERNA del Gree, che può
+                # non corrispondere alla temperatura reale della stanza
+                # (posizione/calibrazione diverse). Decidere una NUOVA
+                # accensione su questo dato ha un costo concreto (consumo
+                # inutile se sbagliato) — meglio aspettare che la sonda
+                # esterna torni prima di accendere. La regolazione di un
+                # clima GIÀ acceso continua invece a usare il fallback
+                # normalmente, qui sotto.
+                _LOGGER.debug(
+                    "%s: accensione (int) sospesa — sonda esterna bloccata, non decido su dato incerto",
+                    self._attr_name,
+                )
                 return
             if temp >= target + turn_on_offset:
                 if dry_enabled:
