@@ -425,6 +425,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._fv_low_since: datetime | None = None             # da quando il surplus FV è insufficiente in modo continuativo (diagnostica)
         self._manual_accension_since: datetime | None = None  # da quando è stato acceso manualmente (non da FV né da notte) — usato per ignorare lo spegnimento FV per un periodo fisso
         self._last_notify_event: dict | None = None             # ultima notifica Telegram inviata (diagnostica)
+        self._notify_history: list = []                          # ultime 8 notifiche, per lo storico espandibile nella card
         self._dry_cancel_timer: callable | None = None       # cancel function async_track_point_in_time
         self._door_debounce_cancel = None                          # timer debounce porta
         self._fv_auto_on: bool = False                       # acceso automaticamente dal FV
@@ -562,6 +563,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "sonda_esterna_bloccata": self._external_sensor_fallback_active,
             "modalita_esterna_non_gestita": self._is_unmanaged_real_mode(),
             "ultimo_evento_notifica": self._last_notify_event,
+            "storico_notifiche": self._notify_history,
+            "sonda_esterna_entity_id": self._temp_sensor,
             # --- diagnostica specifica del modo Completo ---
             "modalita_configurazione": self._get_config_mode(),
             "fv_priorita": self._effective_priority(),
@@ -629,6 +632,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                         self._runtime_priority_override = saved_priority
             except (TypeError, ValueError) as exc:
                 _LOGGER.warning("%s: errore ripristino override target/priorità: %s", self._attr_name, exc)
+            try:
+                saved_history = last_state.attributes.get("storico_notifiche")
+                if isinstance(saved_history, list):
+                    self._notify_history = saved_history[:8]
+            except Exception as exc:
+                _LOGGER.warning("%s: errore ripristino storico notifiche: %s", self._attr_name, exc)
 
         # Recupera dry_end dall'ultimo stato salvato (RestoreEntity).
         # Se il clima era in DRY prima del riavvio, rischeduliamo il timer
@@ -1687,6 +1696,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "timestamp": dt_util.utcnow().isoformat(),
             "messaggio": message,
         }
+        self._notify_history.insert(0, self._last_notify_event)
+        self._notify_history = self._notify_history[:8]  # solo gli ultimi 8, per non far crescere lo stato all'infinito
 
     async def _async_handle_fv_shutoff_simple(self, temp: float, target: float) -> None:
         """Spegnimento e riaccensione FV per il modo semplificato.

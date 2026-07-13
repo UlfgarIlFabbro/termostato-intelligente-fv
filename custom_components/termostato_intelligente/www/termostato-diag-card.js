@@ -110,6 +110,9 @@ class TermostatoDiagCard extends HTMLElement {
     if (!config.entity) {
       throw new Error("Devi specificare un'entità climate");
     }
+    if (this._notifyHistoryExpanded === undefined) {
+      this._notifyHistoryExpanded = false; // sopravvive ai re-render, si azzera solo su riconfigurazione
+    }
     this._config = {
       title: "",
       color_by_state: true,
@@ -157,6 +160,18 @@ class TermostatoDiagCard extends HTMLElement {
     const fvPriorita = stateObj.attributes.fv_priorita;
     const isSimpleMode = ["semplificato", "semplificato_fv"].includes(stateObj.attributes.modalita_configurazione);
     const isSimpleFvMode = stateObj.attributes.modalita_configurazione === "semplificato_fv";
+
+    // Temperatura "stanza" (sonda esterna, se configurata) e "clima" (sonda
+    // interna del climatizzatore reale) mostrate separatamente — utile per
+    // capire a colpo d'occhio se le due letture divergono molto, o durante
+    // il fallback quando current_temperature mostra la sonda interna.
+    const roomSensorEntity = stateObj.attributes.sonda_esterna_entity_id;
+    const roomTempState = roomSensorEntity ? this._hass.states[roomSensorEntity] : null;
+    const roomTemp = roomTempState && !isNaN(parseFloat(roomTempState.state)) ? parseFloat(roomTempState.state) : null;
+    const realClimateEntity = stateObj.attributes.climatizzatore_reale;
+    const realClimateState = realClimateEntity ? this._hass.states[realClimateEntity] : null;
+    const climaTemp = realClimateState && realClimateState.attributes.current_temperature !== undefined
+      ? realClimateState.attributes.current_temperature : null;
 
     const showAttrs = this._config.show_attributes || [];
     const hideInactive = this._config.hide_inactive !== false; // default true
@@ -212,6 +227,31 @@ class TermostatoDiagCard extends HTMLElement {
         ? `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${items.join("")}</div>`
         : `<div style="margin-top:10px;">${items.join("")}</div>`;
       attrsHtml = items.length > 0 ? wrapper : "";
+    }
+
+    // Storico eventi — sempre in fondo, a piena larghezza, con l'ultimo
+    // evento sempre visibile e il resto espandibile con un tocco. Lo stato
+    // di espansione è salvato sull'istanza (non nella config), quindi
+    // sopravvive ai re-render continui della card senza richiudersi da solo.
+    const notifyHistory = Array.isArray(stateObj.attributes.storico_notifiche) ? stateObj.attributes.storico_notifiche : [];
+    let notifyHistoryHtml = "";
+    if (notifyHistory.length > 0) {
+      const latest = notifyHistory[0];
+      const latestTime = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
+      const olderRows = this._notifyHistoryExpanded
+        ? notifyHistory.slice(1).map((ev) => {
+            const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
+            return `<div style="font-size:11px;opacity:0.65;padding:3px 0;">${t} — ${ev.messaggio || ""}</div>`;
+          }).join("")
+        : "";
+      notifyHistoryHtml = `
+        <div style="border-top:0.5px solid rgba(128,128,128,0.25);padding-top:8px;margin-top:10px;">
+          <button data-toggle-notify-history="1" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:10px;border:none;text-align:left;cursor:pointer;">
+            <span style="font-size:12px;opacity:0.8;">🔔 ultimo evento: ${latestTime} — ${latest.messaggio || ""}</span>
+            <ha-icon icon="${this._notifyHistoryExpanded ? "mdi:chevron-up" : "mdi:chevron-down"}" style="--mdc-icon-size:14px;opacity:0.6;flex-shrink:0;margin-left:6px;"></ha-icon>
+          </button>
+          ${olderRows ? `<div style="padding:4px 10px;">${olderRows}</div>` : ""}
+        </div>`;
     }
 
     // Pulsanti modalità: cool (blu), dry (giallo quando attivo), off (grigio).
@@ -275,21 +315,22 @@ class TermostatoDiagCard extends HTMLElement {
     // Target con frecce — regola immediatamente (step di 1°), disponibile
     // solo nel modo Semplice/Semplice+FV (dove il target è sempre
     // ricalcolato da configurazione + eventuale regolazione da card).
+    const tempDisplay = temp !== undefined ? (Math.round(temp * 10) / 10) + "°" : "—";
     const targetControlHtml = isSimpleMode ? `
       <div style="display:flex;align-items:center;gap:10px;">
-        <button data-target-delta="-1" aria-label="Diminuisci target" title="Diminuisci target"
+        <button data-target-delta="-0.1" aria-label="Diminuisci target" title="Diminuisci target"
           style="width:34px;height:34px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
           <ha-icon icon="mdi:minus" style="--mdc-icon-size:18px;"></ha-icon>
         </button>
         <div style="text-align:center;min-width:44px;">
-          <div style="font-size:22px;font-weight:700;line-height:1;">${temp !== undefined ? temp + "°" : "—"}</div>
+          <div style="font-size:22px;font-weight:700;line-height:1;">${tempDisplay}</div>
           <div style="font-size:11px;opacity:0.7;margin-top:2px;">target</div>
         </div>
-        <button data-target-delta="1" aria-label="Aumenta target" title="Aumenta target"
+        <button data-target-delta="0.1" aria-label="Aumenta target" title="Aumenta target"
           style="width:34px;height:34px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
           <ha-icon icon="mdi:plus" style="--mdc-icon-size:18px;"></ha-icon>
         </button>
-      </div>` : `<div style="font-size:14px;opacity:0.85;">target ${temp !== undefined ? temp + "°" : "—"}</div>`;
+      </div>` : `<div style="font-size:14px;opacity:0.85;">target ${tempDisplay}</div>`;
 
     // Priorità con frecce — regola immediatamente (step di 1), solo nel
     // modo Semplice+FV dove la priorità ha un effetto reale.
@@ -318,15 +359,25 @@ class TermostatoDiagCard extends HTMLElement {
             <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">${title}</div>
             ${modeButtonsHtml}
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
-            <div>
-              <div style="font-size:34px;font-weight:700;line-height:1;">${curTemp !== undefined ? curTemp + "°" : "—"}</div>
-              <div style="font-size:11px;opacity:0.7;margin-top:2px;">rilevata</div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:14px;">
+            <div style="flex:1;">
+              <div style="font-size:11px;opacity:0.7;margin-bottom:4px;">temperatura rilevata</div>
+              <div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;">
+                <div style="flex:1;text-align:center;padding:6px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
+                  <div style="font-size:10px;opacity:0.6;">stanza</div>
+                  <div style="font-size:18px;font-weight:700;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
+                </div>
+                <div style="flex:1;text-align:center;padding:6px 4px;">
+                  <div style="font-size:10px;opacity:0.6;">clima</div>
+                  <div style="font-size:18px;font-weight:700;">${climaTemp !== null ? (Math.round(climaTemp * 10) / 10) + "°" : "—"}</div>
+                </div>
+              </div>
             </div>
             ${targetControlHtml}
           </div>
           ${priorityControlHtml}
           ${attrsHtml}
+          ${notifyHistoryHtml}
         </div>
       </ha-card>
     `;
@@ -399,6 +450,14 @@ class TermostatoDiagCard extends HTMLElement {
         }));
       });
     });
+
+    const notifyToggleBtn = this.querySelector("[data-toggle-notify-history]");
+    if (notifyToggleBtn) {
+      notifyToggleBtn.addEventListener("click", () => {
+        this._notifyHistoryExpanded = !this._notifyHistoryExpanded;
+        this._render(); // re-render immediato, non aspetta il prossimo aggiornamento hass
+      });
+    }
   }
 
   static getConfigElement() {
@@ -406,7 +465,9 @@ class TermostatoDiagCard extends HTMLElement {
   }
 
   static getStubConfig(hass) {
-    const climateEntities = Object.keys(hass.states).filter((e) => e.startsWith("climate."));
+    const climateEntities = Object.keys(hass.states).filter(
+      (e) => e.startsWith("climate.") && hass.states[e].attributes.modalita_configurazione !== undefined
+    );
     return {
       entity: climateEntities[0] || "",
       title: "",
@@ -448,7 +509,9 @@ class TermostatoDiagCardEditor extends HTMLElement {
     if (!this._hass) return;
     if (!this._config) return;
 
-    const climateEntities = Object.keys(this._hass.states).filter((e) => e.startsWith("climate."));
+    const climateEntities = Object.keys(this._hass.states).filter(
+      (e) => e.startsWith("climate.") && this._hass.states[e].attributes.modalita_configurazione !== undefined
+    );
     const currentEntity = this._config.entity || "";
 
     // Attributi realmente presenti sull'entità selezionata (se ne esistono di
