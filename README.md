@@ -100,11 +100,12 @@ Se configuri un sensore esterno, il termostato lo usa normalmente. Se questo sen
 
 | Temperatura stanza | Azione |
 |---|---|
-| > target +2°C | Ventola **alta**, setpoint = sonda interna -2°C |
-| > target +1.5°C | Ventola **media**, setpoint = sonda interna -2°C |
-| > target +0.3°C | Ventola **bassa**, setpoint = sonda interna -1°C |
-| ≤ target +0.3°C | Ventola **bassa**, setpoint = sonda interna (rallenta) |
-| ≤ target -0.3°C per 15 min | **Spegni** |
+| ≥ target +3.1°C | Ventola **alta**, setpoint = sonda interna -3°C |
+| ≥ target +1.7°C | Ventola **media**, setpoint = sonda interna -2°C |
+| ≥ target +0.7°C | Ventola **media** (giorno) / **bassa** (notte), setpoint = sonda interna -1°C |
+| ≥ target +0.1°C | Ventola **bassa**, setpoint = sonda interna -1°C |
+| = target | Ventola **bassa**, setpoint = sonda interna (invariato) |
+| < target per 15 min | **Spegni** |
 
 Il clima si **accende** quando la stanza supera `target + 0.8°C` (soglia configurabile).
 
@@ -114,11 +115,11 @@ Quando non è configurata una sonda esterna (o quando è in corso il fallback), 
 
 | Temperatura stanza | Azione |
 |---|---|
-| > target +3°C | Ventola **alta**, setpoint = interna -3°C |
-| > target +2°C | Ventola **media**, setpoint = interna -2°C |
-| > target +1°C | Ventola **bassa** (media di giorno) |
-| ≤ target +1°C | Ventola **bassa**, setpoint = interna |
-| ≤ target -1°C per 15 min | **Spegni** |
+| ≥ target +3°C | Ventola **alta**, setpoint = interna -3°C |
+| ≥ target +2°C | Ventola **media**, setpoint = interna -2°C |
+| ≥ target +1°C | Ventola **bassa** (notte) / **media** (giorno), setpoint = interna -1°C |
+| < target +1°C | Ventola **bassa**, setpoint = interna (invariato) |
+| < target per 15 min | **Spegni** |
 
 Il clima si **accende** quando la stanza supera `target + 1.0°C` (soglia configurabile). Di notte la ventola resta un gradino più bassa rispetto al giorno, per un funzionamento più silenzioso.
 

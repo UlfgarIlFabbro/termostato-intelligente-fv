@@ -501,6 +501,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         return {
             "finestra_aperta": self._is_window_open(),
             "porta_aperta": self._is_door_open(),
+            "finestra_entity_id": self._window_sensor,
+            "porta_entity_id": self._door_sensor,
             "snapshot_attivo": self._snapshot is not None,
             "presenza_da": self._presence_since.isoformat() if self._presence_since else None,
             "climatizzatore_reale": self._climate_entity,
@@ -686,8 +688,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 self._presence_since = None
         elif entity_id == self._climate_entity:
-            if new_state and new_state.state == "off":
-                # Spegnimento reale — cancel timer DRY e reset completo
+            if new_state and new_state.state == "off" and (old_state is None or old_state.state != "off"):
+                # Spegnimento reale — VERA transizione da uno stato acceso a
+                # off (non una ripubblicazione ridondante dello stesso "off",
+                # es. un heartbeat periodico del dispositivo Gree). Senza
+                # questo controllo, un Gree che ripubblica "off" mentre resta
+                # spento azzererebbe continuamente _power_limit_low_since,
+                # impedendo per sempre al timer di riaccensione di accumulare
+                # i minuti consecutivi configurati.
                 self._cancel_dry_timer("off_state_change")
                 self._fv_surplus_buffer = []
                 self._fv_low_since = None
@@ -2158,13 +2166,32 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._power_limit_low_since = None
 
     async def _async_power_limit_restore(self) -> None:
-        """Riaccende il clima dopo calo consumo."""
-        _LOGGER.info("%s: [power limit] riaccensione dopo calo consumo", self._attr_name)
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        """Sblocca il clima dopo calo consumo.
+
+        Controlla PRIMA se il dispositivo reale è già acceso (es. l'utente
+        lo ha riacceso manualmente nel frattempo) — in quel caso non manda
+        un comando ridondante né la notifica fuorviante "ho riacceso",
+        ma sblocca comunque lo stato interno: la condizione di potenza è
+        comunque rientrata, e lasciare il flag attivo bloccherebbe anche
+        il ciclo FV a tempo indeterminato senza motivo.
+        """
+        real_state = self.hass.states.get(self._climate_entity)
+        already_on = real_state is not None and real_state.state not in ("off", "unknown", "unavailable")
+
         self._power_limit_off = False
         self._power_limit_off_at = None
         self._power_limit_low_since = None
         self._power_limit_high_since = None
+
+        if already_on:
+            _LOGGER.info(
+                "%s: [power limit] consumo rientrato — già acceso (probabilmente dall'utente), nessun comando inviato",
+                self._attr_name,
+            )
+            return
+
+        _LOGGER.info("%s: [power limit] riaccensione dopo calo consumo", self._attr_name)
+        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         await self._async_power_limit_notify(is_on=True)
 
     async def _async_power_limit_notify(self, is_on: bool, consumo: float = 0) -> None:

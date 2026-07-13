@@ -20,8 +20,8 @@ const DEFAULT_COLOR = { bg: "rgba(255, 255, 255, 0.5)", border: "black", shadow:
 // Elenco completo attributi diagnostici conosciuti, con etichetta e icona.
 // type serve a formattare il valore: bool | timestamp | number | text | array | notify_event
 const KNOWN_ATTRIBUTES = [
-  { key: "finestra_aperta", label: "Finestra aperta", icon: "🪟", type: "bool" },
-  { key: "porta_aperta", label: "Porta aperta", icon: "🚪", type: "bool" },
+  { key: "finestra_aperta", label: "Finestra aperta", icon: "🪟", type: "bool", linkedEntityAttr: "finestra_entity_id" },
+  { key: "porta_aperta", label: "Porta aperta", icon: "🚪", type: "bool", linkedEntityAttr: "porta_entity_id" },
   { key: "modalita_notturna_attiva", label: "Modalità notturna attiva", icon: "🌙", type: "bool" },
   { key: "target_effettivo", label: "Target effettivo", icon: "🎯", type: "number", unit: "°C" },
   { key: "accensione_notturna_automatica", label: "Acceso automaticamente di notte", icon: "🌙⚡", type: "bool" },
@@ -184,6 +184,14 @@ class TermostatoDiagCard extends HTMLElement {
         const colorStyle =
           val.positive === true ? "color:#2e7d32;font-weight:600;" :
           val.positive === false ? "color:var(--secondary-text-color);" : "";
+        // Se l'attributo è collegato a un'entità reale (es. porta/finestra
+        // hanno il sensore configurato dietro), rendiamo l'elemento
+        // cliccabile per aprire il dialog informazioni nativo di Home
+        // Assistant su quel sensore specifico — utile per vedere lo
+        // storico, l'ultimo aggiornamento, ecc. senza dover cercare
+        // l'entità a parte.
+        const linkedEntity = def.linkedEntityAttr ? stateObj.attributes[def.linkedEntityAttr] : null;
+        const clickableAttr = linkedEntity ? ` data-more-info-entity="${linkedEntity}"` : "";
         if (this._config.display_style === "badges") {
           const bg = val.positive === true ? "rgba(46,125,50,0.15)" : "rgba(120,120,120,0.12)";
           // Booleano (mostrato solo se true, quindi l'icona basta da sola).
@@ -192,11 +200,11 @@ class TermostatoDiagCard extends HTMLElement {
           const content = def.type === "bool"
             ? `<span title="${def.label}">${def.icon}</span>`
             : `<span title="${def.label}">${def.icon}</span><span>${val.text}</span>`;
-          return `<span style="display:inline-flex;align-items:center;gap:4px;background:${bg};border-radius:12px;padding:4px 10px;margin:3px;font-size:12px;${colorStyle}">
+          return `<span${clickableAttr} style="display:inline-flex;align-items:center;gap:4px;background:${bg};border-radius:12px;padding:4px 10px;margin:3px;font-size:12px;${colorStyle}${linkedEntity ? "cursor:pointer;" : ""}">
             ${content}
           </span>`;
         }
-        return `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.15);">
+        return `<div${clickableAttr} style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.15);${linkedEntity ? "cursor:pointer;" : ""}">
           <span>${def.icon} ${def.label}</span><span style="${colorStyle}">${val.text}</span>
         </div>`;
       });
@@ -231,6 +239,17 @@ class TermostatoDiagCard extends HTMLElement {
         </span>`
       : "";
 
+    // Pulsante accensione/spegnimento: a differenza di cool/dry (colorati
+    // solo quando sono la modalità attiva), questo resta SEMPRE colorato —
+    // rosso quando il clima è spento, verde quando è acceso (in qualsiasi
+    // modalità, gestita o no) — per essere riconoscibile a colpo d'occhio
+    // senza dover distinguere le sfumature neutre di "non attivo".
+    const isReallyOff = stateObj.state === "off";
+    const powerBtn = `<button data-power-toggle="1" aria-label="${isReallyOff ? "Spento — tocca per accendere" : "Acceso — tocca per spegnere"}" title="${isReallyOff ? "Spento" : "Acceso"}"
+      style="width:30px;height:30px;border-radius:50%;border:none;background:${isReallyOff ? "#d9302e" : "#2e9c4f"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+      <ha-icon icon="mdi:power" style="--mdc-icon-size:16px;"></ha-icon>
+    </button>`;
+
     // Ventola: icona MDI che mostra già graficamente il livello (fan-speed-1/2/3).
     // Un tocco fa scorrere alla velocità successiva (bassa→media→alta→bassa).
     const fanIcons = { low: "mdi:fan-speed-1", medium: "mdi:fan-speed-2", high: "mdi:fan-speed-3" };
@@ -249,7 +268,7 @@ class TermostatoDiagCard extends HTMLElement {
       ${unmanagedBadge}
       ${modeBtn("cool", "mdi:snowflake", "Raffreddamento", "#2e6fd9", "#fff")}
       ${modeBtn("dry", "mdi:water", "Deumidificatore", "#f0b400", "#4a3800")}
-      ${modeBtn("off", "mdi:power", "Spegni", "var(--card-background-color, #fff)", "var(--secondary-text-color)")}
+      ${powerBtn}
       ${fanBtn}
     </div>`;
 
@@ -331,6 +350,16 @@ class TermostatoDiagCard extends HTMLElement {
       });
     });
 
+    const powerToggleBtn = this.querySelector("[data-power-toggle]");
+    if (powerToggleBtn) {
+      powerToggleBtn.addEventListener("click", () => {
+        // Vero toggle: se è spento accende (in raffreddamento, la modalità
+        // di default), se è acceso (in qualunque modalità) spegne.
+        const nextMode = stateObj.state === "off" ? "cool" : "off";
+        this._callService("climate", "set_hvac_mode", { entity_id: entityId, hvac_mode: nextMode });
+      });
+    }
+
     const fanCycleBtn = this.querySelector("[data-fan-cycle]");
     if (fanCycleBtn) {
       fanCycleBtn.addEventListener("click", () => {
@@ -353,6 +382,21 @@ class TermostatoDiagCard extends HTMLElement {
       btn.addEventListener("click", () => {
         const delta = parseFloat(btn.getAttribute("data-priority-delta"));
         this._callService("termostato_intelligente", "adjust_priority", { entity_id: entityId, delta });
+      });
+    });
+
+    // Righe/badge con un'entità collegata (porta, finestra) — al click
+    // apriamo il dialog informazioni nativo di Home Assistant su quella
+    // entità specifica, usando l'evento standard che tutte le card native
+    // e custom usano per questo scopo.
+    this.querySelectorAll("[data-more-info-entity]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const targetEntityId = el.getAttribute("data-more-info-entity");
+        this.dispatchEvent(new CustomEvent("hass-more-info", {
+          detail: { entityId: targetEntityId },
+          bubbles: true,
+          composed: true,
+        }));
       });
     });
   }
