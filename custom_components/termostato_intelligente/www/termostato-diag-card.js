@@ -44,13 +44,11 @@ const KNOWN_ATTRIBUTES = [
   { key: "acceso_manualmente_da", label: "Acceso manualmente da (immunità FV)", icon: "✋", type: "timestamp" },
   { key: "sonda_esterna_bloccata", label: "Sonda esterna bloccata (fallback su interna)", icon: "📡", type: "bool" },
   { key: "modalita_esterna_non_gestita", label: "Modalità non gestita (caldo/ventilatore/auto)", icon: "⚠️", type: "bool" },
-  { key: "ultimo_evento_notifica", label: "Ultimo evento notifica", icon: "🔔", type: "notify_event" },
   { key: "presenza_da", label: "Presenza rilevata da", icon: "🧍", type: "timestamp" },
   { key: "notte_sotto_target_da", label: "Sotto target notturno da", icon: "🌙", type: "timestamp" },
   { key: "snapshot_attivo", label: "Snapshot finestra attivo", icon: "📸", type: "bool" },
   { key: "climatizzatore_reale", label: "Entità climatizzatore reale", icon: "🔧", type: "text" },
   { key: "modalita_configurazione", label: "Modalità configurazione", icon: "⚙️", type: "mode_label" },
-  { key: "fv_priorita", label: "Priorità FV", icon: "🔢", type: "number" },
   { key: "protezione_potenza_attiva", label: "Protezione potenza attiva", icon: "⚡", type: "bool" },
   { key: "protezione_potenza_da", label: "Protezione potenza da", icon: "⚡", type: "timestamp" },
   { key: "emergenza_caldo_attiva", label: "Emergenza caldo attiva", icon: "🔥", type: "bool" },
@@ -173,7 +171,13 @@ class TermostatoDiagCard extends HTMLElement {
     const climaTemp = realClimateState && realClimateState.attributes.current_temperature !== undefined
       ? realClimateState.attributes.current_temperature : null;
 
-    const showAttrs = this._config.show_attributes || [];
+    // "ultimo_evento_notifica" e "fv_priorita" hanno ora un controllo
+    // dedicato (storico espandibile in fondo, e frecce +/- per la
+    // priorità) — li escludiamo sempre dalla lista generica, anche se
+    // presenti in una configurazione salvata prima di questo cambiamento,
+    // per non mostrarli duplicati senza che l'utente debba deselezionarli.
+    const PROMOTED_TO_DEDICATED_WIDGET = ["ultimo_evento_notifica", "fv_priorita"];
+    const showAttrs = (this._config.show_attributes || []).filter((k) => !PROMOTED_TO_DEDICATED_WIDGET.includes(k));
     const hideInactive = this._config.hide_inactive !== false; // default true
     let attrsHtml = "";
     if (showAttrs.length > 0) {
@@ -519,7 +523,7 @@ class TermostatoDiagCardEditor extends HTMLElement {
     let availableAttrs = KNOWN_ATTRIBUTES.map((a) => a.key);
     if (currentEntity && this._hass.states[currentEntity]) {
       const realAttrs = Object.keys(this._hass.states[currentEntity].attributes).filter(
-        (k) => !["friendly_name", "hvac_modes", "min_temp", "max_temp", "fan_modes", "temperature", "current_temperature", "fan_mode", "supported_features", "hvac_action"].includes(k)
+        (k) => !["friendly_name", "hvac_modes", "min_temp", "max_temp", "fan_modes", "temperature", "current_temperature", "fan_mode", "supported_features", "hvac_action", "ultimo_evento_notifica", "fv_priorita"].includes(k)
       );
       availableAttrs = Array.from(new Set([...availableAttrs.filter((k) => realAttrs.includes(k)), ...realAttrs]));
     }
