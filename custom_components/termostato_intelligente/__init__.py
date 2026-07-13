@@ -125,7 +125,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v0714"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v0715"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -194,17 +194,26 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> None:
 
         target_url = f"{_FRONTEND_URL_PATH}?v={_FRONTEND_VERSION_TAG}"
         existing_items = resources.async_items()
-        match = next((item for item in existing_items if _FRONTEND_URL_PATH in item.get("url", "")), None)
+        matches = [item for item in existing_items if _FRONTEND_URL_PATH in item.get("url", "")]
 
-        if match is None:
+        if not matches:
             await resources.async_create_item({"res_type": "module", "url": target_url})
             _LOGGER.info("Risorsa frontend per la card diagnostica registrata automaticamente: %s", target_url)
-        elif match.get("url") != target_url:
-            # Versione precedente presente — aggiorniamo così anche dopo un
-            # aggiornamento dell'integrazione la card resta al passo senza
-            # dover intervenire manualmente sulla risorsa esistente.
-            await resources.async_update_item(match["id"], {"res_type": "module", "url": target_url})
+            return
+
+        # Teniamo la PRIMA voce trovata (aggiornata se serve) ed eliminiamo
+        # eventuali duplicati — può capitare che una versione precedente di
+        # questa funzione, letta prima che lo storage risorse fosse
+        # completamente caricato all'avvio, non trovasse la voce esistente e
+        # ne creasse una seconda invece di aggiornarla. Questa pulizia si
+        # auto-risana anche per chi ha già accumulato duplicati.
+        keep = matches[0]
+        if keep.get("url") != target_url:
+            await resources.async_update_item(keep["id"], {"res_type": "module", "url": target_url})
             _LOGGER.info("Risorsa frontend per la card diagnostica aggiornata alla nuova versione: %s", target_url)
+        for duplicate in matches[1:]:
+            await resources.async_delete_item(duplicate["id"])
+            _LOGGER.info("Rimossa risorsa frontend duplicata: %s", duplicate.get("url"))
     except Exception as exc:
         _LOGGER.warning(
             "Impossibile registrare/aggiornare automaticamente la risorsa frontend — "
