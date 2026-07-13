@@ -44,11 +44,13 @@ const KNOWN_ATTRIBUTES = [
   { key: "acceso_manualmente_da", label: "Acceso manualmente da (immunità FV)", icon: "✋", type: "timestamp" },
   { key: "sonda_esterna_bloccata", label: "Sonda esterna bloccata (fallback su interna)", icon: "📡", type: "bool" },
   { key: "modalita_esterna_non_gestita", label: "Modalità non gestita (caldo/ventilatore/auto)", icon: "⚠️", type: "bool" },
+  { key: "ultimo_evento_notifica", label: "Ultimo evento notifica (storico espandibile)", icon: "🔔", type: "notify_event", dedicatedWidget: true },
   { key: "presenza_da", label: "Presenza rilevata da", icon: "🧍", type: "timestamp" },
   { key: "notte_sotto_target_da", label: "Sotto target notturno da", icon: "🌙", type: "timestamp" },
   { key: "snapshot_attivo", label: "Snapshot finestra attivo", icon: "📸", type: "bool" },
   { key: "climatizzatore_reale", label: "Entità climatizzatore reale", icon: "🔧", type: "text" },
   { key: "modalita_configurazione", label: "Modalità configurazione", icon: "⚙️", type: "mode_label" },
+  { key: "fv_priorita", label: "Priorità FV (regolabile con frecce)", icon: "🔢", type: "number", dedicatedWidget: true },
   { key: "protezione_potenza_attiva", label: "Protezione potenza attiva", icon: "⚡", type: "bool" },
   { key: "protezione_potenza_da", label: "Protezione potenza da", icon: "⚡", type: "timestamp" },
   { key: "emergenza_caldo_attiva", label: "Emergenza caldo attiva", icon: "🔥", type: "bool" },
@@ -171,13 +173,12 @@ class TermostatoDiagCard extends HTMLElement {
     const climaTemp = realClimateState && realClimateState.attributes.current_temperature !== undefined
       ? realClimateState.attributes.current_temperature : null;
 
-    // "ultimo_evento_notifica" e "fv_priorita" hanno ora un controllo
-    // dedicato (storico espandibile in fondo, e frecce +/- per la
-    // priorità) — li escludiamo sempre dalla lista generica, anche se
-    // presenti in una configurazione salvata prima di questo cambiamento,
-    // per non mostrarli duplicati senza che l'utente debba deselezionarli.
-    const PROMOTED_TO_DEDICATED_WIDGET = ["ultimo_evento_notifica", "fv_priorita"];
-    const showAttrs = (this._config.show_attributes || []).filter((k) => !PROMOTED_TO_DEDICATED_WIDGET.includes(k));
+    // "ultimo_evento_notifica" e "fv_priorita" restano selezionabili come
+    // prima, ma invece di una riga generica ora controllano la visibilità
+    // dei rispettivi widget dedicati (storico espandibile, frecce +/-).
+    const showAttrs = this._config.show_attributes || [];
+    const showNotifyHistoryWidget = showAttrs.includes("ultimo_evento_notifica");
+    const showPriorityWidget = showAttrs.includes("fv_priorita");
     const hideInactive = this._config.hide_inactive !== false; // default true
     let attrsHtml = "";
     if (showAttrs.length > 0) {
@@ -189,6 +190,7 @@ class TermostatoDiagCard extends HTMLElement {
 
       const visibleKeys = showAttrs.filter((key) => {
         const def = findAttrDef(key);
+        if (def.dedicatedWidget) return false; // controlla solo il widget dedicato, niente riga generica
         const raw = stateObj.attributes[key];
         if (!hideInactive || !hasActiveState(def.type)) return true;
         if (def.type === "bool") return !!raw;
@@ -239,7 +241,7 @@ class TermostatoDiagCard extends HTMLElement {
     // sopravvive ai re-render continui della card senza richiudersi da solo.
     const notifyHistory = Array.isArray(stateObj.attributes.storico_notifiche) ? stateObj.attributes.storico_notifiche : [];
     let notifyHistoryHtml = "";
-    if (notifyHistory.length > 0) {
+    if (notifyHistory.length > 0 && showNotifyHistoryWidget) {
       const latest = notifyHistory[0];
       const latestTime = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
       const olderRows = this._notifyHistoryExpanded
@@ -338,7 +340,7 @@ class TermostatoDiagCard extends HTMLElement {
 
     // Priorità con frecce — regola immediatamente (step di 1), solo nel
     // modo Semplice+FV dove la priorità ha un effetto reale.
-    const priorityControlHtml = (isSimpleFvMode && fvPriorita !== undefined) ? `
+    const priorityControlHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
         <span style="font-size:12px;opacity:0.75;display:flex;align-items:center;gap:5px;">
           <ha-icon icon="mdi:flag" style="--mdc-icon-size:14px;"></ha-icon>priorità FV
@@ -523,7 +525,7 @@ class TermostatoDiagCardEditor extends HTMLElement {
     let availableAttrs = KNOWN_ATTRIBUTES.map((a) => a.key);
     if (currentEntity && this._hass.states[currentEntity]) {
       const realAttrs = Object.keys(this._hass.states[currentEntity].attributes).filter(
-        (k) => !["friendly_name", "hvac_modes", "min_temp", "max_temp", "fan_modes", "temperature", "current_temperature", "fan_mode", "supported_features", "hvac_action", "ultimo_evento_notifica", "fv_priorita"].includes(k)
+        (k) => !["friendly_name", "hvac_modes", "min_temp", "max_temp", "fan_modes", "temperature", "current_temperature", "fan_mode", "supported_features", "hvac_action"].includes(k)
       );
       availableAttrs = Array.from(new Set([...availableAttrs.filter((k) => realAttrs.includes(k)), ...realAttrs]));
     }
