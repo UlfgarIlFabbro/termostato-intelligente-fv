@@ -17,6 +17,17 @@ const STATE_COLORS = {
 };
 const DEFAULT_COLOR = { bg: "rgba(255, 255, 255, 0.5)", border: "black", shadow: "rgba(255, 255, 255, 0.3)" };
 
+function applyOpacity(rgbaString, opacity) {
+  // Sostituisce solo il valore alpha di una stringa rgba() esistente,
+  // mantenendo invariati i valori R/G/B — usato per rendere lo sfondo
+  // della card più o meno trasparente in base alla configurazione.
+  const match = rgbaString.match(/rgba?\(([^)]+)\)/);
+  if (!match) return rgbaString;
+  const parts = match[1].split(",").map((s) => s.trim());
+  const [r, g, b] = parts;
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 // Elenco completo attributi diagnostici conosciuti, con etichetta e icona.
 // type serve a formattare il valore: bool | timestamp | number | text | array | notify_event
 const KNOWN_ATTRIBUTES = [
@@ -150,9 +161,13 @@ class TermostatoDiagCard extends HTMLElement {
     const colors = this._config.color_by_state ? (unmanagedMode ? UNMANAGED_COLOR : (STATE_COLORS[stateKey] || DEFAULT_COLOR)) : null;
     const title = this._config.title || stateObj.attributes.friendly_name || this._config.entity;
 
+    // Trasparenza dello sfondo, regolabile dalla configurazione della card
+    // (0.1 = quasi trasparente, 1 = colore pieno) — si applica sia allo
+    // sfondo colorato per stato che a quello neutro quando il clima è spento.
+    const bgOpacity = this._config.background_opacity !== undefined ? this._config.background_opacity : 0.5;
     const cardStyle = colors
-      ? `background-color:${colors.bg};border:2px solid ${colors.border};box-shadow:0 2px 30px ${colors.shadow};border-radius:18px;padding:12px;`
-      : `border-radius:18px;padding:12px;`;
+      ? `background-color:${applyOpacity(colors.bg, bgOpacity)};border:2px solid ${colors.border};box-shadow:0 2px 30px ${colors.shadow};border-radius:var(--ha-card-border-radius, 12px);padding:12px;`
+      : `border-radius:var(--ha-card-border-radius, 12px);padding:12px;`;
 
     const temp = stateObj.attributes.temperature;
     const curTemp = stateObj.attributes.current_temperature;
@@ -274,14 +289,14 @@ class TermostatoDiagCard extends HTMLElement {
       const color = active ? activeColor : "var(--secondary-text-color)";
       const border = active ? "none" : "1px solid var(--divider-color, #ccc)";
       return `<button data-mode="${mode}" aria-label="${label}" title="${label}"
-        style="width:30px;height:30px;border-radius:50%;border:${border};background:${bg};color:${color};display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-        <ha-icon icon="${icon}" style="--mdc-icon-size:16px;"></ha-icon>
+        style="width:24px;height:24px;border-radius:50%;border:${border};background:${bg};color:${color};display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
+        <ha-icon icon="${icon}" style="--mdc-icon-size:13px;"></ha-icon>
       </button>`;
     };
     const unmanagedBadge = unmanagedMode
       ? `<span title="Modalità non gestita da questa integrazione (caldo/ventilazione/auto impostata da fuori)"
-          style="width:22px;height:22px;border-radius:50%;background:#f0b400;color:#4a3800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <ha-icon icon="mdi:alert" style="--mdc-icon-size:14px;"></ha-icon>
+          style="width:24px;height:24px;border-radius:50%;background:#f0b400;color:#4a3800;display:flex;align-items:center;justify-content:center;box-sizing:border-box;flex-shrink:0;">
+          <ha-icon icon="mdi:alert" style="--mdc-icon-size:13px;"></ha-icon>
         </span>`
       : "";
 
@@ -292,8 +307,8 @@ class TermostatoDiagCard extends HTMLElement {
     // senza dover distinguere le sfumature neutre di "non attivo".
     const isReallyOff = stateObj.state === "off";
     const powerBtn = `<button data-power-toggle="1" aria-label="${isReallyOff ? "Spento — tocca per accendere" : "Acceso — tocca per spegnere"}" title="${isReallyOff ? "Spento" : "Acceso"}"
-      style="width:30px;height:30px;border-radius:50%;border:none;background:${isReallyOff ? "#d9302e" : "#2e9c4f"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-      <ha-icon icon="mdi:power" style="--mdc-icon-size:16px;"></ha-icon>
+      style="width:24px;height:24px;border-radius:50%;border:none;background:${isReallyOff ? "#d9302e" : "#2e9c4f"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
+      <ha-icon icon="mdi:power" style="--mdc-icon-size:13px;"></ha-icon>
     </button>`;
 
     // Ventola: icona MDI che mostra già graficamente il livello (fan-speed-1/2/3).
@@ -306,11 +321,11 @@ class TermostatoDiagCard extends HTMLElement {
     // realtà sta semplicemente regolando la ventola da solo.
     const fanIcon = fanIcons[fanMode] || (stateObj.state === "off" ? "mdi:fan-off" : "mdi:fan");
     const fanBtn = `<button data-fan-cycle="1" aria-label="Ventola ${fanMode || "—"}, tocca per cambiare" title="Ventola ${fanMode || "—"}"
-      style="height:30px;border-radius:15px;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;padding:0 8px;cursor:pointer;margin-left:4px;flex-shrink:0;">
-      <ha-icon icon="${fanIcon}" style="--mdc-icon-size:18px;"></ha-icon>
+      style="height:24px;border-radius:12px;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;gap:3px;padding:0 7px;box-sizing:border-box;cursor:pointer;margin-left:2px;flex-shrink:0;">
+      <ha-icon icon="${fanIcon}" style="--mdc-icon-size:13px;"></ha-icon>
     </button>`;
 
-    const modeButtonsHtml = `<div style="display:flex;align-items:center;gap:6px;">
+    const modeButtonsHtml = `<div style="display:flex;align-items:center;gap:5px;height:24px;">
       ${unmanagedBadge}
       ${modeBtn("cool", "mdi:snowflake", "Raffreddamento", "#2e6fd9", "#fff")}
       ${modeBtn("dry", "mdi:water", "Deumidificatore", "#f0b400", "#4a3800")}
@@ -322,21 +337,26 @@ class TermostatoDiagCard extends HTMLElement {
     // solo nel modo Semplice/Semplice+FV (dove il target è sempre
     // ricalcolato da configurazione + eventuale regolazione da card).
     const tempDisplay = temp !== undefined ? (Math.round(temp * 10) / 10) + "°" : "—";
-    const targetControlHtml = isSimpleMode ? `
-      <div style="display:flex;align-items:center;gap:10px;">
-        <button data-target-delta="-0.1" aria-label="Diminuisci target" title="Diminuisci target"
-          style="width:34px;height:34px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-          <ha-icon icon="mdi:minus" style="--mdc-icon-size:18px;"></ha-icon>
-        </button>
-        <div style="text-align:center;min-width:44px;">
-          <div style="font-size:22px;font-weight:700;line-height:1;">${tempDisplay}</div>
-          <div style="font-size:11px;opacity:0.7;margin-top:2px;">target</div>
+    const targetCellHtml = isSimpleMode ? `
+      <div style="flex:1;text-align:center;padding:8px 4px;">
+        <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">target</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+          <button data-target-delta="-0.1" aria-label="Diminuisci target" title="Diminuisci target"
+            style="width:16px;height:16px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
+          </button>
+          <div style="font-size:18px;font-weight:700;line-height:1;min-width:40px;">${tempDisplay}</div>
+          <button data-target-delta="0.1" aria-label="Aumenta target" title="Aumenta target"
+            style="width:16px;height:16px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
+          </button>
         </div>
-        <button data-target-delta="0.1" aria-label="Aumenta target" title="Aumenta target"
-          style="width:34px;height:34px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-          <ha-icon icon="mdi:plus" style="--mdc-icon-size:18px;"></ha-icon>
-        </button>
-      </div>` : `<div style="font-size:14px;opacity:0.85;">target ${tempDisplay}</div>`;
+      </div>` : `
+      <div style="flex:1;text-align:center;padding:8px 4px;">
+        <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">target</div>
+        <div style="font-size:18px;font-weight:700;line-height:1;">${tempDisplay}</div>
+      </div>`;
+
 
     // Priorità con frecce — regola immediatamente (step di 1), solo nel
     // modo Semplice+FV dove la priorità ha un effetto reale.
@@ -359,27 +379,24 @@ class TermostatoDiagCard extends HTMLElement {
       </div>` : "";
 
     this.innerHTML = `
-      <ha-card>
+      <ha-card style="overflow:hidden;">
         <div style="${cardStyle}">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">${title}</div>
             ${modeButtonsHtml}
           </div>
-          <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:14px;">
-            <div style="flex:1;">
-              <div style="font-size:11px;opacity:0.7;margin-bottom:4px;">temperatura rilevata</div>
-              <div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;">
-                <div style="flex:1;text-align:center;padding:6px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
-                  <div style="font-size:10px;opacity:0.6;">stanza</div>
-                  <div style="font-size:18px;font-weight:700;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
-                </div>
-                <div style="flex:1;text-align:center;padding:6px 4px;">
-                  <div style="font-size:10px;opacity:0.6;">clima</div>
-                  <div style="font-size:18px;font-weight:700;">${climaTemp !== null ? (Math.round(climaTemp * 10) / 10) + "°" : "—"}</div>
-                </div>
+          <div style="margin-top:14px;">
+            <div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;">
+              <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
+                <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">stanza</div>
+                <div style="font-size:18px;font-weight:700;line-height:1;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
               </div>
+              <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
+                <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">clima</div>
+                <div style="font-size:18px;font-weight:700;line-height:1;">${climaTemp !== null ? (Math.round(climaTemp * 10) / 10) + "°" : "—"}</div>
+              </div>
+              ${targetCellHtml}
             </div>
-            ${targetControlHtml}
           </div>
           ${priorityControlHtml}
           ${attrsHtml}
@@ -491,8 +508,17 @@ class TermostatoDiagCard extends HTMLElement {
 
 class TermostatoDiagCardEditor extends HTMLElement {
   setConfig(config) {
+    const firstTime = !this._config;
     this._config = { title: "", color_by_state: true, display_style: "rows", show_attributes: [], ...config };
-    this._render();
+    // Ridisegniamo solo al primissimo caricamento. Le chiamate successive a
+    // setConfig arrivano dall'host di Home Assistant come "conferma" dopo
+    // ogni nostro _emitConfig — se ridisegnassimo sempre, un campo di testo
+    // come il titolo perderebbe il focus ad ogni singola lettera digitata
+    // (l'intero DOM viene ricostruito da innerHTML). I controlli che
+    // richiedono davvero un redraw (es. cambio entità, che cambia gli
+    // attributi disponibili nei checkbox) lo chiamano già esplicitamente
+    // nel proprio handler, subito sotto.
+    if (firstTime) this._render();
   }
 
   set hass(hass) {
@@ -570,6 +596,15 @@ class TermostatoDiagCardEditor extends HTMLElement {
         </div>
 
         <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:13px;margin-bottom:4px;color:var(--secondary-text-color);">
+            Trasparenza sfondo (<span id="opacity-value">${Math.round((this._config.background_opacity !== undefined ? this._config.background_opacity : 0.5) * 100)}%</span>)
+          </label>
+          <input id="opacity-slider" type="range" min="0.1" max="1" step="0.05"
+            value="${this._config.background_opacity !== undefined ? this._config.background_opacity : 0.5}"
+            style="width:100%;" />
+        </div>
+
+        <div style="margin-bottom:14px;">
           <label style="display:block;font-size:13px;margin-bottom:6px;color:var(--secondary-text-color);">Stile visualizzazione attributi</label>
           <div style="display:flex;gap:16px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
@@ -612,6 +647,14 @@ class TermostatoDiagCardEditor extends HTMLElement {
 
     this.querySelector("#color-toggle")?.addEventListener("change", (e) => {
       this._config = { ...this._config, color_by_state: e.target.checked };
+      this._emitConfig();
+    });
+
+    this.querySelector("#opacity-slider")?.addEventListener("input", (e) => {
+      const value = parseFloat(e.target.value);
+      this._config = { ...this._config, background_opacity: value };
+      const label = this.querySelector("#opacity-value");
+      if (label) label.textContent = `${Math.round(value * 100)}%`;
       this._emitConfig();
     });
 
