@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 
+import asyncio
 import logging
 import math
 from datetime import datetime, time as dt_time, timedelta
@@ -224,6 +225,16 @@ from .const import (
     CONF_SIMPLE_NO_REON_MANUAL_OFF,
     CONF_FV_SHUTOFF_TOTAL_MINUTES,
     DEFAULT_FV_SHUTOFF_TOTAL_MINUTES,
+    CONF_FV_TURN_ON_TOTAL_MINUTES,
+    DEFAULT_FV_TURN_ON_TOTAL_MINUTES,
+    CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED,
+    DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED,
+    CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN,
+    DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN,
+    CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS,
+    DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS,
+    CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM,
+    DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM,
     CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF,
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
@@ -423,6 +434,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._programmatic_off_until: datetime | None = None  # finestra di tolleranza per distinguere spegnimento nostro da manuale
         self._manual_off_since: datetime | None = None        # da quando è stato spento manualmente (se rilevato)
         self._fv_low_since: datetime | None = None             # da quando il surplus FV è insufficiente in modo continuativo (diagnostica)
+        self._fv_turnon_confirmed_since: datetime | None = None  # da quando le condizioni di accensione FV sono continuativamente favorevoli — evita riaccensioni troppo rapide dopo un proprio spegnimento
         self._manual_accension_since: datetime | None = None  # da quando è stato acceso manualmente (non da FV né da notte) — usato per ignorare lo spegnimento FV per un periodo fisso
         self._last_notify_event: dict | None = None             # ultima notifica Telegram inviata (diagnostica)
         self._notify_history: list = []                          # ultime 8 notifiche, per lo storico espandibile nella card
@@ -708,6 +720,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._cancel_dry_timer("off_state_change")
                 self._fv_surplus_buffer = []
                 self._fv_low_since = None
+                self._fv_turnon_confirmed_since = None
                 self._manual_accension_since = None
                 self._last_sent_setpoint = None
                 self._last_sent_setpoint_at = None
@@ -897,6 +910,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if night_now and bool(get_conf(self.entry, CONF_NIGHT_SHUTOFF_ENABLED, DEFAULT_NIGHT_SHUTOFF_ENABLED)):
             await self._async_handle_night_shutoff(temp, target)
 
+        await self._async_handle_fv_sensor_offline_shutoff()
+
         # Spegnimento a fine modalità notturna
         if night_just_ended:
             await self._async_handle_night_end_shutoff()
@@ -1017,6 +1032,89 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self._async_handle_fv_turn_on_simple(temp, target)
         if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
             await self._async_handle_fv_shutoff_simple(temp, target)
+        await self._async_handle_fv_sensor_offline_shutoff()
+
+    def _is_fv_sensor_offline(self, threshold_min: float) -> bool:
+        """True se il sensore di produzione FV è offline (letteralmente
+        unavailable/unknown) o non si aggiorna da almeno threshold_min
+        minuti — stesso principio già usato per la sonda di temperatura
+        (last_updated, non last_changed, per evitare falsi positivi con
+        valori stabili ma sensore comunque vivo).
+        """
+        if not self._fv_sensor:
+            return False
+        state = self.hass.states.get(self._fv_sensor)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return True
+        last_updated = state.last_updated
+        if last_updated is None:
+            return False
+        return (dt_util.utcnow() - last_updated) > timedelta(minutes=threshold_min)
+
+    async def _async_handle_fv_sensor_offline_shutoff(self) -> None:
+        """Spegne un clima acceso dal FV se il sensore di produzione va
+        offline per troppo tempo — senza quel dato non possiamo più sapere
+        se il sole c'è davvero, quindi lasciarlo acceso indefinitamente
+        rischierebbe uno spreco energetico silenzioso dalla rete.
+
+        Si applica SOLO ai climi accesi dal FV (mai a quelli accesi
+        manualmente — un'accensione manuale non dipende dal fotovoltaico,
+        spegnerla solo perché il sensore è muto non avrebbe senso).
+
+        Una notifica iniziale condivisa avvisa appena il problema viene
+        rilevato (pochi minuti), indipendentemente da quale stanza lo nota
+        per prima; lo spegnimento vero avviene poi singolarmente per ogni
+        istanza, dopo il proprio tempo configurato.
+        """
+        if not bool(get_conf(self.entry, CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED)):
+            return
+        if not self._fv_auto_on:
+            return  # solo climi accesi dal FV, mai quelli manuali
+        real_state = self.hass.states.get(self._climate_entity)
+        if real_state is None or real_state.state in ("off", "unknown", "unavailable"):
+            return  # già spento, nulla da fare
+
+        coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+
+        # Rilevamento immediato (2 minuti, giusto per escludere un singolo
+        # ciclo di polling saltato) — usato solo per la notifica di allerta.
+        if not self._is_fv_sensor_offline(threshold_min=2):
+            coord["fv_sensor_offline_notified"] = False  # il sensore è vivo, resettiamo per il prossimo eventuale episodio
+            return
+
+        notify_tts = bool(get_conf(self.entry, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS))
+        notify_telegram = bool(get_conf(self.entry, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM))
+
+        if not coord.get("fv_sensor_offline_notified"):
+            coord["fv_sensor_offline_notified"] = True
+            shutoff_min_for_msg = float(get_conf(self.entry, CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN))
+            alert_msg = (
+                f"📡 Sensore produzione fotovoltaica offline. Se non torna disponibile entro "
+                f"{shutoff_min_for_msg:.0f} minuti, i climatizzatori accesi dal fotovoltaico verranno spenti per sicurezza."
+            )
+            _LOGGER.warning("%s: sensore FV offline rilevato — notifica di allerta inviata", self._attr_name)
+            if notify_tts:
+                await self._async_simple_speak(alert_msg)
+            if notify_telegram:
+                await self._async_simple_notify(alert_msg)
+
+        # Spegnimento vero — dopo il tempo configurato PER QUESTA istanza
+        shutoff_min = float(get_conf(self.entry, CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN))
+        if not self._is_fv_sensor_offline(threshold_min=shutoff_min):
+            return  # non ancora scaduto il tempo configurato per questa stanza
+
+        _LOGGER.warning("%s: spegnimento — sensore FV offline da oltre %s minuti", self._attr_name, shutoff_min)
+        await self._async_turn_off_climate()
+        self._fv_surplus_buffer = []
+        self._fv_low_since = None
+        own_msg = (
+            f"⚠️ {self._attr_name}: climatizzatore spento — sensore produzione fotovoltaica "
+            f"offline da oltre {shutoff_min:.0f} minuti."
+        )
+        if notify_tts:
+            await self._async_simple_speak(own_msg)
+        if notify_telegram:
+            await self._async_simple_notify(own_msg)
 
     def _external_sensor_is_stale(self) -> bool:
         """True se la sonda esterna è configurata ma non si aggiorna da
@@ -1588,7 +1686,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 return  # Batteria sotto soglia — riprova al prossimo ciclo
 
         if not (fv > consumo + margin):
+            self._fv_turnon_confirmed_since = None  # condizione non soddisfatta, azzero il timer di conferma
             return  # FV insufficiente — riprova al prossimo ciclo
+
+        # Conferma temporale — stesso principio della riaccensione, per
+        # evitare che condizioni favorevoli solo momentanee (es. subito
+        # dopo che un'altra istanza si è spenta, liberando surplus) portino
+        # a un'accensione troppo rapida che potrebbe rivelarsi ingiustificata.
+        now_confirm = dt_util.utcnow()
+        if self._fv_turnon_confirmed_since is None:
+            self._fv_turnon_confirmed_since = now_confirm
+            return  # primo ciclo favorevole, aspettiamo la conferma
+        turn_on_total_minutes = float(get_conf(self.entry, CONF_FV_TURN_ON_TOTAL_MINUTES, DEFAULT_FV_TURN_ON_TOTAL_MINUTES))
+        if (now_confirm - self._fv_turnon_confirmed_since) < timedelta(minutes=turn_on_total_minutes):
+            return  # non ancora confermato abbastanza a lungo
 
         # Check stagger e priorità
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
@@ -1647,6 +1758,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._cancel_dry_timer("accensione_fv_cool_no_dry")
 
         coord["last_fv_turn_on"] = now
+        self._fv_turnon_confirmed_since = None
         self._fv_auto_on = True
         self._simple_night_auto_on = False
         soc_val = self._read_float(self._battery_sensor) or 0
@@ -1657,13 +1769,32 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     # ------------------------------------------------------------------
 
     async def _async_simple_speak(self, message: str) -> None:
-        """TTS per modo semplificato — silenzia di notte se configurato."""
+        """TTS per modo semplificato — silenzia di notte se configurato.
+
+        Distanziatore vocale: se un'altra istanza ha parlato negli ultimi
+        20 secondi, aspettiamo il tempo rimanente prima di parlare a nostra
+        volta, per evitare che due annunci si sovrappongano su Google Home
+        quando più stanze generano eventi quasi nello stesso momento (es.
+        porte multiple, o il nuovo controllo sensore FV offline).
+        """
         players = get_conf(self.entry, CONF_TTS_PLAYERS, [])
         if not players:
             return
         if self._simple_is_quiet_night() and bool(get_conf(self.entry, CONF_SIMPLE_QUIET_NIGHT_TTS, DEFAULT_SIMPLE_QUIET_NIGHT_TTS)):
             _LOGGER.debug("%s: [semplificato] TTS soppresso (notte)", self._attr_name)
             return
+
+        coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+        voice_gap = timedelta(seconds=20)
+        last_voice_at = coord.get("last_voice_notify_at")
+        now = dt_util.utcnow()
+        if last_voice_at is not None:
+            elapsed = now - last_voice_at
+            if elapsed < voice_gap:
+                wait_seconds = (voice_gap - elapsed).total_seconds()
+                _LOGGER.debug("%s: [semplificato] TTS in coda, attendo %.1fs per non sovrappormi", self._attr_name, wait_seconds)
+                await asyncio.sleep(wait_seconds)
+
         engine = get_conf(self.entry, CONF_TTS_ENGINE)
         if not engine:
             tts_states = self.hass.states.async_all("tts")
@@ -1675,6 +1806,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             {"entity_id": engine, "media_player_entity_id": players, "message": message, "cache": True},
             blocking=True,
         )
+        coord["last_voice_notify_at"] = dt_util.utcnow()
 
     async def _async_simple_notify(self, message: str, bypass_quiet: bool = False) -> None:
         """Notifica Telegram per modo semplificato — silenzia di notte se configurato."""
@@ -1735,24 +1867,48 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
             fv_ok = fv > consumo + margin and (soc is None or soc > soc_min)
             temp_ok = temp >= target + turn_on_offset
-            if fv_ok and temp_ok and not self._simple_is_in_limbo() and not self._is_manual_off_block_active():
-                dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
-                now = dt_util.utcnow()
-                if dry_enabled:
-                    _LOGGER.info("%s: [semplificato FV] riaccensione DRY dopo calo FV", self._attr_name)
-                    await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
-                    self._schedule_dry_timer("riaccensione_fv_dopo_calo")
-                else:
-                    _LOGGER.info("%s: [semplificato FV] riaccensione COOL dopo calo FV", self._attr_name)
-                    await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                    self._cancel_dry_timer("riaccensione_fv_cool_no_dry")
-                self._fv_surplus_buffer = []
-                self._fv_low_since = None
-                self._manual_accension_since = None
-                soc_val2 = self._read_float(self._battery_sensor) or 0
-                fv2 = self._read_float(self._fv_sensor) or 0
-                consumo2 = self._read_float(self._consumption_sensor) or 0
-                await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv2, consumo=consumo2, soc=soc_val2)
+            conditions_ok = fv_ok and temp_ok and not self._simple_is_in_limbo() and not self._is_manual_off_block_active()
+            now = dt_util.utcnow()
+
+            if not conditions_ok:
+                # Le condizioni non sono (più) favorevoli in questo ciclo —
+                # azzeriamo il timer di conferma, si riparte da zero la
+                # prossima volta che tornano favorevoli.
+                self._fv_turnon_confirmed_since = None
+                return
+
+            # Le condizioni sono favorevoli — verifichiamo che lo siano state
+            # in modo CONTINUATIVO per il tempo configurato prima di
+            # riaccendere davvero. Senza questa conferma, spegnersi per FV
+            # insufficiente riduce il consumo della casa, il che può far
+            # apparire il surplus improvvisamente sufficiente al ciclo
+            # successivo — un'oscillazione spegni/riaccendi in pochissimo
+            # tempo (visto in produzione: meno di un minuto tra i due).
+            if self._fv_turnon_confirmed_since is None:
+                self._fv_turnon_confirmed_since = now
+                return  # primo ciclo favorevole, aspettiamo la conferma
+            turn_on_total_minutes = float(get_conf(self.entry, CONF_FV_TURN_ON_TOTAL_MINUTES, DEFAULT_FV_TURN_ON_TOTAL_MINUTES))
+            if (now - self._fv_turnon_confirmed_since) < timedelta(minutes=turn_on_total_minutes):
+                return  # non ancora confermato abbastanza a lungo
+
+            dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+            if dry_enabled:
+                _LOGGER.info("%s: [semplificato FV] riaccensione DRY dopo calo FV (confermata %s min)", self._attr_name, turn_on_total_minutes)
+                await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                self._schedule_dry_timer("riaccensione_fv_dopo_calo")
+            else:
+                _LOGGER.info("%s: [semplificato FV] riaccensione COOL dopo calo FV (confermata %s min)", self._attr_name, turn_on_total_minutes)
+                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                self._cancel_dry_timer("riaccensione_fv_cool_no_dry")
+            self._fv_surplus_buffer = []
+            self._fv_low_since = None
+            self._manual_accension_since = None
+            self._fv_turnon_confirmed_since = None
+            soc_val2 = self._read_float(self._battery_sensor) or 0
+            fv2 = self._read_float(self._fv_sensor) or 0
+            consumo2 = self._read_float(self._consumption_sensor) or 0
+            await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv2, consumo=consumo2, soc=soc_val2)
+            return
             return
 
         if not is_on:
@@ -1844,6 +2000,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._fv_surplus_buffer = []
         self._fv_low_since = None
         self._manual_accension_since = None
+        self._own_fv_shutoff_at = now  # per impedire una riaccensione troppo rapida della STESSA istanza
         # NON resettiamo _fv_auto_on così la riaccensione sa che era il FV ad averlo acceso
         await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
 
@@ -2367,6 +2524,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         fv = self._read_float(self._fv_sensor) or 0
         await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         coord["last_fv_turn_on"] = dt_util.utcnow()
+        self._fv_auto_on = True
         await self._async_notify_power_event(
             reason=REASON_FV, is_on=True,
             extra={"fv": round(fv), "temp": round(temp, 1), "target": round(target, 1)},
@@ -2459,6 +2617,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self._async_turn_off_climate()
         coord["last_fv_shutoff"] = now
         self._fv_surplus_buffer = []
+        self._fv_auto_on = False
         await self._async_notify_power_event(
             reason=REASON_FV_SHUTOFF, is_on=False,
             extra={"fv": round(fv), "consumo": round(consumo)},
