@@ -29,6 +29,11 @@ CONF_FV_SHUTOFF_MANUAL_DELAY_MIN = "fv_shutoff_manual_delay_min"  # ritardo extr
 DEFAULT_FV_SHUTOFF_MANUAL_DELAY_MIN = 30  # minuti — consigliati almeno 30, minimo 10
 CONF_FV_SHUTOFF_DELAY_MIN = "fv_shutoff_delay_min"
 CONF_FV_SHUTOFF_TOTAL_MINUTES = "fv_shutoff_total_minutes"  # minuti totali di calo FV confermato prima di spegnere
+CONF_FV_TURN_ON_TOTAL_MINUTES = "fv_turn_on_total_minutes"  # minuti totali di surplus FV confermato prima di accendere
+CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED = "fv_sensor_offline_shutoff_enabled"  # spegni se il sensore FV va offline (solo climi accesi dal FV)
+CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN = "fv_sensor_offline_shutoff_min"  # minuti di sensore offline prima di spegnere
+CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS = "fv_sensor_offline_notify_tts"  # avviso vocale per questo evento
+CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM = "fv_sensor_offline_notify_telegram"  # avviso Telegram per questo evento
 CONF_FV_SHUTOFF_EXTRA_HOURS = "fv_shutoff_extra_hours"
 CONF_FV_SHUTOFF_THRESHOLD = "fv_shutoff_threshold"
 
@@ -198,6 +203,11 @@ DEFAULT_FV_STAGGER_MIN = 5
 DEFAULT_FV_SHUTOFF_ENABLED = False
 DEFAULT_FV_SHUTOFF_DELAY_MIN = 5
 DEFAULT_FV_SHUTOFF_TOTAL_MINUTES = 20  # minuti totali (4 campioni fissi → intervallo = totale/4)
+DEFAULT_FV_TURN_ON_TOTAL_MINUTES = 15  # minuti totali di conferma prima di accendere (4 campioni fissi)
+DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED = False  # disattivato di default — l'utente lo attiva consapevolmente
+DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN = 45  # minuti, stesso ordine di grandezza del fallback sonda temperatura
+DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS = True
+DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM = True
 DEFAULT_FV_SHUTOFF_EXTRA_HOURS = 1.0
 DEFAULT_FV_SHUTOFF_THRESHOLD = 0
 DEFAULT_PRESENCE_BOOST_MIN = 10

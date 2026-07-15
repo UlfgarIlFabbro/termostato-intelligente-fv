@@ -130,7 +130,17 @@ from .const import (
     CONF_FV_SENSOR,
     CONF_FV_SHUTOFF_DELAY_MIN,
     CONF_FV_SHUTOFF_TOTAL_MINUTES,
+    CONF_FV_TURN_ON_TOTAL_MINUTES,
+    CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED,
+    DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED,
+    CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN,
+    DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN,
+    CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS,
+    DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS,
+    CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM,
+    DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM,
     DEFAULT_FV_SHUTOFF_TOTAL_MINUTES,
+    DEFAULT_FV_TURN_ON_TOTAL_MINUTES,
     CONF_FV_SHUTOFF_ENABLED,
     CONF_FV_SHUTOFF_MANUAL,
     CONF_FV_SHUTOFF_MANUAL_DELAY_MIN,
@@ -324,6 +334,11 @@ def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str
         _f(vol.Optional, CONF_SIMPLE_NO_REON_MANUAL_OFF, defaults, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS, defaults, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=24, step=0.5, unit_of_measurement="ore", mode="box")),
         _f(vol.Optional, CONF_FV_SHUTOFF_TOTAL_MINUTES, defaults, DEFAULT_FV_SHUTOFF_TOTAL_MINUTES): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=60, step=1, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_FV_TURN_ON_TOTAL_MINUTES, defaults, DEFAULT_FV_TURN_ON_TOTAL_MINUTES): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=60, step=1, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED, defaults, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN, defaults, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=15, max=180, step=5, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM): selector.BooleanSelector(),
         _f(vol.Optional, CONF_FV_SHUTOFF_THRESHOLD, defaults, DEFAULT_FV_SHUTOFF_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=-5000, max=5000, step=50, unit_of_measurement="W", mode="box")),
     })
 
@@ -464,6 +479,10 @@ def _schema_energia(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_FV_SHUTOFF_DELAY_MIN, defaults, DEFAULT_FV_SHUTOFF_DELAY_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=1, max=60, step=1, unit_of_measurement="campioni", mode="box")),
         _f(vol.Optional, CONF_FV_SHUTOFF_THRESHOLD, defaults, DEFAULT_FV_SHUTOFF_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=-5000, max=5000, step=50, unit_of_measurement="W", mode="box")),
         _f(vol.Optional, CONF_FV_SHUTOFF_EXTRA_HOURS, defaults, DEFAULT_FV_SHUTOFF_EXTRA_HOURS): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=4, step=0.5, unit_of_measurement="h", mode="box")),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED, defaults, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN, defaults, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=15, max=180, step=5, unit_of_measurement="min", mode="box")),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM): selector.BooleanSelector(),
     })
 
 
