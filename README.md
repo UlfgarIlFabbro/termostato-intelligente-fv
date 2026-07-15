@@ -24,26 +24,52 @@ Sviluppata e mantenuta da [UlfgarIlFabbro](https://github.com/UlfgarIlFabbro).
 
 ---
 
-## 🃏 Card diagnostica
+## 🃏 Card diagnostica interattiva
 
-L'integrazione registra **automaticamente** una card Lovelace ("Termostato Diag Card") con editor grafico — nessun file da copiare, nessuna risorsa da aggiungere manualmente (la registrazione usa lo stesso meccanismo dell'interfaccia di Home Assistant, non un'iniezione diretta, per evitare problemi di caricamento).
+L'integrazione registra **automaticamente** una card Lovelace ("Termostato Diag Card") con editor grafico — nessun file da copiare, nessuna risorsa da aggiungere manualmente.
 
 Dopo l'installazione:
 1. Aggiungi una nuova card sulla dashboard
 2. Cerca **"Termostato Diag Card"**
-3. Scegli l'entità, il titolo, lo stile (righe o badge) e quali attributi diagnostici mostrare — tutto da interfaccia, senza scrivere YAML
+3. Scegli l'entità, il titolo, lo stile e quali attributi mostrare — tutto da interfaccia, senza scrivere YAML
 
-**Caratteristiche della card:**
-- Sfondo colorato in base allo stato del climatizzatore (blu per raffreddamento, azzurro per deumidificatore, ecc.), disattivabile
-- **Filtro "mostra solo attributi attivi"**: finestra chiusa, notte non attiva, DRY non in corso vengono nascosti automaticamente, mostrando solo ciò che è effettivamente rilevante in quel momento
-- In stile badge, un valore booleano attivo mostra solo l'icona (l'etichetta resta disponibile come tooltip), per un ingombro minimo
-- **Si adatta da sola al modo di configurazione**: su un'istanza in modo Completo mostra protezione potenza ed emergenza caldo; su un'istanza Semplice/Semplice+FV mostra DRY, blocco riaccensione, FV — senza bisogno di configurazioni diverse per ciascuna
-- L'editor non si ridisegna ad ogni aggiornamento di stato in casa (bug corretto nelle prime versioni), quindi tendine e scroll restano stabili durante la configurazione
-- **Controlli diretti dalla card** (modo Semplice/Semplice+FV): icone per cambiare modalità (raffreddamento/deumidificatore/spento), ventola con icona a step cliccabile, target regolabile con frecce `−`/`+`, priorità FV regolabile allo stesso modo — tutto applicato immediatamente, senza ricaricare l'integrazione
+### Con sonda di temperatura esterna configurata
+
+![Card con sonda esterna](docs/card-con-sonda.svg)
+
+### Senza sonda esterna (solo sonda interna del climatizzatore)
+
+Quando non è configurata una sonda esterna, la casella "stanza" scompare automaticamente — restano solo "clima" e "target":
+
+![Card senza sonda esterna](docs/card-senza-sonda.svg)
+
+### Controlli diretti dalla card (modo Semplice/Semplice+FV)
+
+Tutti i controlli agiscono **immediatamente**, senza ricaricare l'integrazione:
+
+| Controllo | Azione |
+|---|---|
+| ❄️ / 💧 / ⏻ (icone modalità) | Un tocco cambia subito raffreddamento / deumidificatore / spento sul climatizzatore reale |
+| ⏻ (accensione/spegnimento) | Sempre colorato — 🔴 rosso se spento, 🟢 verde se acceso — funziona come un vero interruttore |
+| Ventola (icona con numero) | Un tocco fa scorrere alla velocità successiva (bassa→media→alta→bassa); se il climatizzatore è in "auto" mostra un'icona neutra, mai "spenta" per non essere fuorviante |
+| Target (frecce `−`/`+`) | Regola di 0,1°C per tocco. Il valore è un override che ha precedenza sulla configurazione da wizard, persistito ai riavvii |
+| Priorità FV (frecce `−`/`+`, se abilitata) | Regola di 1 punto per tocco, stesso principio del target |
+| 🚪 Porta / 🪟 Finestra | Se il sensore è configurato, un tocco apre il dialog informazioni nativo di Home Assistant su quel sensore |
+| 🔔 Ultimo evento (se abilitato) | Sempre in fondo, a piena larghezza — un tocco espande le ultime 8 notifiche inviate |
+
+### Altre caratteristiche
+
+- Sfondo colorato in base allo stato del climatizzatore, con **trasparenza regolabile** da uno slider nella configurazione (si applica sia allo sfondo colorato che a quello neutro a clima spento)
+- Se il climatizzatore reale è in una modalità non gestita dall'integrazione (riscaldamento, ventilazione, auto — impostata da telecomando o altra automazione), la card lo segnala con un badge di avviso invece di mostrare uno stato fuorviante
+- **Filtro "mostra solo attributi attivi"**: finestra chiusa, notte non attiva, DRY non in corso vengono nascosti automaticamente
+- **Si adatta da sola al modo di configurazione**: un'istanza in modo Completo mostra protezione potenza ed emergenza caldo; una in modo Semplice/Semplice+FV mostra DRY, blocco riaccensione, FV
+- Nel selettore entità dell'editor compaiono solo i termostati creati da questa integrazione, non tutte le entità climate di Home Assistant
+- Editor senza bug di perdita del focus durante la digitazione
 
 ---
 
 ## 📦 Installazione
+
 
 ### Tramite HACS (consigliato)
 1. Apri HACS in Home Assistant
@@ -272,6 +298,8 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| **v0.8.0** | **Card diagnostica interattiva completa.** Controlli diretti dal dashboard: cambio modalità, ventola a step, target e priorità FV regolabili con frecce (0,1°C per tocco), click su porta/finestra per il dialog informazioni nativo, storico notifiche espandibile, trasparenza sfondo regolabile, temperatura mostrata separatamente per stanza e climatizzatore. Corretti diversi bug di visualizzazione (angoli sporgenti, editor che perdeva il focus durante la digitazione, icona ventola fuorviante in modalità auto, gestione delle modalità esterne non supportate come riscaldamento/ventilazione) |
+| v0.7.4 → v0.7.21 | Fix di sicurezza sulla protezione anti-blackout (il ciclo FV poteva riaccendere immediatamente un clima appena spento per esubero), fix del timer di riaccensione dopo blocco potenza, controllo "già acceso" prima di un ripristino automatico, pulizia automatica di risorse Lovelace duplicate |
 | **v0.7.4** | **Prima versione stabile.** Immunità configurabile per accensioni manuali con FV insufficiente (ignora completamente per un periodo fisso, non solo un ritardo), fallback automatico su sonda di temperatura bloccata con protezione dall'accensione su dato incerto, priorità FV realmente funzionante (anche a parità di valore, anche con stanze disabilitate), fix di comandi e notifiche duplicate per ritardo di sincronizzazione del climatizzatore, ventola inclusa nei messaggi, card diagnostica con filtro "solo attivi" e adattiva ai 3 modi |
 | v0.7.3-beta1 → beta49 | Sviluppo iterativo: fix del blocco riaccensione manuale (falsi positivi al riavvio, eventi off→off duplicati, race condition sullo spegnimento programmato), master switch rispettato ovunque, card diagnostica introdotta e perfezionata, priorità FV, attributi diagnostici sensibili al modo di configurazione |
 | v0.6.x | Protezione potenza contrattuale, switch emergenza caldo, riscrittura soglie termiche del modo semplificato |

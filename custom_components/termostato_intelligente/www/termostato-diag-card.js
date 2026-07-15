@@ -167,7 +167,7 @@ class TermostatoDiagCard extends HTMLElement {
     const bgOpacity = this._config.background_opacity !== undefined ? this._config.background_opacity : 0.5;
     const cardStyle = colors
       ? `background-color:${applyOpacity(colors.bg, bgOpacity)};border:2px solid ${colors.border};box-shadow:0 2px 30px ${colors.shadow};border-radius:var(--ha-card-border-radius, 12px);padding:12px;`
-      : `border-radius:var(--ha-card-border-radius, 12px);padding:12px;`;
+      : `background-color:var(--card-background-color, #fff);border-radius:var(--ha-card-border-radius, 12px);padding:12px;`;
 
     const temp = stateObj.attributes.temperature;
     const curTemp = stateObj.attributes.current_temperature;
@@ -379,7 +379,7 @@ class TermostatoDiagCard extends HTMLElement {
       </div>` : "";
 
     this.innerHTML = `
-      <ha-card style="overflow:hidden;">
+      <ha-card style="overflow:hidden;background:transparent;--ha-card-background:transparent;">
         <div style="${cardStyle}">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">${title}</div>
@@ -387,10 +387,11 @@ class TermostatoDiagCard extends HTMLElement {
           </div>
           <div style="margin-top:14px;">
             <div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;">
+              ${roomSensorEntity ? `
               <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">stanza</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
-              </div>
+              </div>` : ""}
               <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">clima</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${climaTemp !== null ? (Math.round(climaTemp * 10) / 10) + "°" : "—"}</div>
