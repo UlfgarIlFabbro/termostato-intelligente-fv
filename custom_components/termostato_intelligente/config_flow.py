@@ -19,6 +19,8 @@ from .const import (
     CONF_SIMPLE_DRY_MAX_MIN,
     CONF_SIMPLE_NO_AUTO_ON_NIGHT,
     CONF_SIMPLE_TURN_ON_OFFSET,
+    CONF_SIMPLE_SHUTOFF_MARGIN,
+    DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_NIGHT_END,
     CONF_SIMPLE_NIGHT_START,
     CONF_SIMPLE_SUNSET_ANTICIPATE_H,
@@ -299,15 +301,16 @@ def _schema_simple_entita(defaults: dict) -> vol.Schema:
 def _schema_simple_temperature(defaults: dict) -> vol.Schema:
     return vol.Schema({
         _f(vol.Required, CONF_SIMPLE_TARGET_DAY, defaults, DEFAULT_SIMPLE_TARGET_DAY): selector.NumberSelector(selector.NumberSelectorConfig(min=16, max=30, step=0.5, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_SIMPLE_TURN_ON_OFFSET, defaults, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT): selector.NumberSelector(selector.NumberSelectorConfig(min=0.3, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_SIMPLE_SHUTOFF_MARGIN, defaults, DEFAULT_SIMPLE_SHUTOFF_MARGIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=2.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_SIMPLE_DRY_ENABLED, defaults, DEFAULT_SIMPLE_DRY_ENABLED): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_SIMPLE_DRY_MAX_MIN, defaults, DEFAULT_SIMPLE_DRY_MAX_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="min", mode="box")),
         _f(vol.Required, CONF_SIMPLE_TARGET_NIGHT, defaults, DEFAULT_SIMPLE_TARGET_NIGHT): selector.NumberSelector(selector.NumberSelectorConfig(min=16, max=30, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Required, CONF_SIMPLE_NIGHT_START, defaults, DEFAULT_SIMPLE_NIGHT_START): selector.TimeSelector(),
         _f(vol.Required, CONF_SIMPLE_NIGHT_END, defaults, DEFAULT_SIMPLE_NIGHT_END): selector.TimeSelector(),
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_ENABLED, defaults, DEFAULT_NIGHT_END_SHUTOFF_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_AUTO_ONLY, defaults, DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NO_AUTO_ON_NIGHT, defaults, DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_TURN_ON_OFFSET, defaults, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT): selector.NumberSelector(selector.NumberSelectorConfig(min=0.3, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
-        _f(vol.Optional, CONF_SIMPLE_DRY_ENABLED, defaults, DEFAULT_SIMPLE_DRY_ENABLED): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_SIMPLE_DRY_MAX_MIN, defaults, DEFAULT_SIMPLE_DRY_MAX_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="min", mode="box")),
     })
 
 
@@ -337,8 +340,6 @@ def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str
         _f(vol.Optional, CONF_FV_TURN_ON_TOTAL_MINUTES, defaults, DEFAULT_FV_TURN_ON_TOTAL_MINUTES): selector.NumberSelector(selector.NumberSelectorConfig(min=5, max=60, step=1, unit_of_measurement="min", mode="box")),
         _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED, defaults, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_SHUTOFF_MIN, defaults, DEFAULT_FV_SENSOR_OFFLINE_SHUTOFF_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=15, max=180, step=5, unit_of_measurement="min", mode="box")),
-        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM): selector.BooleanSelector(),
         _f(vol.Optional, CONF_FV_SHUTOFF_THRESHOLD, defaults, DEFAULT_FV_SHUTOFF_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=-5000, max=5000, step=50, unit_of_measurement="W", mode="box")),
     })
 
@@ -358,6 +359,7 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_TTS, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_TTS): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS): selector.BooleanSelector(),
         # --- Telegram ---
         _f(vol.Optional, CONF_NOTIFY_TARGETS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="notify", multiple=True)),
         _f(vol.Optional, CONF_NOTIFY_CHAT_IDS, defaults): selector.TextSelector(),
@@ -371,6 +373,7 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_NOTIFY, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY): selector.BooleanSelector(),
+        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM): selector.BooleanSelector(),
     })
 
 

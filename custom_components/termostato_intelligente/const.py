@@ -416,6 +416,7 @@ CONF_SIMPLE_NO_AUTO_ON_NIGHT = "simple_no_auto_on_night"  # blocca accensione au
 CONF_SIMPLE_NO_REON_MANUAL_OFF = "simple_no_reon_manual_off"  # non riaccendere se spento manualmente
 CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS = "simple_no_reon_manual_off_hours"  # ore di blocco riaccensione
 CONF_SIMPLE_TURN_ON_OFFSET = "simple_turn_on_offset"  # soglia accensione configurabile
+CONF_SIMPLE_SHUTOFF_MARGIN = "simple_shutoff_margin"  # margine sotto il target prima di spegnere
 CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN = "simple_external_sensor_stale_min"  # dopo quanti minuti senza aggiornamenti considerare bloccata la sonda esterna
 DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN = 45  # minuti
 CONF_SIMPLE_DRY_ENABLED = "simple_dry_enabled"
@@ -425,6 +426,7 @@ DEFAULT_SIMPLE_NO_REON_MANUAL_OFF = False
 DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS = 2
 DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT = 0.8  # sonda esterna: accende da target + 0.8°C
 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT = 1.0  # sonda interna: accende da target + 1°C
+DEFAULT_SIMPLE_SHUTOFF_MARGIN = 0.2  # °C sotto il target prima di spegnere (arrotondato a 0/1 per la sonda interna)
 DEFAULT_SIMPLE_DRY_ENABLED = False
 DEFAULT_SIMPLE_DRY_MAX_MIN = 30
 

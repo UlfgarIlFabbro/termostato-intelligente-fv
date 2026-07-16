@@ -239,6 +239,8 @@ from .const import (
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF,
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
     CONF_SIMPLE_TURN_ON_OFFSET,
+    CONF_SIMPLE_SHUTOFF_MARGIN,
+    DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
     DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
     CONFIG_MODE_FULL,
@@ -1398,17 +1400,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
           temp < target          → ventola bassa, setpoint = internal per 15 min → spegne
         """
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_INT))
+        shutoff_margin_raw = float(get_conf(self.entry, CONF_SIMPLE_SHUTOFF_MARGIN, DEFAULT_SIMPLE_SHUTOFF_MARGIN))
+        shutoff_margin_int = self._round_setpoint(shutoff_margin_raw)  # la sonda interna legge solo interi: arrotondiamo con la stessa regola già usata per i setpoint (≤0.5 → 0, >0.5 → 1)
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
         is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
         # --- Spegnimento per target raggiunto ---
         if is_on:
-            if temp < target:
+            if temp <= target - shutoff_margin_int:
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_INT_SHUTOFF_MIN):
-                    _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f < target=%.0f)", self._attr_name, temp, target)
+                    _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f <= target-margine=%.0f)", self._attr_name, temp, target - shutoff_margin_int)
                     await self._async_turn_off_climate()
                     self._simple_shutoff_since = None
                     self._cancel_dry_timer("spegnimento_target_int")
@@ -1476,8 +1480,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             new_setpoint = internal_int - 1
             fan = "low" if is_night else "medium"
         else:
-            # temp = target o leggermente sopra — ventola bassa, setpoint = interna
-            new_setpoint = internal_int
+            # Sotto target+1: fascia unica fino al punto di spegnimento
+            # (target - margine) — stessa spinta costante, senza il vecchio
+            # salto indietro a "setpoint = interna" che rallentava proprio
+            # nell'ultimo tratto prima di raggiungere il target.
+            new_setpoint = internal_int - 1
             fan = "low"
 
         current_sp = real_state.attributes.get("temperature") if real_state else None
@@ -1535,17 +1542,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
           temp < target              → ventola bassa, setpoint = internal per 15 min → spegne
         """
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
+        shutoff_margin = float(get_conf(self.entry, CONF_SIMPLE_SHUTOFF_MARGIN, DEFAULT_SIMPLE_SHUTOFF_MARGIN))
         now = dt_util.utcnow()
         current_mode = real_state.state if real_state else "off"
         is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
         # --- Spegnimento per target raggiunto ---
         if is_on:
-            if temp < target:
+            if temp <= target - shutoff_margin:
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_EXT_SHUTOFF_MIN):
-                    _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f < target=%.1f)", self._attr_name, temp, target)
+                    _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f <= target-margine=%.1f)", self._attr_name, temp, target - shutoff_margin)
                     await self._async_turn_off_climate()
                     self._simple_shutoff_since = None
                     self._cancel_dry_timer("spegnimento_target_ext")
@@ -1595,12 +1603,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         elif temp >= target + 0.7:
             new_setpoint = internal_temp - 1.0
             fan = "low" if is_night else "medium"
-        elif temp >= target + 0.1:
-            new_setpoint = internal_temp - 1.0
-            fan = "low"
         else:
-            # temp = target — ventola bassa, setpoint = interna
-            new_setpoint = internal_temp
+            # Sotto target+0.7, fino al punto di spegnimento (target -
+            # margine): fascia unica con spinta costante — non c'è più il
+            # vecchio salto a "setpoint = interna" quando si raggiungeva
+            # esattamente il target, che rallentava proprio nell'ultimo
+            # tratto prima di stabilizzarsi.
+            new_setpoint = internal_temp - 1.0
             fan = "low"
 
         new_setpoint_r = self._round_setpoint(new_setpoint)

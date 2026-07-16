@@ -129,11 +129,10 @@ Se configuri un sensore esterno, il termostato lo usa normalmente. Se questo sen
 | ≥ target +3.1°C | Ventola **alta**, setpoint = sonda interna -3°C |
 | ≥ target +1.7°C | Ventola **media**, setpoint = sonda interna -2°C |
 | ≥ target +0.7°C | Ventola **media** (giorno) / **bassa** (notte), setpoint = sonda interna -1°C |
-| ≥ target +0.1°C | Ventola **bassa**, setpoint = sonda interna -1°C |
-| = target | Ventola **bassa**, setpoint = sonda interna (invariato) |
-| < target per 15 min | **Spegni** |
+| < target +0.7°C, fino al margine di spegnimento | Ventola **bassa**, setpoint = sonda interna -1°C |
+| ≤ target − margine di spegnimento per 15 min | **Spegni** |
 
-Il clima si **accende** quando la stanza supera `target + 0.8°C` (soglia configurabile).
+Il clima si **accende** quando la stanza supera `target + 0.8°C` (soglia configurabile) e si **spegne** quando scende sotto `target − margine` (margine configurabile, default 0.2°C). La spinta di raffreddamento resta costante fino al vero spegnimento, senza rallentare nell'ultimo tratto.
 
 #### Logica termica — con sonda interna (valori interi)
 
@@ -144,10 +143,10 @@ Quando non è configurata una sonda esterna (o quando è in corso il fallback), 
 | ≥ target +3°C | Ventola **alta**, setpoint = interna -3°C |
 | ≥ target +2°C | Ventola **media**, setpoint = interna -2°C |
 | ≥ target +1°C | Ventola **bassa** (notte) / **media** (giorno), setpoint = interna -1°C |
-| < target +1°C | Ventola **bassa**, setpoint = interna (invariato) |
-| < target per 15 min | **Spegni** |
+| < target +1°C, fino al margine di spegnimento | Ventola **bassa**, setpoint = interna -1°C |
+| ≤ target − margine di spegnimento per 15 min | **Spegni** |
 
-Il clima si **accende** quando la stanza supera `target + 1.0°C` (soglia configurabile). Di notte la ventola resta un gradino più bassa rispetto al giorno, per un funzionamento più silenzioso.
+Il clima si **accende** quando la stanza supera `target + 1.0°C` (soglia configurabile). Il margine di spegnimento, essendo la sonda interna limitata ai gradi interi, viene arrotondato automaticamente: 0.5°C o meno equivale a nessun margine (spegne appena raggiunto il target, come prima), oltre 0.5°C equivale a un grado intero di margine. Di notte la ventola resta un gradino più bassa rispetto al giorno, per un funzionamento più silenzioso.
 
 #### Deumidificatore intelligente (opzionale)
 
@@ -298,6 +297,7 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| **v0.8.5** | **Regolazione termica ottimizzata.** Eliminato il "salto indietro" del setpoint nella fascia finale (vicino al target), che rallentava proprio nell'ultimo tratto prima di raggiungerlo. Nuovo campo "Margine di spegnimento": la stanza resta vicina al target invece di spegnersi al primo istante sotto soglia. Anti-oscillazione FV (nuovo campo per l'accensione, simmetrico allo spegnimento), protezione sensore FV offline (con switch dedicato, minuti configurabili, notifiche separate), distanziatore notifiche vocali, riordino della configurazione |
 | **v0.8.0** | **Card diagnostica interattiva completa.** Controlli diretti dal dashboard: cambio modalità, ventola a step, target e priorità FV regolabili con frecce (0,1°C per tocco), click su porta/finestra per il dialog informazioni nativo, storico notifiche espandibile, trasparenza sfondo regolabile, temperatura mostrata separatamente per stanza e climatizzatore. Corretti diversi bug di visualizzazione (angoli sporgenti, editor che perdeva il focus durante la digitazione, icona ventola fuorviante in modalità auto, gestione delle modalità esterne non supportate come riscaldamento/ventilazione) |
 | v0.7.4 → v0.7.21 | Fix di sicurezza sulla protezione anti-blackout (il ciclo FV poteva riaccendere immediatamente un clima appena spento per esubero), fix del timer di riaccensione dopo blocco potenza, controllo "già acceso" prima di un ripristino automatico, pulizia automatica di risorse Lovelace duplicate |
 | **v0.7.4** | **Prima versione stabile.** Immunità configurabile per accensioni manuali con FV insufficiente (ignora completamente per un periodo fisso, non solo un ritardo), fallback automatico su sonda di temperatura bloccata con protezione dall'accensione su dato incerto, priorità FV realmente funzionante (anche a parità di valore, anche con stanze disabilitate), fix di comandi e notifiche duplicate per ritardo di sincronizzazione del climatizzatore, ventola inclusa nei messaggi, card diagnostica con filtro "solo attivi" e adattiva ai 3 modi |
