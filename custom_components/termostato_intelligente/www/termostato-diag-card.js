@@ -121,8 +121,8 @@ class TermostatoDiagCard extends HTMLElement {
     if (!config.entity) {
       throw new Error("Devi specificare un'entità climate");
     }
-    if (this._notifyHistoryExpanded === undefined) {
-      this._notifyHistoryExpanded = false; // sopravvive ai re-render, si azzera solo su riconfigurazione
+    if (this._notifyHistoryModalOpen === undefined) {
+      this._notifyHistoryModalOpen = false; // sopravvive ai re-render, si azzera solo su riconfigurazione
     }
     this._config = {
       title: "",
@@ -203,76 +203,103 @@ class TermostatoDiagCard extends HTMLElement {
       // sempre visibili.
       const hasActiveState = (type) => ["bool", "timestamp", "array", "notify_event"].includes(type);
 
-      const visibleKeys = showAttrs.filter((key) => {
-        const def = findAttrDef(key);
-        if (def.dedicatedWidget) return false; // controlla solo il widget dedicato, niente riga generica
-        const raw = stateObj.attributes[key];
-        if (!hideInactive || !hasActiveState(def.type)) return true;
-        if (def.type === "bool") return !!raw;
-        if (def.type === "array") return Array.isArray(raw) && raw.length > 0;
-        if (def.type === "notify_event") return !!(raw && raw.messaggio);
-        return raw !== null && raw !== undefined && raw !== ""; // timestamp
-      });
+      const visibleKeys = showAttrs.filter((key) => !findAttrDef(key).dedicatedWidget);
 
       const items = visibleKeys.map((key) => {
         const def = findAttrDef(key);
-        const val = formatValue(def, stateObj.attributes[key]);
+        const raw = stateObj.attributes[key];
+        const val = formatValue(def, raw);
         const colorStyle =
           val.positive === true ? "color:#2e7d32;font-weight:600;" :
           val.positive === false ? "color:var(--secondary-text-color);" : "";
-        // Se l'attributo è collegato a un'entità reale (es. porta/finestra
-        // hanno il sensore configurato dietro), rendiamo l'elemento
-        // cliccabile per aprire il dialog informazioni nativo di Home
-        // Assistant su quel sensore specifico — utile per vedere lo
-        // storico, l'ultimo aggiornamento, ecc. senza dover cercare
-        // l'entità a parte.
+
+        // "Inattivo" = attributi con hideInactive attivo che risultano
+        // false/vuoti in questo momento. Invece di OMETTERE la riga (che
+        // farebbe cambiare l'altezza della card — un problema quando più
+        // card della stessa integrazione sono affiancate sul dashboard e
+        // solo alcune hanno quell'attributo attivo), la manteniamo nel
+        // markup ma invisibile: lo spazio resta riservato, l'altezza
+        // della card è sempre la stessa indipendentemente da cosa è
+        // attivo in ciascuna istanza.
+        let isInactive = false;
+        if (hideInactive && hasActiveState(def.type)) {
+          if (def.type === "bool") isInactive = !raw;
+          else if (def.type === "array") isInactive = !(Array.isArray(raw) && raw.length > 0);
+          else if (def.type === "notify_event") isInactive = !(raw && raw.messaggio);
+          else isInactive = raw === null || raw === undefined || raw === "";
+        }
+        const visibilityStyle = isInactive ? "visibility:hidden;" : "";
+
         const linkedEntity = def.linkedEntityAttr ? stateObj.attributes[def.linkedEntityAttr] : null;
         const clickableAttr = linkedEntity ? ` data-more-info-entity="${linkedEntity}"` : "";
+        let html;
         if (this._config.display_style === "badges") {
           const bg = val.positive === true ? "rgba(46,125,50,0.15)" : "rgba(120,120,120,0.12)";
-          // Booleano (mostrato solo se true, quindi l'icona basta da sola).
-          // Per timestamp/eventi/array mostriamo anche il valore, che porta
-          // un'informazione reale (orario, testo messaggio, numeri).
           const content = def.type === "bool"
             ? `<span title="${def.label}">${def.icon}</span>`
             : `<span title="${def.label}">${def.icon}</span><span>${val.text}</span>`;
-          return `<span${clickableAttr} style="display:inline-flex;align-items:center;gap:4px;background:${bg};border-radius:12px;padding:4px 10px;margin:3px;font-size:12px;${colorStyle}${linkedEntity ? "cursor:pointer;" : ""}">
+          html = `<span${clickableAttr} style="display:inline-flex;align-items:center;gap:4px;background:${bg};border-radius:12px;padding:4px 10px;margin:3px;font-size:12px;${colorStyle}${visibilityStyle}${linkedEntity ? "cursor:pointer;" : ""}">
             ${content}
           </span>`;
-        }
-        return `<div${clickableAttr} style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.15);${linkedEntity ? "cursor:pointer;" : ""}">
+        } else {
+          html = `<div${clickableAttr} style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;border-bottom:1px solid rgba(128,128,128,0.15);${visibilityStyle}${linkedEntity ? "cursor:pointer;" : ""}">
           <span>${def.icon} ${def.label}</span><span style="${colorStyle}">${val.text}</span>
         </div>`;
+        }
+        return { html, isInactive };
       });
+      // Nello stile badge, le icone attive si compattano all'inizio (senza
+      // "buchi" tra loro) e quelle invisibili — che occupano comunque lo
+      // stesso spazio per mantenere l'altezza coerente tra card affiancate
+      // — vengono spostate in coda, dopo tutte le attive. .sort() è
+      // stabile, quindi l'ordine relativo tra elementi dello stesso tipo
+      // (attivo/inattivo) resta quello di configurazione originale.
+      const orderedItems = this._config.display_style === "badges"
+        ? [...items].sort((a, b) => (a.isInactive === b.isInactive) ? 0 : (a.isInactive ? 1 : -1))
+        : items;
+      const itemsHtml = orderedItems.map((it) => it.html);
       const wrapper = this._config.display_style === "badges"
-        ? `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${items.join("")}</div>`
-        : `<div style="margin-top:10px;">${items.join("")}</div>`;
+        ? `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${itemsHtml.join("")}</div>`
+        : `<div style="margin-top:10px;">${itemsHtml.join("")}</div>`;
       attrsHtml = items.length > 0 ? wrapper : "";
     }
 
     // Storico eventi — sempre in fondo, a piena larghezza, con l'ultimo
-    // evento sempre visibile e il resto espandibile con un tocco. Lo stato
-    // di espansione è salvato sull'istanza (non nella config), quindi
-    // sopravvive ai re-render continui della card senza richiudersi da solo.
+    // evento sempre visibile e un pulsante che apre lo storico completo
+    // in un popup separato (non espande la card in-flow, che cambierebbe
+    // altezza e disallineerebbe card affiancate sulla stessa dashboard).
     const notifyHistory = Array.isArray(stateObj.attributes.storico_notifiche) ? stateObj.attributes.storico_notifiche : [];
     let notifyHistoryHtml = "";
+    let notifyHistoryModalHtml = "";
     if (notifyHistory.length > 0 && showNotifyHistoryWidget) {
       const latest = notifyHistory[0];
       const latestTime = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
-      const olderRows = this._notifyHistoryExpanded
-        ? notifyHistory.slice(1).map((ev) => {
-            const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
-            return `<div style="font-size:11px;opacity:0.65;padding:3px 0;">${t} — ${ev.messaggio || ""}</div>`;
-          }).join("")
-        : "";
       notifyHistoryHtml = `
         <div style="border-top:0.5px solid rgba(128,128,128,0.25);padding-top:8px;margin-top:10px;">
-          <button data-toggle-notify-history="1" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:10px;border:none;text-align:left;cursor:pointer;">
+          <button data-open-notify-history="1" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:10px;border:none;text-align:left;cursor:pointer;">
             <span style="font-size:12px;opacity:0.8;">🔔 ultimo evento: ${latestTime} — ${latest.messaggio || ""}</span>
-            <ha-icon icon="${this._notifyHistoryExpanded ? "mdi:chevron-up" : "mdi:chevron-down"}" style="--mdc-icon-size:14px;opacity:0.6;flex-shrink:0;margin-left:6px;"></ha-icon>
+            <ha-icon icon="mdi:open-in-new" style="--mdc-icon-size:14px;opacity:0.6;flex-shrink:0;margin-left:6px;"></ha-icon>
           </button>
-          ${olderRows ? `<div style="padding:4px 10px;">${olderRows}</div>` : ""}
         </div>`;
+
+      if (this._notifyHistoryModalOpen) {
+        const allRows = notifyHistory.map((ev) => {
+          const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
+          return `<div style="font-size:13px;padding:6px 0;border-bottom:0.5px solid rgba(128,128,128,0.15);">${t} — ${ev.messaggio || ""}</div>`;
+        }).join("");
+        notifyHistoryModalHtml = `
+          <div data-notify-history-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+            <div style="background:var(--card-background-color, #fff);border-radius:12px;padding:16px;max-width:360px;width:100%;max-height:70vh;overflow-y:auto;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:14px;font-weight:700;">🔔 Storico notifiche</div>
+                <button data-close-notify-history="1" style="border:none;background:none;cursor:pointer;padding:4px;">
+                  <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
+                </button>
+              </div>
+              ${allRows}
+            </div>
+          </div>`;
+      }
     }
 
     // Pulsanti modalità: cool (blu), dry (giallo quando attivo), off (grigio).
@@ -404,6 +431,7 @@ class TermostatoDiagCard extends HTMLElement {
           ${notifyHistoryHtml}
         </div>
       </ha-card>
+      ${notifyHistoryModalHtml}
     `;
 
     this._attachControlListeners(stateObj);
@@ -475,11 +503,29 @@ class TermostatoDiagCard extends HTMLElement {
       });
     });
 
-    const notifyToggleBtn = this.querySelector("[data-toggle-notify-history]");
-    if (notifyToggleBtn) {
-      notifyToggleBtn.addEventListener("click", () => {
-        this._notifyHistoryExpanded = !this._notifyHistoryExpanded;
-        this._render(); // re-render immediato, non aspetta il prossimo aggiornamento hass
+    const notifyOpenBtn = this.querySelector("[data-open-notify-history]");
+    if (notifyOpenBtn) {
+      notifyOpenBtn.addEventListener("click", () => {
+        this._notifyHistoryModalOpen = true;
+        this._render();
+      });
+    }
+    const notifyCloseBtn = this.querySelector("[data-close-notify-history]");
+    if (notifyCloseBtn) {
+      notifyCloseBtn.addEventListener("click", () => {
+        this._notifyHistoryModalOpen = false;
+        this._render();
+      });
+    }
+    const notifyBackdrop = this.querySelector("[data-notify-history-backdrop]");
+    if (notifyBackdrop) {
+      // Chiude solo se si clicca esattamente sullo sfondo scuro, non sul
+      // pannello interno (altrimenti qualsiasi tocco dentro il popup lo chiuderebbe).
+      notifyBackdrop.addEventListener("click", (e) => {
+        if (e.target === notifyBackdrop) {
+          this._notifyHistoryModalOpen = false;
+          this._render();
+        }
       });
     }
   }

@@ -346,7 +346,9 @@
           "simple_notify_tel_night_start": "▶ Night mode starts",
           "simple_notify_tel_night_end": "▶ Night mode ends",
           "simple_quiet_night_notify": "▶ Silence Telegram during night hours",
-          "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar"
+          "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar",
+          "fv_sensor_offline_notify_tts": "Voice alert for FV sensor offline",
+          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline"
         },
         "data_description": {
           "tts_media_players": "Select Google Home or Nest speakers. Leave empty to disable voice.",
@@ -373,7 +375,9 @@
           "simple_notify_tel_night_start": "Telegram alerts at start of night mode.",
           "simple_notify_tel_night_end": "Telegram alerts at end of night mode.",
           "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours.",
-          "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached."
+          "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached.",
+          "fv_sensor_offline_notify_tts": "If enabled, alerts on Google Home when the solar production sensor goes offline and when an AC unit is turned off as a result.",
+          "fv_sensor_offline_notify_telegram": "If enabled, alerts on Telegram when the solar production sensor goes offline and when an AC unit is turned off as a result."
         }
       },
       "protezione_potenza": {
@@ -795,7 +799,9 @@
           "simple_notify_tel_night_start": "▶ Night mode starts",
           "simple_notify_tel_night_end": "▶ Night mode ends",
           "simple_quiet_night_notify": "▶ Silence Telegram during night hours",
-          "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar"
+          "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar",
+          "fv_sensor_offline_notify_tts": "Voice alert for FV sensor offline",
+          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline"
         },
         "data_description": {
           "tts_media_players": "Select Google Home or Nest speakers. Leave empty to disable voice.",
@@ -822,7 +828,9 @@
           "simple_notify_tel_night_start": "Telegram alerts at start of night mode.",
           "simple_notify_tel_night_end": "Telegram alerts at end of night mode.",
           "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours.",
-          "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached."
+          "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached.",
+          "fv_sensor_offline_notify_tts": "If enabled, alerts on Google Home when the solar production sensor goes offline and when an AC unit is turned off as a result.",
+          "fv_sensor_offline_notify_telegram": "If enabled, alerts on Telegram when the solar production sensor goes offline and when an AC unit is turned off as a result."
         }
       },
       "cambia_modalita": {
