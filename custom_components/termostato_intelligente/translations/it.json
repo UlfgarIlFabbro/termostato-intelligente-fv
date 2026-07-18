@@ -84,7 +84,14 @@
           "fv_shutoff_enabled": "▶ Spegnimento automatico quando il FV cala",
           "fv_shutoff_delay_min": "Campioni insufficienti consecutivi prima di spegnere",
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
-          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può spegnere"
+          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può spegnere",
+          "fv_shutoff_manual": "Spegni anche se acceso manualmente",
+          "simple_no_reon_manual_off": "Non accendere se spento manualmente",
+          "simple_no_reon_manual_off_hours": "Ore di blocco riaccensione dopo spegnimento manuale",
+          "fv_sensor_offline_shutoff_enabled": "Spegni se sensore FV offline",
+          "fv_sensor_offline_shutoff_min": "Minuti prima di spegnere se il sensore FV è offline",
+          "fv_sensor_offline_notify_tts": "Avviso vocale per sensore FV offline",
+          "fv_sensor_offline_notify_telegram": "Avviso Telegram per sensore FV offline"
         },
         "data_description": {
           "fv_sensor": "Watt prodotti dai pannelli in tempo reale. Esempio: sensor.somma_sensori_zcs_pannelli.",
@@ -99,7 +106,14 @@
           "fv_shutoff_enabled": "Se attivato: spegne il clima quando il surplus FV resta sotto soglia per N campioni consecutivi. Con più termostati spegne prima quello con priorità numerica più alta.",
           "fv_shutoff_delay_min": "Quanti campioni consecutivi (uno per ogni ciclo di aggiornamento generale) di surplus sotto soglia devono accumularsi prima di spegnere. Esempio: 5 campioni con ciclo di aggiornamento di 5 minuti = 25 minuti confermati. La finestra è scorrevole: un singolo valore alto non azzera tutto, ma fa slittare il buffer.",
           "fv_shutoff_threshold": "Il surplus (produzione - consumo) deve essere sotto questo valore in TUTTI gli ultimi N campioni per far scattare lo spegnimento. Valore 0 = spegne quando FV non copre il consumo. Valore positivo = spegne prima, quando il surplus scende sotto X Watt. Esempio: 500W → spegne quando stai producendo meno di 500W di surplus per N campioni consecutivi.",
-          "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00."
+          "fv_shutoff_extra_hours": "Ore extra dopo la fine fascia in cui può ancora spegnere. Esempio: fascia finisce alle 16:00, extra 1h → può spegnere fino alle 17:00.",
+          "fv_shutoff_manual": "Se attivo, lo spegnimento per calo FV si applica anche a un climatizzatore acceso manualmente, non solo a quelli accesi automaticamente dal fotovoltaico.",
+          "simple_no_reon_manual_off": "Se attivo, dopo uno spegnimento manuale il termostato non riaccende automaticamente il climatizzatore per il numero di ore configurato qui sotto.",
+          "simple_no_reon_manual_off_hours": "Per quante ore, dopo uno spegnimento manuale, il termostato evita di riaccendere automaticamente il climatizzatore.",
+          "fv_sensor_offline_shutoff_enabled": "Se attivo, un climatizzatore acceso dal fotovoltaico viene spento automaticamente quando il sensore di produzione FV smette di rispondere per troppo tempo — senza quel dato non possiamo più sapere se il sole c'è davvero. Si applica SOLO ai climatizzatori accesi dal fotovoltaico: un'accensione manuale non viene mai toccata. Di notte non ha alcun effetto, dato che l'accensione notturna non passa mai dal controllo fotovoltaico.",
+          "fv_sensor_offline_shutoff_min": "Dopo quanti minuti di sensore FV offline spegnere questo specifico climatizzatore. Una notifica di allerta parte comunque entro pochi minuti dal rilevamento, indipendentemente da questo valore.",
+          "fv_sensor_offline_notify_tts": "Avviso vocale (Google Home) quando il sensore FV va offline e quando questo climatizzatore viene spento di conseguenza.",
+          "fv_sensor_offline_notify_telegram": "Avviso Telegram quando il sensore FV va offline e quando questo climatizzatore viene spento di conseguenza."
         }
       },
       "modalita_notturna": {
@@ -557,7 +571,14 @@
           "fv_shutoff_enabled": "▶ Spegnimento automatico quando il FV cala",
           "fv_shutoff_delay_min": "Campioni insufficienti consecutivi prima di spegnere",
           "fv_shutoff_threshold": "Soglia surplus FV per lo spegnimento (W)",
-          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia per spegnimento"
+          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia per spegnimento",
+          "fv_shutoff_manual": "Spegni anche se acceso manualmente",
+          "simple_no_reon_manual_off": "Non accendere se spento manualmente",
+          "simple_no_reon_manual_off_hours": "Ore di blocco riaccensione dopo spegnimento manuale",
+          "fv_sensor_offline_shutoff_enabled": "Spegni se sensore FV offline",
+          "fv_sensor_offline_shutoff_min": "Minuti prima di spegnere se il sensore FV è offline",
+          "fv_sensor_offline_notify_tts": "Avviso vocale per sensore FV offline",
+          "fv_sensor_offline_notify_telegram": "Avviso Telegram per sensore FV offline"
         },
         "data_description": {
           "fv_sensor": "Watt prodotti dai pannelli in tempo reale.",
@@ -572,7 +593,14 @@
           "fv_shutoff_enabled": "Se attivato: spegne quando il surplus resta sotto soglia per N campioni consecutivi.",
           "fv_shutoff_delay_min": "Quanti campioni consecutivi (uno per ogni ciclo di aggiornamento generale) di surplus sotto soglia devono accumularsi prima di spegnere. Esempio: 5 campioni con ciclo di aggiornamento di 5 minuti = 25 minuti confermati. La finestra è scorrevole: un singolo valore alto non azzera tutto, ma fa slittare il buffer.",
           "fv_shutoff_threshold": "Surplus minimo (produzione - consumo) richiesto. Sotto questo valore per N campioni → spegne. Valore 0 = spegne quando FV non copre il consumo.",
-          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può ancora spegnere."
+          "fv_shutoff_extra_hours": "Ore extra dopo fine fascia in cui può ancora spegnere.",
+          "fv_shutoff_manual": "Se attivo, lo spegnimento per calo FV si applica anche a un climatizzatore acceso manualmente, non solo a quelli accesi automaticamente dal fotovoltaico.",
+          "simple_no_reon_manual_off": "Se attivo, dopo uno spegnimento manuale il termostato non riaccende automaticamente il climatizzatore per il numero di ore configurato qui sotto.",
+          "simple_no_reon_manual_off_hours": "Per quante ore, dopo uno spegnimento manuale, il termostato evita di riaccendere automaticamente il climatizzatore.",
+          "fv_sensor_offline_shutoff_enabled": "Se attivo, un climatizzatore acceso dal fotovoltaico viene spento automaticamente quando il sensore di produzione FV smette di rispondere per troppo tempo — senza quel dato non possiamo più sapere se il sole c'è davvero. Si applica SOLO ai climatizzatori accesi dal fotovoltaico: un'accensione manuale non viene mai toccata. Di notte non ha alcun effetto, dato che l'accensione notturna non passa mai dal controllo fotovoltaico.",
+          "fv_sensor_offline_shutoff_min": "Dopo quanti minuti di sensore FV offline spegnere questo specifico climatizzatore. Una notifica di allerta parte comunque entro pochi minuti dal rilevamento, indipendentemente da questo valore.",
+          "fv_sensor_offline_notify_tts": "Avviso vocale (Google Home) quando il sensore FV va offline e quando questo climatizzatore viene spento di conseguenza.",
+          "fv_sensor_offline_notify_telegram": "Avviso Telegram quando il sensore FV va offline e quando questo climatizzatore viene spento di conseguenza."
         }
       },
       "modalita_notturna": {

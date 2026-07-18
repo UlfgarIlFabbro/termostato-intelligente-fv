@@ -84,7 +84,14 @@
           "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
           "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
           "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
-          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off"
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off",
+          "fv_shutoff_manual": "Turn off even if manually turned on",
+          "simple_no_reon_manual_off": "Don't turn back on if manually turned off",
+          "simple_no_reon_manual_off_hours": "Hours blocking re-accension after manual shutoff",
+          "fv_sensor_offline_shutoff_enabled": "Turn off if FV sensor is offline",
+          "fv_sensor_offline_shutoff_min": "Minutes before turning off if the FV sensor is offline",
+          "fv_sensor_offline_notify_tts": "Voice alert for FV sensor offline",
+          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline"
         },
         "data_description": {
           "fv_sensor": "Watts produced by panels in real time. Example: sensor.solar_panels_total.",
@@ -99,7 +106,14 @@
           "fv_shutoff_enabled": "If enabled: turns off the AC when solar surplus stays below threshold for N consecutive samples. With multiple thermostats, turns off the highest priority number first.",
           "fv_shutoff_delay_min": "How many consecutive samples (one per general update cycle) of insufficient surplus must accumulate before turning off. Example: 5 samples with a 5-minute update cycle = 25 confirmed minutes. The window is sliding: one high value does not reset the buffer, it just shifts it.",
           "fv_shutoff_threshold": "The surplus (production - consumption) must be below this value in ALL the last N samples to trigger turn-off. Value 0 = turns off when solar no longer covers consumption. Positive value = turns off earlier, when surplus drops below X Watts. Example: 500W → turns off when surplus is below 500W for N consecutive samples.",
-          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends at 16:00, extra 1h → can turn off until 17:00."
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off. Example: window ends at 16:00, extra 1h → can turn off until 17:00.",
+          "fv_shutoff_manual": "If enabled, the FV-drop shutoff also applies to a manually turned-on AC, not only to those turned on automatically by solar.",
+          "simple_no_reon_manual_off": "If enabled, after a manual shutoff the thermostat avoids automatically turning the AC back on for the number of hours configured below.",
+          "simple_no_reon_manual_off_hours": "For how many hours, after a manual shutoff, the thermostat avoids automatically turning the AC back on.",
+          "fv_sensor_offline_shutoff_enabled": "If enabled, an AC turned on by solar automatically turns off when the FV production sensor stops responding for too long — without that data we can no longer know if there's actually sunlight. Applies ONLY to AC units turned on by solar: a manual accension is never affected. Has no effect at night, since night accension never goes through the solar check.",
+          "fv_sensor_offline_shutoff_min": "After how many minutes of FV sensor offline this specific AC turns off. An alert notification is sent anyway within a few minutes of detection, regardless of this value.",
+          "fv_sensor_offline_notify_tts": "Voice alert (Google Home) when the FV sensor goes offline and when this AC is turned off as a result.",
+          "fv_sensor_offline_notify_telegram": "Telegram alert when the FV sensor goes offline and when this AC is turned off as a result."
         }
       },
       "modalita_notturna": {
@@ -557,7 +571,14 @@
           "fv_shutoff_enabled": "▶ Automatic turn-off when solar drops",
           "fv_shutoff_delay_min": "Consecutive insufficient samples before turning off",
           "fv_shutoff_threshold": "Solar surplus threshold for turn-off (W)",
-          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off"
+          "fv_shutoff_extra_hours": "Extra hours after window end for turn-off",
+          "fv_shutoff_manual": "Turn off even if manually turned on",
+          "simple_no_reon_manual_off": "Don't turn back on if manually turned off",
+          "simple_no_reon_manual_off_hours": "Hours blocking re-accension after manual shutoff",
+          "fv_sensor_offline_shutoff_enabled": "Turn off if FV sensor is offline",
+          "fv_sensor_offline_shutoff_min": "Minutes before turning off if the FV sensor is offline",
+          "fv_sensor_offline_notify_tts": "Voice alert for FV sensor offline",
+          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline"
         },
         "data_description": {
           "fv_sensor": "Watts produced by panels in real time.",
@@ -572,7 +593,14 @@
           "fv_shutoff_enabled": "If enabled: turns off when surplus stays below threshold for N consecutive samples.",
           "fv_shutoff_delay_min": "How many consecutive samples (one per general update cycle) of insufficient surplus must accumulate before turning off. Example: 5 samples with a 5-minute update cycle = 25 confirmed minutes. The window is sliding: one high value does not reset the buffer, it just shifts it.",
           "fv_shutoff_threshold": "Minimum surplus (production - consumption) required. Below this for N samples → turns off. Value 0 = turns off when solar no longer covers consumption.",
-          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off."
+          "fv_shutoff_extra_hours": "Extra hours after window end when it can still turn off.",
+          "fv_shutoff_manual": "If enabled, the FV-drop shutoff also applies to a manually turned-on AC, not only to those turned on automatically by solar.",
+          "simple_no_reon_manual_off": "If enabled, after a manual shutoff the thermostat avoids automatically turning the AC back on for the number of hours configured below.",
+          "simple_no_reon_manual_off_hours": "For how many hours, after a manual shutoff, the thermostat avoids automatically turning the AC back on.",
+          "fv_sensor_offline_shutoff_enabled": "If enabled, an AC turned on by solar automatically turns off when the FV production sensor stops responding for too long — without that data we can no longer know if there's actually sunlight. Applies ONLY to AC units turned on by solar: a manual accension is never affected. Has no effect at night, since night accension never goes through the solar check.",
+          "fv_sensor_offline_shutoff_min": "After how many minutes of FV sensor offline this specific AC turns off. An alert notification is sent anyway within a few minutes of detection, regardless of this value.",
+          "fv_sensor_offline_notify_tts": "Voice alert (Google Home) when the FV sensor goes offline and when this AC is turned off as a result.",
+          "fv_sensor_offline_notify_telegram": "Telegram alert when the FV sensor goes offline and when this AC is turned off as a result."
         }
       },
       "modalita_notturna": {
