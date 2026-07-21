@@ -135,6 +135,23 @@ class TermostatoDiagCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // Home Assistant chiama questo setter ad OGNI cambio di stato in tutta
+    // la casa, non solo quando cambia qualcosa di rilevante per questa
+    // card — con più istanze sulla stessa dashboard, senza questo
+    // controllo si ridisegna l'intero DOM decine di volte al minuto anche
+    // quando nulla di davvero utile è cambiato, causando rallentamenti
+    // percepibili specialmente su dispositivi meno potenti.
+    const stateObj = this._config && hass.states[this._config.entity];
+    if (!stateObj) { this._render(); return; }
+    const roomSensorEntity = stateObj.attributes.sonda_esterna_entity_id;
+    const realClimateEntity = stateObj.attributes.climatizzatore_reale;
+    const signature = JSON.stringify([
+      stateObj,
+      roomSensorEntity ? hass.states[roomSensorEntity] : null,
+      realClimateEntity ? hass.states[realClimateEntity] : null,
+    ]);
+    if (signature === this._lastRenderSignature) return; // nulla di rilevante è cambiato, salta il re-render
+    this._lastRenderSignature = signature;
     this._render();
   }
 
