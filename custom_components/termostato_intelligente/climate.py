@@ -99,6 +99,8 @@ from .const import (
     CONF_UPDATE_INTERVAL_MIN,
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
+    CONF_WINDOW_DETECTION_ENABLED,
+    DEFAULT_WINDOW_DETECTION_ENABLED,
     DEFAULT_BELOW_OFFSET,
     DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_DOOR_ALERT_ENABLED,
@@ -791,6 +793,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 if old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
                     self._manual_accension_since = dt_util.utcnow()
                     _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
+                    # Se la finestra è GIÀ aperta in questo momento (non è
+                    # lei a essere appena cambiata, quindi il suo stesso
+                    # listener non scatterebbe mai per questo caso),
+                    # applichiamo la stessa gestione che scatterebbe se si
+                    # fosse appena aperta: snapshot + spegnimento ritardato,
+                    # stessa notifica — invece di lasciare il clima acceso
+                    # senza nessun controllo finché la finestra non cambia
+                    # stato per conto suo.
+                    if (self._is_window_open()
+                            and self._switch_state(SWITCH_KEY_MASTER, True)
+                            and bool(get_conf(self.entry, CONF_WINDOW_DETECTION_ENABLED, DEFAULT_WINDOW_DETECTION_ENABLED))):
+                        mode = self._get_config_mode()
+                        if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
+                            _LOGGER.info("%s: accensione manuale con finestra già aperta — avvio gestione come apertura finestra", self._attr_name)
+                            await self._async_simple_notify_window(True, SIMPLE_WINDOW_DELAY_MIN, ac_was_on=True)
+                            await self._async_window_opened_simple()
+                        else:
+                            _LOGGER.info("%s: accensione manuale con finestra già aperta — avvio gestione come apertura finestra", self._attr_name)
+                            await self._async_window_opened()
                 if new_state.state == "dry":
                     if self._simple_dry_end is None:
                         # Tornato in DRY senza timer attivo (es. set manuale da UI/altra
@@ -2794,6 +2815,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         if not self._switch_state(SWITCH_KEY_MASTER, True):
             return
+        if not bool(get_conf(self.entry, CONF_WINDOW_DETECTION_ENABLED, DEFAULT_WINDOW_DETECTION_ENABLED)):
+            return  # rilevamento finestra disattivato per questa istanza — non deve mai influire sul climatizzatore
         mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
         real_state = self.hass.states.get(self._climate_entity)

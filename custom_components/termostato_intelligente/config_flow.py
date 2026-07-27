@@ -202,6 +202,8 @@ from .const import (
     CONF_UPDATE_INTERVAL_MIN,
     CONF_WINDOW_DELAY_MIN,
     CONF_WINDOW_SENSOR,
+    CONF_WINDOW_DETECTION_ENABLED,
+    DEFAULT_WINDOW_DETECTION_ENABLED,
     DEFAULT_BELOW_OFFSET,
     DEFAULT_CALIBRATION_MAX_OFFSET,
     DEFAULT_DOOR_ALERT_ENABLED,
@@ -294,6 +296,7 @@ def _schema_simple_entita(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_TEMP_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
         _f(vol.Optional, CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN, defaults, DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=15, max=180, step=5, unit_of_measurement="min", mode="box")),
         _f(vol.Optional, CONF_WINDOW_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+        _f(vol.Optional, CONF_WINDOW_DETECTION_ENABLED, defaults, DEFAULT_WINDOW_DETECTION_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_DOOR_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
     })
 
@@ -449,6 +452,7 @@ def _schema_user(defaults: dict) -> vol.Schema:
         _f(vol.Required, CONF_CLIMATE_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
         _f(vol.Required, CONF_TEMP_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
         _f(vol.Required, CONF_WINDOW_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+        _f(vol.Optional, CONF_WINDOW_DETECTION_ENABLED, defaults, DEFAULT_WINDOW_DETECTION_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_PRESENCE_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
         _f(vol.Optional, CONF_DOOR_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
     })
@@ -459,6 +463,7 @@ def _schema_sensori(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_NAME, defaults, DEFAULT_NAME): selector.TextSelector(),
         _f(vol.Required, CONF_TEMP_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
         _f(vol.Required, CONF_WINDOW_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+        _f(vol.Optional, CONF_WINDOW_DETECTION_ENABLED, defaults, DEFAULT_WINDOW_DETECTION_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_PRESENCE_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
         _f(vol.Optional, CONF_DOOR_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
     })

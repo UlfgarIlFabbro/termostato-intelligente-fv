@@ -7,6 +7,7 @@ CONF_NAME = "name"
 CONF_CLIMATE_ENTITY = "climate_entity"
 CONF_TEMP_SENSOR = "temp_sensor"
 CONF_WINDOW_SENSOR = "window_sensor"
+CONF_WINDOW_DETECTION_ENABLED = "window_detection_enabled"  # se disattivato, la finestra non influisce mai sul climatizzatore
 CONF_PRESENCE_SENSOR = "presence_sensor"
 CONF_DOOR_SENSOR = "door_sensor"
 
@@ -213,6 +214,7 @@ DEFAULT_FV_SHUTOFF_THRESHOLD = 0
 DEFAULT_PRESENCE_BOOST_MIN = 10
 DEFAULT_PRESENCE_BOOST_OFFSET = 1.0
 DEFAULT_WINDOW_DELAY_MIN = 5
+DEFAULT_WINDOW_DETECTION_ENABLED = True  # comportamento invariato di default — l'utente lo disattiva consapevolmente
 DEFAULT_UPDATE_INTERVAL_MIN = 5
 DEFAULT_CALIBRATION_MAX_OFFSET = 3.0
 DEFAULT_MIN_BELOW_INTERNAL = 1.0

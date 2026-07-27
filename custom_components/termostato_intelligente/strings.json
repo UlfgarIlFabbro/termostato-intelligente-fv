@@ -219,7 +219,8 @@
           "temp_sensor": "Room temperature sensor",
           "window_sensor": "Window sensor",
           "presence_sensor": "Presence sensor (optional)",
-          "door_sensor": "Door sensor (optional)"
+          "door_sensor": "Door sensor (optional)",
+          "window_detection_enabled": "Window detection affects the AC"
         },
         "data_description": {
           "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom', 'Living room'.",
@@ -227,7 +228,8 @@
           "temp_sensor": "Sensor measuring the real room temperature, placed away from the AC.",
           "window_sensor": "Binary sensor 'on' when window is open. Example: binary_sensor.window_bedroom.",
           "presence_sensor": "Optional. Enables fan boost for continuous presence.",
-          "door_sensor": "Optional. Sends open/close alerts, never acts on AC."
+          "door_sensor": "Optional. Sends open/close alerts, never acts on AC.",
+          "window_detection_enabled": "If disabled, the window has no effect on the AC at all — no shutoff when it opens, no alert when manually turning on with the window already open. Useful if the sensor is unreliable in certain conditions (e.g. doesn't update correctly during prolonged kitchen use)."
         }
       },
       "simple_entita": {
@@ -239,7 +241,8 @@
           "temp_sensor": "Room temperature sensor (optional)",
           "simple_external_sensor_stale_min": "Minutes before considering the external sensor stuck",
           "window_sensor": "Window sensor (optional)",
-          "door_sensor": "Door sensor (optional)"
+          "door_sensor": "Door sensor (optional)",
+          "window_detection_enabled": "Window detection affects the AC"
         },
         "data_description": {
           "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom'.",
@@ -247,7 +250,8 @@
           "temp_sensor": "External room temperature sensor (e.g. Zigbee probe). If left empty, the thermostat uses the AC's internal sensor. ⚠️ The AC internal sensor reads only integer values (e.g. 25°C, not 25.3°C) so turn-on and turn-off thresholds adapt automatically. Example: sensor.temperature_bedroom. Leave empty to use the AC internal sensor.",
           "simple_external_sensor_stale_min": "If the external sensor (e.g. an MQTT sensor depending on a remote server) stops updating for more than this many minutes, the thermostat automatically switches to the AC's internal sensor, to avoid regulating based on stale data. It switches back on its own as soon as the external sensor resumes updating. Default 45 minutes.",
           "window_sensor": "Binary sensor 'on' when window is open. If set: alerts on opening and turns off AC after 5 minutes if still open, then turns it back on when closed. Leave empty to disable.",
-          "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable."
+          "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable.",
+          "window_detection_enabled": "If disabled, the window has no effect on the AC at all — no shutoff when it opens, no alert when manually turning on with the window already open. Useful if the sensor is unreliable in certain conditions (e.g. doesn't update correctly during prolonged kitchen use)."
         }
       },
       "simple_temperature": {
@@ -511,14 +515,16 @@
           "temp_sensor": "Room temperature sensor",
           "window_sensor": "Window sensor",
           "presence_sensor": "Presence sensor (optional)",
-          "door_sensor": "Door sensor (optional)"
+          "door_sensor": "Door sensor (optional)",
+          "window_detection_enabled": "Window detection affects the AC"
         },
         "data_description": {
           "name": "The name this thermostat appears as in Home Assistant. Example: 'Bedroom'.",
           "temp_sensor": "Room temperature probe, away from the AC.",
           "window_sensor": "Binary sensor 'on' when the window is open.",
           "presence_sensor": "Optional. Enables fan boost for continuous presence. Leave empty to disable.",
-          "door_sensor": "Optional. Alerts when door opens or closes. Never acts on the AC. Leave empty to disable."
+          "door_sensor": "Optional. Alerts when door opens or closes. Never acts on the AC. Leave empty to disable.",
+          "window_detection_enabled": "If disabled, the window has no effect on the AC at all — no shutoff when it opens, no alert when manually turning on with the window already open. Useful if the sensor is unreliable in certain conditions (e.g. doesn't update correctly during prolonged kitchen use)."
         }
       },
       "profilo": {
@@ -706,7 +712,8 @@
           "temp_sensor": "Room temperature sensor (optional)",
           "simple_external_sensor_stale_min": "Minutes before considering the external sensor stuck",
           "window_sensor": "Window sensor (optional)",
-          "door_sensor": "Door sensor (optional)"
+          "door_sensor": "Door sensor (optional)",
+          "window_detection_enabled": "Window detection affects the AC"
         },
         "data_description": {
           "name": "The name this thermostat will appear as in Home Assistant. Example: 'Bedroom'.",
@@ -714,7 +721,8 @@
           "temp_sensor": "External room temperature sensor (e.g. Zigbee probe). If left empty, the thermostat uses the AC's internal sensor. ⚠️ The AC internal sensor reads only integer values (e.g. 25°C, not 25.3°C) so turn-on and turn-off thresholds adapt automatically. Example: sensor.temperature_bedroom. Leave empty to use the AC internal sensor.",
           "simple_external_sensor_stale_min": "If the external sensor (e.g. an MQTT sensor depending on a remote server) stops updating for more than this many minutes, the thermostat automatically switches to the AC's internal sensor, to avoid regulating based on stale data. It switches back on its own as soon as the external sensor resumes updating. Default 45 minutes.",
           "window_sensor": "Binary sensor 'on' when window is open. If set: alerts on opening and turns off AC after 5 minutes if still open, then turns it back on when closed. Leave empty to disable.",
-          "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable."
+          "door_sensor": "Binary sensor 'on' when door is open. If set: sends an alert when door opens or closes. Never acts on AC. Leave empty to disable.",
+          "window_detection_enabled": "If disabled, the window has no effect on the AC at all — no shutoff when it opens, no alert when manually turning on with the window already open. Useful if the sensor is unreliable in certain conditions (e.g. doesn't update correctly during prolonged kitchen use)."
         }
       },
       "simple_temperature": {

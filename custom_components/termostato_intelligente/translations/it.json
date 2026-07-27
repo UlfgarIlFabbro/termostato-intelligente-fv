@@ -219,7 +219,8 @@
           "temp_sensor": "Sensore temperatura stanza",
           "window_sensor": "Sensore finestra",
           "presence_sensor": "Sensore presenza (opzionale)",
-          "door_sensor": "Sensore porta (opzionale)"
+          "door_sensor": "Sensore porta (opzionale)",
+          "window_detection_enabled": "Il rilevamento finestra influisce sul climatizzatore"
         },
         "data_description": {
           "name": "Il nome con cui questo termostato apparirà in Home Assistant. Esempio: 'Camera da letto', 'Sala sopra', 'Sala giochi'.",
@@ -227,7 +228,8 @@
           "temp_sensor": "Il sensore che misura la temperatura reale della stanza. Posizionalo lontano dal climatizzatore. Esempio: sensor.temperatura_camera_letto.",
           "window_sensor": "Sensore binario 'on' quando la finestra è aperta. Esempio: binary_sensor.finestra_camera_letto.",
           "presence_sensor": "Sensore di presenza opzionale per il boost ventola. Lascia vuoto per disabilitare.",
-          "door_sensor": "Sensore porta opzionale. Invia avvisi apertura/chiusura, non agisce mai sul clima. Lascia vuoto per disabilitare."
+          "door_sensor": "Sensore porta opzionale. Invia avvisi apertura/chiusura, non agisce mai sul clima. Lascia vuoto per disabilitare.",
+          "window_detection_enabled": "Se disattivato, la finestra non ha alcun effetto sul climatizzatore — né spegnimento quando si apre, né avviso quando accendi manualmente con la finestra già aperta. Utile se il sensore ha comportamenti poco affidabili in certe condizioni (es. non si aggiorna correttamente durante usi prolungati della cucina)."
         }
       },
       "simple_entita": {
@@ -239,7 +241,8 @@
           "temp_sensor": "Sensore temperatura stanza (opzionale)",
           "simple_external_sensor_stale_min": "Minuti prima di considerare bloccata la sonda esterna",
           "window_sensor": "Sensore finestra (opzionale)",
-          "door_sensor": "Sensore porta (opzionale)"
+          "door_sensor": "Sensore porta (opzionale)",
+          "window_detection_enabled": "Il rilevamento finestra influisce sul climatizzatore"
         },
         "data_description": {
           "name": "Il nome con cui questo termostato apparirà in Home Assistant. Esempio: 'Camera da letto'.",
@@ -247,7 +250,8 @@
           "temp_sensor": "Sensore di temperatura esterna alla stanza (es. sonda Zigbee). Se lasci vuoto, il termostato usa la sonda interna del climatizzatore. ⚠️ La sonda interna del clima legge solo valori interi (es. 25°C, non 25.3°C) quindi le soglie di accensione e spegnimento si adattano automaticamente. Esempio con sonda esterna: sensor.temperatura_camera_letto. Lascia vuoto per usare la sonda del clima.",
           "simple_external_sensor_stale_min": "Se la sonda esterna (es. un sensore MQTT che dipende da un server remoto) smette di aggiornarsi per più di questi minuti, il termostato passa automaticamente alla sonda interna del climatizzatore, per evitare di regolare la temperatura basandosi su un dato vecchio. Torna da sola alla sonda esterna non appena questa riprende ad aggiornarsi. Default 45 minuti.",
           "window_sensor": "Sensore binario che diventa 'on' quando la finestra è aperta. Se configurato: il termostato avvisa all'apertura e dopo 5 minuti spegne il clima, poi lo riaccende automaticamente quando la finestra viene chiusa. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.finestra_camera.",
-          "door_sensor": "Sensore binario che diventa 'on' quando la porta è aperta. Se configurato: invia un avviso quando la porta si apre o si chiude. Non agisce mai sul clima. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.porta_camera."
+          "door_sensor": "Sensore binario che diventa 'on' quando la porta è aperta. Se configurato: invia un avviso quando la porta si apre o si chiude. Non agisce mai sul clima. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.porta_camera.",
+          "window_detection_enabled": "Se disattivato, la finestra non ha alcun effetto sul climatizzatore — né spegnimento quando si apre, né avviso quando accendi manualmente con la finestra già aperta. Utile se il sensore ha comportamenti poco affidabili in certe condizioni (es. non si aggiorna correttamente durante usi prolungati della cucina)."
         }
       },
       "simple_temperature": {
@@ -511,14 +515,16 @@
           "temp_sensor": "Sensore temperatura stanza",
           "window_sensor": "Sensore finestra",
           "presence_sensor": "Sensore presenza (opzionale)",
-          "door_sensor": "Sensore porta (opzionale)"
+          "door_sensor": "Sensore porta (opzionale)",
+          "window_detection_enabled": "Il rilevamento finestra influisce sul climatizzatore"
         },
         "data_description": {
           "name": "Il nome con cui questo termostato appare in Home Assistant. Esempio: 'Camera da letto'.",
           "temp_sensor": "Sonda temperatura della stanza, lontana dal climatizzatore.",
           "window_sensor": "Sensore binario 'on' quando la finestra è aperta.",
           "presence_sensor": "Opzionale. Abilita il boost ventola per presenza continua. Lascia vuoto per disattivare.",
-          "door_sensor": "Opzionale. Avvisa quando la porta si apre o chiude. Non agisce sul clima. Lascia vuoto per disattivare."
+          "door_sensor": "Opzionale. Avvisa quando la porta si apre o chiude. Non agisce sul clima. Lascia vuoto per disattivare.",
+          "window_detection_enabled": "Se disattivato, la finestra non ha alcun effetto sul climatizzatore — né spegnimento quando si apre, né avviso quando accendi manualmente con la finestra già aperta. Utile se il sensore ha comportamenti poco affidabili in certe condizioni (es. non si aggiorna correttamente durante usi prolungati della cucina)."
         }
       },
       "profilo": {
@@ -706,7 +712,8 @@
           "temp_sensor": "Sensore temperatura stanza (opzionale)",
           "simple_external_sensor_stale_min": "Minuti prima di considerare bloccata la sonda esterna",
           "window_sensor": "Sensore finestra (opzionale)",
-          "door_sensor": "Sensore porta (opzionale)"
+          "door_sensor": "Sensore porta (opzionale)",
+          "window_detection_enabled": "Il rilevamento finestra influisce sul climatizzatore"
         },
         "data_description": {
           "name": "Il nome con cui questo termostato apparirà in Home Assistant. Esempio: 'Camera da letto'.",
@@ -714,7 +721,8 @@
           "temp_sensor": "Sensore di temperatura esterna alla stanza (es. sonda Zigbee). Se lasci vuoto, il termostato usa la sonda interna del climatizzatore. ⚠️ La sonda interna del clima legge solo valori interi (es. 25°C, non 25.3°C) quindi le soglie di accensione e spegnimento si adattano automaticamente. Esempio con sonda esterna: sensor.temperatura_camera_letto. Lascia vuoto per usare la sonda del clima.",
           "simple_external_sensor_stale_min": "Se la sonda esterna (es. un sensore MQTT che dipende da un server remoto) smette di aggiornarsi per più di questi minuti, il termostato passa automaticamente alla sonda interna del climatizzatore, per evitare di regolare la temperatura basandosi su un dato vecchio. Torna da sola alla sonda esterna non appena questa riprende ad aggiornarsi. Default 45 minuti.",
           "window_sensor": "Sensore binario che diventa 'on' quando la finestra è aperta. Se configurato: il termostato avvisa all'apertura e dopo 5 minuti spegne il clima, poi lo riaccende automaticamente quando la finestra viene chiusa. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.finestra_camera.",
-          "door_sensor": "Sensore binario che diventa 'on' quando la porta è aperta. Se configurato: invia un avviso quando la porta si apre o si chiude. Non agisce mai sul clima. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.porta_camera."
+          "door_sensor": "Sensore binario che diventa 'on' quando la porta è aperta. Se configurato: invia un avviso quando la porta si apre o si chiude. Non agisce mai sul clima. Lascia vuoto per non usare questa funzione. Esempio: binary_sensor.porta_camera.",
+          "window_detection_enabled": "Se disattivato, la finestra non ha alcun effetto sul climatizzatore — né spegnimento quando si apre, né avviso quando accendi manualmente con la finestra già aperta. Utile se il sensore ha comportamenti poco affidabili in certe condizioni (es. non si aggiorna correttamente durante usi prolungati della cucina)."
         }
       },
       "simple_temperature": {
