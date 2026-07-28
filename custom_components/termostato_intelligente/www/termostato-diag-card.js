@@ -6,15 +6,20 @@
 // Completamente configurabile da editor grafico — nessun YAML necessario.
 // ============================================================================
 
-const STATE_COLORS = {
-  cool:      { bg: "rgba(0, 0, 255, 0.5)",   border: "blue",      shadow: "rgba(0, 0, 255, 0.3)" },
-  dry:       { bg: "rgba(0, 0, 255, 0.5)",   border: "lightblue", shadow: "rgba(0, 0, 255, 0.3)" },
-  auto:      { bg: "rgba(255, 255, 0, 0.3)", border: "yellow",    shadow: "rgba(255, 255, 0, 0.3)" },
-  fan_only:  { bg: "rgba(255, 0, 255, 0.5)", border: "violet",    shadow: "rgba(255, 0, 255, 0.3)" },
-  heat:      { bg: "rgba(255, 0, 0, 0.5)",   border: "red",       shadow: "rgba(255, 0, 0, 0.3)" },
-  unknown:   { bg: "rgba(0, 0, 0, 0.5)",     border: "black",     shadow: "rgba(0, 0, 0, 0.3)" },
-  off:       { bg: "rgba(255, 255, 255, 0.5)", border: "black",   shadow: "rgba(255, 255, 255, 0.3)" },
+// Mappa unificata icona+colore per ciascuna modalità hvac — usata sia per lo
+// sfondo/cornice della card sia per i pulsanti modalità in alto, così sono
+// sempre coerenti tra loro (prima erano due sistemi scollegati). Il verde è
+// deliberatamente escluso: è riservato al pulsante di accensione/spegnimento.
+const HVAC_MODE_STYLE = {
+  cool:      { icon: "mdi:snowflake",              activeBg: "#2e6fd9", activeFg: "#fff",    cardBg: "rgba(46, 111, 217, 0.5)",  cardBorder: "#2e6fd9", cardShadow: "rgba(46, 111, 217, 0.3)" },
+  dry:       { icon: "mdi:water",                  activeBg: "#f0b400", activeFg: "#4a3800", cardBg: "rgba(240, 180, 0, 0.5)",   cardBorder: "#f0b400", cardShadow: "rgba(240, 180, 0, 0.3)" },
+  heat:      { icon: "mdi:fire",                   activeBg: "#e8602c", activeFg: "#fff",    cardBg: "rgba(232, 96, 44, 0.5)",   cardBorder: "#e8602c", cardShadow: "rgba(232, 96, 44, 0.3)" },
+  fan_only:  { icon: "mdi:fan",                    activeBg: "#8e5fd1", activeFg: "#fff",    cardBg: "rgba(142, 95, 209, 0.5)",  cardBorder: "#8e5fd1", cardShadow: "rgba(142, 95, 209, 0.3)" },
+  auto:      { icon: "mdi:autorenew",              activeBg: "#1fa8a0", activeFg: "#fff",    cardBg: "rgba(31, 168, 160, 0.5)",  cardBorder: "#1fa8a0", cardShadow: "rgba(31, 168, 160, 0.3)" },
+  heat_cool: { icon: "mdi:sun-snowflake-variant",  activeBg: "#c74e8e", activeFg: "#fff",    cardBg: "rgba(199, 78, 142, 0.5)",  cardBorder: "#c74e8e", cardShadow: "rgba(199, 78, 142, 0.3)" },
 };
+const UNKNOWN_MODE_STYLE = { icon: "mdi:help-circle-outline", activeBg: "#8a8a8a", activeFg: "#fff", cardBg: "rgba(138, 138, 138, 0.4)", cardBorder: "#8a8a8a", cardShadow: "rgba(138, 138, 138, 0.3)" };
+const OFF_COLOR = { bg: "rgba(255, 255, 255, 0.5)", border: "black", shadow: "rgba(255, 255, 255, 0.3)" };
 const DEFAULT_COLOR = { bg: "rgba(255, 255, 255, 0.5)", border: "black", shadow: "rgba(255, 255, 255, 0.3)" };
 
 function applyOpacity(rgbaString, opacity) {
@@ -168,14 +173,20 @@ class TermostatoDiagCard extends HTMLElement {
     }
 
     // Se il dispositivo reale è in una modalità che questa integrazione
-    // non gestisce (caldo, ventilazione, auto — impostata da fuori), lo
-    // stato che riportiamo a Home Assistant resta "cool" per vincolo
-    // tecnico, ma sarebbe fuorviante colorare la card e l'icona come se
-    // stesse raffreddando. Usiamo un colore di avviso neutro dedicato.
+    // Leggiamo il clima reale PRIMA della sezione colori, perché ora la
+    // scegliamo in base allo stato REALE del dispositivo (che può essere
+    // heat/fan_only/auto anche quando il nostro wrapper riporta "cool" per
+    // vincolo tecnico), non solo al nostro stato riportato.
+    const realClimateEntity = stateObj.attributes.climatizzatore_reale;
+    const realClimateState = realClimateEntity ? this._hass.states[realClimateEntity] : null;
+    const realHvacState = realClimateState ? realClimateState.state : stateObj.state;
+
     const unmanagedMode = !!stateObj.attributes.modalita_esterna_non_gestita;
-    const stateKey = unmanagedMode ? "unmanaged" : (stateObj.state in STATE_COLORS ? stateObj.state : "unknown");
-    const UNMANAGED_COLOR = { bg: "rgba(240, 180, 0, 0.15)", border: "#f0b400", shadow: "rgba(240, 180, 0, 0.2)" };
-    const colors = this._config.color_by_state ? (unmanagedMode ? UNMANAGED_COLOR : (STATE_COLORS[stateKey] || DEFAULT_COLOR)) : null;
+    const isOff = realHvacState === "off" || realHvacState === "unknown" || realHvacState === "unavailable";
+    const modeStyle = isOff ? null : (HVAC_MODE_STYLE[realHvacState] || UNKNOWN_MODE_STYLE);
+    const colors = this._config.color_by_state
+      ? (isOff ? OFF_COLOR : { bg: modeStyle.cardBg, border: modeStyle.cardBorder, shadow: modeStyle.cardShadow })
+      : null;
     const title = this._config.title || stateObj.attributes.friendly_name || this._config.entity;
 
     // Trasparenza dello sfondo, regolabile dalla configurazione della card
@@ -200,8 +211,6 @@ class TermostatoDiagCard extends HTMLElement {
     const roomSensorEntity = stateObj.attributes.sonda_esterna_entity_id;
     const roomTempState = roomSensorEntity ? this._hass.states[roomSensorEntity] : null;
     const roomTemp = roomTempState && !isNaN(parseFloat(roomTempState.state)) ? parseFloat(roomTempState.state) : null;
-    const realClimateEntity = stateObj.attributes.climatizzatore_reale;
-    const realClimateState = realClimateEntity ? this._hass.states[realClimateEntity] : null;
     const climaTemp = realClimateState && realClimateState.attributes.current_temperature !== undefined
       ? realClimateState.attributes.current_temperature : null;
 
@@ -212,6 +221,57 @@ class TermostatoDiagCard extends HTMLElement {
     const showNotifyHistoryWidget = showAttrs.includes("ultimo_evento_notifica");
     const showPriorityWidget = showAttrs.includes("fv_priorita");
     const hideInactive = this._config.hide_inactive !== false; // default true
+
+    // Storico notifiche — calcolato QUI (prima della lista attributi) così
+    // il badge compatto può essere incluso nella stessa riga degli altri
+    // badge quando lo stile è "badges". Genera 2 varianti diverse in base
+    // allo stile scelto: badge compatto (solo icona) oppure riga completa
+    // a piena larghezza con il testo dell'ultimo evento, più il popup con
+    // lo storico completo (condiviso da entrambe le varianti).
+    const notifyHistory = Array.isArray(stateObj.attributes.storico_notifiche) ? stateObj.attributes.storico_notifiche : [];
+    let notifyHistoryHtml = "";
+    let notifyBellBadgeHtml = "";
+    let notifyHistoryModalHtml = "";
+    const isBadgeStyle = this._config.display_style === "badges";
+    if (notifyHistory.length > 0 && showNotifyHistoryWidget) {
+      const latest = notifyHistory[0];
+      const latestTime = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
+
+      if (isBadgeStyle) {
+        notifyBellBadgeHtml = `<span data-open-notify-history="1" title="Ultimo evento: ${latestTime} — ${latest.messaggio || ""}"
+          style="display:inline-flex;align-items:center;justify-content:center;background:rgba(120,120,120,0.12);border-radius:12px;padding:4px 8px;margin:3px;font-size:12px;cursor:pointer;">
+          <ha-icon icon="mdi:bell" style="--mdc-icon-size:14px;"></ha-icon>
+        </span>`;
+      } else {
+        notifyHistoryHtml = `
+          <div style="border-top:0.5px solid rgba(128,128,128,0.25);padding-top:8px;margin-top:10px;">
+            <button data-open-notify-history="1" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:10px;border:none;text-align:left;cursor:pointer;">
+              <span style="font-size:12px;opacity:0.8;">🔔 ultimo evento: ${latestTime} — ${latest.messaggio || ""}</span>
+              <ha-icon icon="mdi:open-in-new" style="--mdc-icon-size:14px;opacity:0.6;flex-shrink:0;margin-left:6px;"></ha-icon>
+            </button>
+          </div>`;
+      }
+
+      if (this._notifyHistoryModalOpen) {
+        const allRows = notifyHistory.map((ev) => {
+          const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
+          return `<div style="font-size:13px;padding:6px 0;border-bottom:0.5px solid rgba(128,128,128,0.15);">${t} — ${ev.messaggio || ""}</div>`;
+        }).join("");
+        notifyHistoryModalHtml = `
+          <div data-notify-history-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+            <div style="background:var(--card-background-color, #fff);border-radius:12px;padding:16px;max-width:360px;width:100%;max-height:70vh;overflow-y:auto;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:14px;font-weight:700;">🔔 Storico notifiche</div>
+                <button data-close-notify-history="1" style="border:none;background:none;cursor:pointer;padding:4px;">
+                  <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
+                </button>
+              </div>
+              ${allRows}
+            </div>
+          </div>`;
+      }
+    }
+
     let attrsHtml = "";
     if (showAttrs.length > 0) {
       // Tipi che hanno un concetto naturale di "attivo/presente" — se
@@ -275,106 +335,68 @@ class TermostatoDiagCard extends HTMLElement {
         ? [...items].sort((a, b) => (a.isInactive === b.isInactive) ? 0 : (a.isInactive ? 1 : -1))
         : items;
       const itemsHtml = orderedItems.map((it) => it.html);
+      if (notifyBellBadgeHtml) itemsHtml.push(notifyBellBadgeHtml);
       const wrapper = this._config.display_style === "badges"
         ? `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${itemsHtml.join("")}</div>`
         : `<div style="margin-top:10px;">${itemsHtml.join("")}</div>`;
-      attrsHtml = items.length > 0 ? wrapper : "";
+      attrsHtml = items.length > 0 || notifyBellBadgeHtml ? wrapper : "";
     }
 
-    // Storico eventi — sempre in fondo, a piena larghezza, con l'ultimo
-    // evento sempre visibile e un pulsante che apre lo storico completo
-    // in un popup separato (non espande la card in-flow, che cambierebbe
-    // altezza e disallineerebbe card affiancate sulla stessa dashboard).
-    const notifyHistory = Array.isArray(stateObj.attributes.storico_notifiche) ? stateObj.attributes.storico_notifiche : [];
-    let notifyHistoryHtml = "";
-    let notifyHistoryModalHtml = "";
-    if (notifyHistory.length > 0 && showNotifyHistoryWidget) {
-      const latest = notifyHistory[0];
-      const latestTime = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
-      notifyHistoryHtml = `
-        <div style="border-top:0.5px solid rgba(128,128,128,0.25);padding-top:8px;margin-top:10px;">
-          <button data-open-notify-history="1" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:10px;border:none;text-align:left;cursor:pointer;">
-            <span style="font-size:12px;opacity:0.8;">🔔 ultimo evento: ${latestTime} — ${latest.messaggio || ""}</span>
-            <ha-icon icon="mdi:open-in-new" style="--mdc-icon-size:14px;opacity:0.6;flex-shrink:0;margin-left:6px;"></ha-icon>
-          </button>
-        </div>`;
 
-      if (this._notifyHistoryModalOpen) {
-        const allRows = notifyHistory.map((ev) => {
-          const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "";
-          return `<div style="font-size:13px;padding:6px 0;border-bottom:0.5px solid rgba(128,128,128,0.15);">${t} — ${ev.messaggio || ""}</div>`;
-        }).join("");
-        notifyHistoryModalHtml = `
-          <div data-notify-history-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
-            <div style="background:var(--card-background-color, #fff);border-radius:12px;padding:16px;max-width:360px;width:100%;max-height:70vh;overflow-y:auto;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <div style="font-size:14px;font-weight:700;">🔔 Storico notifiche</div>
-                <button data-close-notify-history="1" style="border:none;background:none;cursor:pointer;padding:4px;">
-                  <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
-                </button>
-              </div>
-              ${allRows}
-            </div>
-          </div>`;
-      }
-    }
-
-    // Pulsanti modalità: cool (blu), dry (giallo quando attivo), off (grigio).
-    // Un tocco cambia subito la modalità reale del climatizzatore.
-    // Se il dispositivo reale è in una modalità non gestita (caldo,
-    // ventilazione, auto — impostata dal telecomando o da un'altra
-    // automazione, mai da noi), NESSUNA delle 3 icone risulta "attiva":
-    // lo stato riportato da questa entità è sempre "cool" per vincolo
-    // tecnico anche in quel caso, ma sarebbe fuorviante mostrare
-    // raffreddamento come attivo quando in realtà sta scaldando.
-    const modeBtn = (mode, icon, label, activeBg, activeColor) => {
-      const active = !unmanagedMode && stateObj.state === mode;
-      const bg = active ? activeBg : "var(--card-background-color, #fff)";
-      const color = active ? activeColor : "var(--secondary-text-color)";
+    // Pulsanti modalità dinamici: costruiti dagli hvac_modes REALI del
+    // climatizzatore sottostante (letti da realClimateState), non più
+    // limitati ai 3 fissi che il nostro wrapper gestisce automaticamente.
+    // Se il dispositivo supporta anche caldo/ventilazione/auto, compaiono
+    // qui come pulsanti cliccabili — restano un controllo MANUALE diretto
+    // (nessuna logica di temperatura nostra in quelle modalità), da cui il
+    // badge di avviso che li accompagna quando sono quelli attivi.
+    const realHvacModes = (realClimateState && Array.isArray(realClimateState.attributes.hvac_modes))
+      ? realClimateState.attributes.hvac_modes
+      : ["cool", "dry"]; // fallback prudente se il clima reale non è ancora disponibile
+    const managedModes = ["cool", "dry"]; // le uniche 2 che il NOSTRO wrapper sa impostare direttamente
+    const modeBtn = (mode) => {
+      const style = HVAC_MODE_STYLE[mode] || UNKNOWN_MODE_STYLE;
+      const active = realHvacState === mode;
+      const bg = active ? style.activeBg : "var(--card-background-color, #fff)";
+      const color = active ? style.activeFg : "var(--secondary-text-color)";
       const border = active ? "none" : "1px solid var(--divider-color, #ccc)";
-      return `<button data-mode="${mode}" aria-label="${label}" title="${label}"
+      // I modi che il nostro wrapper non gestisce (heat/fan_only/auto/...)
+      // vengono impostati direttamente sul climatizzatore reale, dato che
+      // il nostro wrapper rifiuterebbe un hvac_mode fuori dai suoi 3
+      // dichiarati (off/cool/dry) — data-mode-target distingue i due casi.
+      const isManaged = managedModes.includes(mode);
+      const targetAttr = isManaged ? "" : ` data-mode-target="real"`;
+      const label = mode === "cool" ? "Raffreddamento" : mode === "dry" ? "Deumidificatore"
+        : mode === "heat" ? "Riscaldamento" : mode === "fan_only" ? "Solo ventilazione"
+        : mode === "auto" ? "Auto" : mode === "heat_cool" ? "Caldo/freddo" : mode;
+      return `<button data-mode="${mode}"${targetAttr} aria-label="${label}" title="${label}"
         style="width:24px;height:24px;border-radius:50%;border:${border};background:${bg};color:${color};display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
-        <ha-icon icon="${icon}" style="--mdc-icon-size:13px;"></ha-icon>
+        <ha-icon icon="${style.icon}" style="--mdc-icon-size:13px;"></ha-icon>
       </button>`;
     };
+    const modeButtons = realHvacModes.filter((m) => m !== "off").map((m) => modeBtn(m)).join("");
     const unmanagedBadge = unmanagedMode
-      ? `<span title="Modalità non gestita da questa integrazione (caldo/ventilazione/auto impostata da fuori)"
-          style="width:24px;height:24px;border-radius:50%;background:#f0b400;color:#4a3800;display:flex;align-items:center;justify-content:center;box-sizing:border-box;flex-shrink:0;">
-          <ha-icon icon="mdi:alert" style="--mdc-icon-size:13px;"></ha-icon>
+      ? `<span title="Modalità attiva, ma non regolata automaticamente da questa integrazione (nessuna logica di temperatura per questo modo)"
+          style="width:16px;height:16px;border-radius:50%;background:#f0b400;color:#4a3800;display:flex;align-items:center;justify-content:center;box-sizing:border-box;flex-shrink:0;margin-left:-6px;margin-top:-14px;border:1.5px solid var(--card-background-color, #fff);">
+          <ha-icon icon="mdi:alert" style="--mdc-icon-size:9px;"></ha-icon>
         </span>`
       : "";
 
-    // Pulsante accensione/spegnimento: a differenza di cool/dry (colorati
-    // solo quando sono la modalità attiva), questo resta SEMPRE colorato —
-    // rosso quando il clima è spento, verde quando è acceso (in qualsiasi
-    // modalità, gestita o no) — per essere riconoscibile a colpo d'occhio
-    // senza dover distinguere le sfumature neutre di "non attivo".
-    const isReallyOff = stateObj.state === "off";
+    // Pulsante accensione/spegnimento: a differenza delle altre modalità
+    // (colorate solo quando sono quella attiva), questo resta SEMPRE
+    // colorato — rosso quando il clima è spento, verde quando è acceso (in
+    // qualsiasi modalità, gestita o no) — per essere riconoscibile a colpo
+    // d'occhio senza dover distinguere le sfumature neutre di "non attivo".
+    const isReallyOff = realHvacState === "off";
     const powerBtn = `<button data-power-toggle="1" aria-label="${isReallyOff ? "Spento — tocca per accendere" : "Acceso — tocca per spegnere"}" title="${isReallyOff ? "Spento" : "Acceso"}"
       style="width:24px;height:24px;border-radius:50%;border:none;background:${isReallyOff ? "#d9302e" : "#2e9c4f"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
       <ha-icon icon="mdi:power" style="--mdc-icon-size:13px;"></ha-icon>
     </button>`;
 
-    // Ventola: icona MDI che mostra già graficamente il livello (fan-speed-1/2/3).
-    // Un tocco fa scorrere alla velocità successiva (bassa→media→alta→bassa).
-    const fanIcons = { low: "mdi:fan-speed-1", medium: "mdi:fan-speed-2", high: "mdi:fan-speed-3" };
-    // "auto" o altri valori non tra i 3 livelli fissi: mostriamo un'icona
-    // ventola generica (in funzione, livello non specificato) — MAI
-    // "fan-off" a meno che il clima sia realmente spento, altrimenti
-    // sembrerebbe che il climatizzatore non stia facendo nulla quando in
-    // realtà sta semplicemente regolando la ventola da solo.
-    const fanIcon = fanIcons[fanMode] || (stateObj.state === "off" ? "mdi:fan-off" : "mdi:fan");
-    const fanBtn = `<button data-fan-cycle="1" aria-label="Ventola ${fanMode || "—"}, tocca per cambiare" title="Ventola ${fanMode || "—"}"
-      style="height:24px;border-radius:12px;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;gap:3px;padding:0 7px;box-sizing:border-box;cursor:pointer;margin-left:2px;flex-shrink:0;">
-      <ha-icon icon="${fanIcon}" style="--mdc-icon-size:13px;"></ha-icon>
-    </button>`;
-
-    const modeButtonsHtml = `<div style="display:flex;align-items:center;gap:5px;height:24px;">
-      ${unmanagedBadge}
-      ${modeBtn("cool", "mdi:snowflake", "Raffreddamento", "#2e6fd9", "#fff")}
-      ${modeBtn("dry", "mdi:water", "Deumidificatore", "#f0b400", "#4a3800")}
+    const modeButtonsHtml = `<div style="display:flex;align-items:center;gap:5px;height:24px;position:relative;">
+      ${modeButtons}
       ${powerBtn}
-      ${fanBtn}
+      ${unmanagedBadge}
     </div>`;
 
     // Target con frecce — regola immediatamente (step di 1°), disponibile
@@ -405,22 +427,52 @@ class TermostatoDiagCard extends HTMLElement {
     // Priorità con frecce — regola immediatamente (step di 1), solo nel
     // modo Semplice+FV dove la priorità ha un effetto reale.
     const priorityControlHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
         <span style="font-size:12px;opacity:0.75;display:flex;align-items:center;gap:5px;">
-          <ha-icon icon="mdi:flag" style="--mdc-icon-size:14px;"></ha-icon>priorità FV
+          <ha-icon icon="mdi:flag" style="--mdc-icon-size:14px;"></ha-icon>priorità
         </span>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:6px;">
           <button data-priority-delta="-1" aria-label="Diminuisci priorità" title="Diminuisci priorità"
-            style="width:22px;height:22px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-            <ha-icon icon="mdi:minus" style="--mdc-icon-size:12px;"></ha-icon>
+            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
           </button>
-          <span style="font-size:13px;font-weight:700;min-width:16px;text-align:center;">${fvPriorita}</span>
+          <span style="font-size:13px;font-weight:700;min-width:14px;text-align:center;">${fvPriorita}</span>
           <button data-priority-delta="1" aria-label="Aumenta priorità" title="Aumenta priorità"
-            style="width:22px;height:22px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-            <ha-icon icon="mdi:plus" style="--mdc-icon-size:12px;"></ha-icon>
+            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
           </button>
         </div>
       </div>` : "";
+
+    // Ventola con frecce esplicite (prima era un click nascosto sull'icona
+    // che ciclava le velocità — poco scopribile, sostituito con lo stesso
+    // stile di controllo già usato per target e priorità).
+    const fanOrder = ["low", "medium", "high"];
+    const fanLabels = { low: "bassa", medium: "media", high: "alta" };
+    const fanLabel = fanLabels[fanMode] || fanMode || "—";
+    const fanControlHtml = fanMode !== undefined ? `
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
+        <span style="font-size:12px;opacity:0.75;display:flex;align-items:center;gap:5px;">
+          <ha-icon icon="mdi:fan" style="--mdc-icon-size:14px;"></ha-icon>ventola
+        </span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button data-fan-delta="-1" aria-label="Diminuisci ventola" title="Diminuisci ventola"
+            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
+          </button>
+          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;">${fanLabel}</span>
+          <button data-fan-delta="1" aria-label="Aumenta ventola" title="Aumenta ventola"
+            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
+          </button>
+        </div>
+      </div>` : "";
+
+    // Ventola e priorità condividono la stessa riga, divisa in due colonne
+    // — se una delle due non è presente, l'altra occupa tutta la riga.
+    const fanPriorityRowHtml = (fanControlHtml || priorityControlHtml)
+      ? `<div style="display:flex;gap:8px;margin-top:12px;">${fanControlHtml}${priorityControlHtml}</div>`
+      : "";
 
     this.innerHTML = `
       <ha-card style="overflow:hidden;background:transparent;--ha-card-background:transparent;">
@@ -432,7 +484,7 @@ class TermostatoDiagCard extends HTMLElement {
           <div style="margin-top:14px;">
             <div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;">
               ${roomSensorEntity ? `
-              <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
+              <div data-more-info-entity="${roomSensorEntity}" style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);cursor:pointer;">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">stanza</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
               </div>` : ""}
@@ -443,7 +495,7 @@ class TermostatoDiagCard extends HTMLElement {
               ${targetCellHtml}
             </div>
           </div>
-          ${priorityControlHtml}
+          ${fanPriorityRowHtml}
           ${attrsHtml}
           ${notifyHistoryHtml}
         </div>
@@ -462,11 +514,20 @@ class TermostatoDiagCard extends HTMLElement {
 
   _attachControlListeners(stateObj) {
     const entityId = this._config.entity;
+    const realClimateEntity = stateObj.attributes.climatizzatore_reale;
+    const fanOrder = ["low", "medium", "high"];
+    const fanMode = stateObj.attributes.fan_mode;
 
     this.querySelectorAll("[data-mode]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const mode = btn.getAttribute("data-mode");
-        this._callService("climate", "set_hvac_mode", { entity_id: entityId, hvac_mode: mode });
+        // I modi extra (heat/fan_only/auto/...) non sono tra quelli che il
+        // nostro wrapper dichiara di supportare — mandiamo il comando
+        // direttamente al climatizzatore reale sottostante, altrimenti
+        // Home Assistant rifiuterebbe la richiesta come hvac_mode non
+        // valido per l'entità target.
+        const target = btn.getAttribute("data-mode-target") === "real" && realClimateEntity ? realClimateEntity : entityId;
+        this._callService("climate", "set_hvac_mode", { entity_id: target, hvac_mode: mode });
       });
     });
 
@@ -475,19 +536,8 @@ class TermostatoDiagCard extends HTMLElement {
       powerToggleBtn.addEventListener("click", () => {
         // Vero toggle: se è spento accende (in raffreddamento, la modalità
         // di default), se è acceso (in qualunque modalità) spegne.
-        const nextMode = stateObj.state === "off" ? "cool" : "off";
+        const nextMode = realHvacState === "off" ? "cool" : "off";
         this._callService("climate", "set_hvac_mode", { entity_id: entityId, hvac_mode: nextMode });
-      });
-    }
-
-    const fanCycleBtn = this.querySelector("[data-fan-cycle]");
-    if (fanCycleBtn) {
-      fanCycleBtn.addEventListener("click", () => {
-        const order = ["low", "medium", "high"];
-        const current = stateObj.attributes.fan_mode;
-        const idx = order.indexOf(current);
-        const next = order[(idx + 1) % order.length] || "low";
-        this._callService("climate", "set_fan_mode", { entity_id: entityId, fan_mode: next });
       });
     }
 
@@ -502,6 +552,18 @@ class TermostatoDiagCard extends HTMLElement {
       btn.addEventListener("click", () => {
         const delta = parseFloat(btn.getAttribute("data-priority-delta"));
         this._callService("termostato_intelligente", "adjust_priority", { entity_id: entityId, delta });
+      });
+    });
+
+    this.querySelectorAll("[data-fan-delta]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const delta = parseInt(btn.getAttribute("data-fan-delta"), 10);
+        const currentIdx = fanOrder.indexOf(fanMode);
+        // Se il valore attuale non è tra i 3 noti (es. "auto"), partiamo
+        // da "bassa" invece di un indice negativo che sballerebbe il calcolo.
+        const baseIdx = currentIdx === -1 ? 0 : currentIdx;
+        const nextIdx = (baseIdx + delta + fanOrder.length) % fanOrder.length;
+        this._callService("climate", "set_fan_mode", { entity_id: entityId, fan_mode: fanOrder[nextIdx] });
       });
     });
 
