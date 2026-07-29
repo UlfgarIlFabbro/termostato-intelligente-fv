@@ -560,10 +560,11 @@ class TermostatoDiagCard extends HTMLElement {
     // della card. Solo le celle effettivamente presenti vengono unite, e
     // il bordo destro si applica a tutte tranne l'ultima.
     const fanPriorityCells = [fanControlHtml, priorityControlHtml, timerMinutesControlHtml].filter(Boolean);
+    const dividerBorderColor = colors ? colors.border : "#000";
     const fanPriorityRowHtml = fanPriorityCells.length > 0
-      ? `<div style="display:flex;border:0.5px solid #000;border-radius:10px;overflow:hidden;margin-top:12px;">
+      ? `<div style="display:flex;border:2px solid ${dividerBorderColor};border-radius:10px;overflow:hidden;margin-top:12px;">
           ${fanPriorityCells.map((cell, i) => i < fanPriorityCells.length - 1
-            ? cell.replace('min-width:0;', 'min-width:0;border-right:0.5px solid #000;')
+            ? cell.replace('min-width:0;', `min-width:0;border-right:2px solid ${dividerBorderColor};`)
             : cell
           ).join("")}
         </div>`
@@ -600,13 +601,13 @@ class TermostatoDiagCard extends HTMLElement {
             ${modeButtonsHtml}
           </div>
           <div style="margin-top:14px;">
-            <div style="display:flex;border:0.5px solid #000;border-radius:10px;overflow:hidden;">
+            <div style="display:flex;border:2px solid ${colors ? colors.border : "#000"};border-radius:10px;overflow:hidden;">
               ${roomSensorEntity ? `
-              <div data-more-info-entity="${roomSensorEntity}" style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid #000;cursor:pointer;">
+              <div data-more-info-entity="${roomSensorEntity}" style="flex:1;text-align:center;padding:8px 4px;border-right:2px solid ${colors ? colors.border : "#000"};cursor:pointer;">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">stanza</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
               </div>` : ""}
-              <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid #000;">
+              <div style="flex:1;text-align:center;padding:8px 4px;border-right:2px solid ${colors ? colors.border : "#000"};">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">clima</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${climaTemp !== null ? (Math.round(climaTemp * 10) / 10) + "°" : "—"}</div>
               </div>
