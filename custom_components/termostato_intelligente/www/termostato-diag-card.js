@@ -132,6 +132,9 @@ class TermostatoDiagCard extends HTMLElement {
     if (this._modePickerOpen === undefined) {
       this._modePickerOpen = false;
     }
+    if (this._modePickerWasOn === undefined) {
+      this._modePickerWasOn = false;
+    }
     if (this._timerConfirmOpen === undefined) {
       this._timerConfirmOpen = false;
     }
@@ -430,17 +433,17 @@ class TermostatoDiagCard extends HTMLElement {
           <span style="font-size:11px;color:var(--primary-text-color);">${modeLabel(mode)}</span>
         </button>`;
       }).join("");
-      // Pulsante spegni — dentro il popup, dato che ora il power in alto
-      // apre sempre questo menu (anche da acceso) invece di spegnere
-      // direttamente. Stile rosso distintivo, coerente col colore del
-      // power quando è spento.
-      const offButton = `<button data-mode="off" aria-label="Spegni"
+      // Pulsante spegni — compare SOLO se il popup è stato aperto da
+      // acceso (il power era verde). Se era già spento (rosso), il popup
+      // serve solo a scegliere con quale modalità accendere — mostrare
+      // "Spegni" in quel caso non avrebbe senso, dato che è già spento.
+      const offButton = this._modePickerWasOn ? `<button data-mode="off" aria-label="Spegni"
         style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
         <span style="width:44px;height:44px;border-radius:50%;background:#d9302e;color:#fff;display:flex;align-items:center;justify-content:center;">
           <ha-icon icon="mdi:power" style="--mdc-icon-size:22px;"></ha-icon>
         </span>
         <span style="font-size:11px;color:var(--primary-text-color);">Spegni</span>
-      </button>`;
+      </button>` : "";
       modePickerModalHtml = `
         <div data-mode-picker-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
           <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
@@ -558,9 +561,9 @@ class TermostatoDiagCard extends HTMLElement {
     // il bordo destro si applica a tutte tranne l'ultima.
     const fanPriorityCells = [fanControlHtml, priorityControlHtml, timerMinutesControlHtml].filter(Boolean);
     const fanPriorityRowHtml = fanPriorityCells.length > 0
-      ? `<div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;margin-top:12px;">
+      ? `<div style="display:flex;border:0.5px solid #000;border-radius:10px;overflow:hidden;margin-top:12px;">
           ${fanPriorityCells.map((cell, i) => i < fanPriorityCells.length - 1
-            ? cell.replace('min-width:0;', 'min-width:0;border-right:0.5px solid var(--divider-color, #ccc);')
+            ? cell.replace('min-width:0;', 'min-width:0;border-right:0.5px solid #000;')
             : cell
           ).join("")}
         </div>`
@@ -597,13 +600,13 @@ class TermostatoDiagCard extends HTMLElement {
             ${modeButtonsHtml}
           </div>
           <div style="margin-top:14px;">
-            <div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;">
+            <div style="display:flex;border:0.5px solid #000;border-radius:10px;overflow:hidden;">
               ${roomSensorEntity ? `
-              <div data-more-info-entity="${roomSensorEntity}" style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);cursor:pointer;">
+              <div data-more-info-entity="${roomSensorEntity}" style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid #000;cursor:pointer;">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">stanza</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${roomTemp !== null ? (Math.round(roomTemp * 10) / 10) + "°" : "—"}</div>
               </div>` : ""}
-              <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid var(--divider-color, #ccc);">
+              <div style="flex:1;text-align:center;padding:8px 4px;border-right:0.5px solid #000;">
                 <div style="font-size:10px;opacity:0.6;margin-bottom:2px;">clima</div>
                 <div style="font-size:18px;font-weight:700;line-height:1;">${climaTemp !== null ? (Math.round(climaTemp * 10) / 10) + "°" : "—"}</div>
               </div>
@@ -661,7 +664,10 @@ class TermostatoDiagCard extends HTMLElement {
         // Apriamo sempre il popup di selezione modalità, sia da acceso
         // che da spento — così chi vuole solo cambiare modalità (senza
         // passare per uno spegnimento) può farlo con un tocco. Lo
-        // spegnimento diretto resta disponibile dentro il popup stesso.
+        // spegnimento diretto resta disponibile dentro il popup stesso,
+        // ma solo se il dispositivo era davvero acceso all'apertura —
+        // se era già spento, mostrare "Spegni" non avrebbe senso.
+        this._modePickerWasOn = realHvacState !== "off";
         this._modePickerOpen = true;
         this._render();
       });
