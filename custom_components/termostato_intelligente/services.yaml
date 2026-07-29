@@ -53,3 +53,80 @@ adjust_priority:
           max: 20
           step: 1
           mode: box
+
+set_shutoff_timer:
+  name: Imposta timer di spegnimento
+  description: >-
+    Programma lo spegnimento automatico del climatizzatore dopo un numero
+    di minuti, indipendentemente dal master switch dell'automazione — utile
+    per un uso manuale (es. uno scaldotto). Impostare 0 minuti annulla un
+    timer già attivo senza spegnere nulla.
+  fields:
+    entity_id:
+      name: Termostato
+      description: L'entità termostato su cui impostare il timer.
+      required: true
+      selector:
+        entity:
+          integration: termostato_intelligente
+          domain: climate
+    minutes:
+      name: Minuti
+      description: Tra quanti minuti spegnere. 0 annulla un timer già attivo.
+      required: true
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 480
+          step: 5
+          mode: box
+
+toggle_manual_shutoff_timer:
+  name: Attiva/disattiva timer di spegnimento manuale
+  description: >-
+    Attiva o disattiva la funzione "spegni dopo X minuti da un'accensione
+    manuale" per questo termostato — usata dalla card per il pulsante
+    interruttore dedicato.
+  fields:
+    entity_id:
+      name: Termostato
+      description: L'entità termostato su cui attivare/disattivare la funzione.
+      required: true
+      selector:
+        entity:
+          integration: termostato_intelligente
+          domain: climate
+    enabled:
+      name: Attivo
+      description: True per attivare, false per disattivare.
+      required: true
+      default: true
+      selector:
+        boolean: {}
+
+adjust_manual_shutoff_timer_minutes:
+  name: Regola minuti timer di spegnimento manuale
+  description: >-
+    Aumenta o diminuisce i minuti del timer di spegnimento dopo
+    accensione manuale. Non scende mai sotto 5.
+  fields:
+    entity_id:
+      name: Termostato
+      description: L'entità termostato da regolare.
+      required: true
+      selector:
+        entity:
+          integration: termostato_intelligente
+          domain: climate
+    delta:
+      name: Variazione
+      description: Di quanti minuti aumentare (positivo) o diminuire (negativo) il valore attuale.
+      required: true
+      default: 1
+      selector:
+        number:
+          min: -60
+          max: 60
+          step: 1
+          mode: box

@@ -49,22 +49,26 @@ Tutti i controlli agiscono **immediatamente**, senza ricaricare l'integrazione:
 
 | Controllo | Azione |
 |---|---|
-| ❄️ / 💧 / ⏻ (icone modalità) | Un tocco cambia subito raffreddamento / deumidificatore / spento sul climatizzatore reale |
-| ⏻ (accensione/spegnimento) | Sempre colorato — 🔴 rosso se spento, 🟢 verde se acceso — funziona come un vero interruttore |
-| Ventola (icona con numero) | Un tocco fa scorrere alla velocità successiva (bassa→media→alta→bassa); se il climatizzatore è in "auto" mostra un'icona neutra, mai "spenta" per non essere fuorviante |
+| Icona modalità (accanto al power) | Mostra **solo** la modalità attualmente attiva, ricavata dagli `hvac_modes` reali del climatizzatore — colori dedicati per raffreddamento/deumidificatore/riscaldamento/ventilazione/auto |
+| ⏻ Accensione/spegnimento (grande, 🔴 spento / 🟢 acceso) | Da acceso spegne direttamente; da spento apre un **popup** con tutte le modalità disponibili per scegliere con quale accendere |
+| Ventola (frecce `−`/`+`) | Cambia velocità (bassa→media→alta) di uno scatto per tocco |
 | Target (frecce `−`/`+`) | Regola di 0,1°C per tocco. Il valore è un override che ha precedenza sulla configurazione da wizard, persistito ai riavvii |
 | Priorità FV (frecce `−`/`+`, se abilitata) | Regola di 1 punto per tocco, stesso principio del target |
+| Timer spegnimento manuale (icona + frecce `−`/`+`) | Icona-interruttore per attivare/disattivare (stato persistente); frecce per regolare i minuti (step di 1). Se attivo, ogni accensione manuale spegne automaticamente dopo i minuti impostati — indipendentemente dal master switch (utile per un uso completamente manuale, es. uno scaldotto) |
+| Interruttore automazione (icona robot) | Disattiva/riattiva l'intero termostato per quella stanza direttamente dalla card, senza cercare lo switch separato |
 | 🚪 Porta / 🪟 Finestra | Se il sensore è configurato, un tocco apre il dialog informazioni nativo di Home Assistant su quel sensore |
-| 🔔 Ultimo evento (se abilitato) | Sempre in fondo, a piena larghezza — un tocco espande le ultime 8 notifiche inviate |
+| Temperatura stanza | Un tocco apre il dialog informazioni nativo (con grafico storico) sul sensore esterno |
+| 🔔 Ultimo evento | Badge compatto (stile icone) o riga completa (stile righe) — un tocco apre un popup con le ultime 8 notifiche |
 
 ### Altre caratteristiche
 
-- Sfondo colorato in base allo stato del climatizzatore, con **trasparenza regolabile** da uno slider nella configurazione (si applica sia allo sfondo colorato che a quello neutro a clima spento)
-- Se il climatizzatore reale è in una modalità non gestita dall'integrazione (riscaldamento, ventilazione, auto — impostata da telecomando o altra automazione), la card lo segnala con un badge di avviso invece di mostrare uno stato fuorviante
-- **Filtro "mostra solo attributi attivi"**: finestra chiusa, notte non attiva, DRY non in corso vengono nascosti automaticamente
+- Sfondo colorato in base alla modalità attiva (blu raffreddamento, giallo deumidificatore, arancione riscaldamento, viola ventilazione, teal auto), con **trasparenza regolabile** da uno slider nella configurazione
+- Se il climatizzatore reale è in una modalità non gestita dall'integrazione (riscaldamento, ventilazione, auto — impostata da telecomando o altra automazione), la card lo segnala con un badge di avviso sovrapposto all'icona modalità
+- **Filtro "mostra solo attributi attivi"**: finestra chiusa, notte non attiva, DRY non in corso vengono resi invisibili ma mantengono lo spazio riservato, per allineare l'altezza tra card affiancate con stati diversi
 - **Si adatta da sola al modo di configurazione**: un'istanza in modo Completo mostra protezione potenza ed emergenza caldo; una in modo Semplice/Semplice+FV mostra DRY, blocco riaccensione, FV
 - Nel selettore entità dell'editor compaiono solo i termostati creati da questa integrazione, non tutte le entità climate di Home Assistant
 - Editor senza bug di perdita del focus durante la digitazione
+- Bordi arrotondati e prestazioni ottimizzate: la card si ridisegna solo quando cambia davvero qualcosa di rilevante, non ad ogni aggiornamento di Home Assistant
 
 ---
 
@@ -237,11 +241,11 @@ La fascia di silenzio è configurabile separatamente per Google e Telegram — n
 
 ## 🔧 Switch ausiliari
 
-Ogni istanza espone tre switch in Home Assistant:
+Ogni istanza espone tre switch in Home Assistant (il Master è controllabile anche direttamente dalla card):
 
 | Switch | Funzione |
 |---|---|
-| **Master** | Abilita/disabilita completamente il termostato |
+| **Master** | Abilita/disabilita completamente il termostato — usa la card se preferisci non cercarlo separatamente |
 | **Accensione FV** | Abilita/disabilita solo l'accensione automatica da fotovoltaico |
 | **Raffreddamento rapido** | Abbassa ulteriormente il setpoint e porta la ventola al massimo |
 
@@ -267,8 +271,13 @@ Ogni istanza espone tre switch in Home Assistant:
 | `fv_priorita` | Priorità configurata per questa istanza |
 | `sonda_esterna_bloccata` | Se è in corso il fallback sulla sonda interna |
 | `ultimo_evento_notifica` | Ultimo messaggio inviato realmente, con timestamp |
+| `storico_notifiche` | Ultime 8 notifiche inviate, mostrate nel popup della card |
 | `modalita_configurazione` | Semplificato / Semplificato+FV / Completo |
 | `protezione_potenza_attiva` / `emergenza_caldo_attiva` | Stato delle protezioni del modo Completo |
+| `master_switch_entity_id` | Entity_id reale dello switch master, usato dalla card per il pulsante interruttore automazione |
+| `timer_manuale_attivo` / `timer_manuale_minuti_configurati` | Stato del timer di spegnimento dopo accensione manuale (attivabile/regolabile dalla card) |
+| `timer_spegnimento_fino_a` | Se il timer è in corso, quando scatterà lo spegnimento |
+| `window_detection_enabled` | Se la finestra influisce sul climatizzatore per questa istanza (disattivabile per sensori poco affidabili) |
 
 ---
 
@@ -276,11 +285,12 @@ Ogni istanza espone tre switch in Home Assistant:
 
 ```
 custom_components/termostato_intelligente/
-├── __init__.py
+├── __init__.py          # Setup, registrazione servizi custom, resource card
 ├── climate.py          # Logica principale del termostato
 ├── config_flow.py      # Configurazione guidata
 ├── const.py             # Costanti e valori di default
 ├── manifest.json       # Metadati integrazione
+├── services.yaml        # Descrizione dei servizi custom (per l'interfaccia Azioni)
 ├── strings.json         # Stringhe UI (base inglese)
 ├── switch.py             # Switch ausiliari
 ├── util.py               # Funzioni di utilità
@@ -297,6 +307,11 @@ custom_components/termostato_intelligente/
 
 | Versione | Note |
 |---|---|
+| **v0.8.19** | **Timer di spegnimento manuale regolabile dalla card.** Icona-interruttore persistente + frecce per i minuti (step di 1), oltre alla configurazione da wizard. Se attivo, ogni accensione manuale (anche a master switch disattivato) spegne automaticamente dopo i minuti impostati — pensato per un uso completamente manuale del clima (es. uno scaldotto d'inverno) |
+| v0.8.17 → v0.8.18 | Nuovo interruttore automazione direttamente dalla card (senza cercare lo switch separato), prima versione del timer di spegnimento manuale (solo da configurazione), popup di selezione modalità al posto dell'accensione diretta, icona modalità singola (solo l'attiva) ingrandita accanto al power, icona "A" per la modalità auto, campanella coerente con lo stile emoji di porta/finestra, bordi più arrotondati |
+| v0.8.16 | La campanella dello storico notifiche, in stile icone, partecipa correttamente al sistema di compattamento/allineamento degli altri badge (prima restava sempre in coda, ora si comporta come porta/finestra) |
+| v0.8.15 | **Fix cruciale della cache del browser.** Il tag usato per invalidare la cache sull'URL della card era rimasto fermo alla primissima versione, impedendo il caricamento di tutti gli aggiornamenti successivi nonostante i file sul disco fossero sempre corretti |
+| v0.8.11 → v0.8.14 | Protezione finestra già aperta al momento dell'accensione manuale (prima veniva ignorata), switch per disattivare completamente l'influenza della finestra su un climatizzatore specifico (utile con sensori poco affidabili, es. vapore di cottura prolungato), modalità dinamiche ricavate dagli `hvac_modes` reali del climatizzatore invece delle sole 3 fisse, fix prestazioni card (non si ridisegna più ad ogni aggiornamento irrilevante di Home Assistant) |
 | **v0.8.5** | **Regolazione termica ottimizzata.** Eliminato il "salto indietro" del setpoint nella fascia finale (vicino al target), che rallentava proprio nell'ultimo tratto prima di raggiungerlo. Nuovo campo "Margine di spegnimento": la stanza resta vicina al target invece di spegnersi al primo istante sotto soglia. Anti-oscillazione FV (nuovo campo per l'accensione, simmetrico allo spegnimento), protezione sensore FV offline (con switch dedicato, minuti configurabili, notifiche separate), distanziatore notifiche vocali, riordino della configurazione |
 | **v0.8.0** | **Card diagnostica interattiva completa.** Controlli diretti dal dashboard: cambio modalità, ventola a step, target e priorità FV regolabili con frecce (0,1°C per tocco), click su porta/finestra per il dialog informazioni nativo, storico notifiche espandibile, trasparenza sfondo regolabile, temperatura mostrata separatamente per stanza e climatizzatore. Corretti diversi bug di visualizzazione (angoli sporgenti, editor che perdeva il focus durante la digitazione, icona ventola fuorviante in modalità auto, gestione delle modalità esterne non supportate come riscaldamento/ventilazione) |
 | v0.7.4 → v0.7.21 | Fix di sicurezza sulla protezione anti-blackout (il ciclo FV poteva riaccendere immediatamente un clima appena spento per esubero), fix del timer di riaccensione dopo blocco potenza, controllo "già acceso" prima di un ripristino automatico, pulizia automatica di risorse Lovelace duplicate |

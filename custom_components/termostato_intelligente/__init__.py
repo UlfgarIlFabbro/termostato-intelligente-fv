@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_call_later
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -125,7 +128,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v080"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v0819"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -262,8 +265,42 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             climate_entity._runtime_priority_override = new_value
             climate_entity.async_write_ha_state()
 
+    async def _handle_set_shutoff_timer(call) -> None:
+        minutes = float(call.data.get("minutes", 0))
+        for climate_entity in _find_climate_entities(call):
+            # Annulliamo sempre un eventuale timer già attivo prima di
+            # procedere, sia per sostituirlo con uno nuovo sia per
+            # annullarlo del tutto (minutes=0 dalla card).
+            if climate_entity._shutoff_timer_cancel is not None:
+                climate_entity._shutoff_timer_cancel()
+                climate_entity._shutoff_timer_cancel = None
+                climate_entity._shutoff_timer_until = None
+            if minutes > 0:
+                climate_entity._shutoff_timer_until = dt_util.utcnow() + timedelta(minutes=minutes)
+                climate_entity._shutoff_timer_cancel = async_call_later(
+                    hass, timedelta(minutes=minutes), climate_entity._async_shutoff_timer_expired
+                )
+            climate_entity.async_write_ha_state()
+
+    async def _handle_toggle_manual_shutoff_timer(call) -> None:
+        enabled = bool(call.data.get("enabled", True))
+        for climate_entity in _find_climate_entities(call):
+            climate_entity._runtime_shutoff_timer_enabled = enabled
+            climate_entity.async_write_ha_state()
+
+    async def _handle_adjust_manual_shutoff_timer_minutes(call) -> None:
+        delta = float(call.data.get("delta", 0))
+        for climate_entity in _find_climate_entities(call):
+            current = climate_entity._manual_shutoff_timer_minutes()
+            new_value = max(5, round(current + delta))
+            climate_entity._runtime_shutoff_timer_minutes = new_value
+            climate_entity.async_write_ha_state()
+
     hass.services.async_register(DOMAIN, "adjust_target", _handle_adjust_target)
     hass.services.async_register(DOMAIN, "adjust_priority", _handle_adjust_priority)
+    hass.services.async_register(DOMAIN, "set_shutoff_timer", _handle_set_shutoff_timer)
+    hass.services.async_register(DOMAIN, "toggle_manual_shutoff_timer", _handle_toggle_manual_shutoff_timer)
+    hass.services.async_register(DOMAIN, "adjust_manual_shutoff_timer_minutes", _handle_adjust_manual_shutoff_timer_minutes)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

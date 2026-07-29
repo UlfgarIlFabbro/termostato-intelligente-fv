@@ -242,6 +242,8 @@ from .const import (
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
     CONF_SIMPLE_TURN_ON_OFFSET,
     CONF_SIMPLE_SHUTOFF_MARGIN,
+    CONF_MANUAL_SHUTOFF_TIMER_MIN,
+    DEFAULT_MANUAL_SHUTOFF_TIMER_MIN,
     DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
     DEFAULT_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
@@ -394,6 +396,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         )
         self._snapshot: dict[str, Any] | None = None
         self._window_cancel_timer = None
+        self._shutoff_timer_cancel = None  # funzione per annullare il timer di spegnimento manuale (card), se attivo
+        self._shutoff_timer_until: datetime | None = None  # quando scatterà lo spegnimento, per mostrarlo alla card
+        self._runtime_shutoff_timer_enabled: bool | None = None  # override dalla card — None = usa il default (attivo se i minuti configurati sono > 0)
+        self._runtime_shutoff_timer_minutes: float | None = None  # override dalla card per i minuti — None = usa il valore configurato
         self._presence_since: datetime | None = None
         self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
         self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
@@ -524,6 +530,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "presenza_da": self._presence_since.isoformat() if self._presence_since else None,
             "climatizzatore_reale": self._climate_entity,
             "termostato_abilitato": self._switch_state(SWITCH_KEY_MASTER, True),
+            "master_switch_entity_id": self._switch_entity_id(SWITCH_KEY_MASTER),
+            "timer_spegnimento_fino_a": self._shutoff_timer_until.isoformat() if self._shutoff_timer_until else None,
+            "timer_manuale_attivo": self._manual_shutoff_timer_enabled(),
+            "timer_manuale_minuti_configurati": self._manual_shutoff_timer_minutes(),
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
             "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
             "modalita_notturna_attiva": self._is_night_mode_active(),
@@ -648,6 +658,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                         self._runtime_priority_override = saved_priority
             except (TypeError, ValueError) as exc:
                 _LOGGER.warning("%s: errore ripristino override target/priorità: %s", self._attr_name, exc)
+            try:
+                saved_timer_enabled = last_state.attributes.get("timer_manuale_attivo")
+                if saved_timer_enabled is not None:
+                    self._runtime_shutoff_timer_enabled = bool(saved_timer_enabled)
+                configured_timer_minutes = float(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_MIN, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN))
+                saved_timer_minutes = last_state.attributes.get("timer_manuale_minuti_configurati")
+                if saved_timer_minutes is not None and float(saved_timer_minutes) != configured_timer_minutes:
+                    self._runtime_shutoff_timer_minutes = float(saved_timer_minutes)
+            except (TypeError, ValueError) as exc:
+                _LOGGER.warning("%s: errore ripristino stato timer manuale: %s", self._attr_name, exc)
             try:
                 saved_history = last_state.attributes.get("storico_notifiche")
                 if isinstance(saved_history, list):
@@ -793,6 +813,22 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 if old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
                     self._manual_accension_since = dt_util.utcnow()
                     _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
+                    # Timer di spegnimento automatico dopo accensione
+                    # manuale — se l'utente l'ha attivato dalla card (o è
+                    # configurato di default), programma lo spegnimento a
+                    # prescindere da tutto il resto (FV, notte, finestra),
+                    # proprio come vuole chi usa il clima manualmente (es.
+                    # uno scaldotto) e vuole solo una sicurezza a tempo.
+                    if self._manual_shutoff_timer_enabled():
+                        timer_minutes = self._manual_shutoff_timer_minutes()
+                        if timer_minutes > 0:
+                            if self._shutoff_timer_cancel is not None:
+                                self._shutoff_timer_cancel()
+                            self._shutoff_timer_until = dt_util.utcnow() + timedelta(minutes=timer_minutes)
+                            self._shutoff_timer_cancel = async_call_later(
+                                self.hass, timedelta(minutes=timer_minutes), self._async_shutoff_timer_expired
+                            )
+                            _LOGGER.info("%s: timer di spegnimento automatico avviato (%s minuti)", self._attr_name, timer_minutes)
                     # Se la finestra è GIÀ aperta in questo momento (non è
                     # lei a essere appena cambiata, quindi il suo stesso
                     # listener non scatterebbe mai per questo caso),
@@ -2502,6 +2538,30 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return default
         return bool(getattr(switch, "is_on", default))
 
+    def _switch_entity_id(self, key: str) -> str | None:
+        """Restituisce l'entity_id reale di uno switch ausiliario (es. il
+        master switch), per poterlo esporre alla card e permetterle di
+        controllarlo direttamente."""
+        data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
+        switch = data.get(key)
+        return getattr(switch, "entity_id", None) if switch is not None else None
+
+    def _manual_shutoff_timer_minutes(self) -> float:
+        """Minuti effettivi del timer manuale — override dalla card se
+        presente, altrimenti il valore configurato nelle opzioni."""
+        if self._runtime_shutoff_timer_minutes is not None:
+            return self._runtime_shutoff_timer_minutes
+        return float(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_MIN, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN))
+
+    def _manual_shutoff_timer_enabled(self) -> bool:
+        """True se il timer di spegnimento automatico dopo accensione
+        manuale è attivo — l'utente lo attiva/disattiva dalla card
+        (override runtime); se non l'ha mai toccato, il valore di default
+        dipende solo dai minuti configurati (0 = mai attivo di default)."""
+        if self._runtime_shutoff_timer_enabled is not None:
+            return self._runtime_shutoff_timer_enabled
+        return self._manual_shutoff_timer_minutes() > 0
+
     def _read_float(self, entity_id: str | None) -> float | None:
         if not entity_id:
             return None
@@ -3013,6 +3073,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
         await self._async_turn_off_climate()
         await self._async_notify_window_closed_off()
+        self.async_write_ha_state()
+
+    async def _async_shutoff_timer_expired(self, now: datetime | None = None) -> None:
+        """Spegne il clima quando scade il timer impostato manualmente
+        dalla card. A differenza delle altre automazioni, questo funziona
+        SEMPRE, anche se il master switch è disattivato — è un comando
+        esplicito dell'utente (es. per uno scaldotto usato manualmente
+        d'inverno), non una decisione automatica del termostato."""
+        self._shutoff_timer_cancel = None
+        self._shutoff_timer_until = None
+        await self._async_turn_off_climate()
         self.async_write_ha_state()
 
     async def _async_window_closed(self) -> None:
