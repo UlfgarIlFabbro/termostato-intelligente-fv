@@ -542,12 +542,12 @@ class TermostatoDiagCard extends HTMLElement {
           <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:12px;"></ha-icon>
         </button>
         <div style="display:flex;align-items:center;gap:2px;">
-          <button data-timer-minutes-delta="-1" aria-label="Diminuisci minuti" title="Diminuisci minuti"
+          <button data-timer-minutes-delta="-5" aria-label="Diminuisci minuti" title="Diminuisci minuti"
             style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
           <span title="Minuti" style="font-size:11px;font-weight:700;min-width:20px;text-align:center;flex-shrink:0;">${Math.round(timerMinutesConfigured)}</span>
-          <button data-timer-minutes-delta="1" aria-label="Aumenta minuti" title="Aumenta minuti"
+          <button data-timer-minutes-delta="5" aria-label="Aumenta minuti" title="Aumenta minuti"
             style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>

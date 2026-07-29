@@ -128,7 +128,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v0832"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v0833"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -293,9 +293,21 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         delta = float(call.data.get("delta", 0))
         for climate_entity in _find_climate_entities(call):
             current = climate_entity._manual_shutoff_timer_minutes()
-            new_value = max(1, round(current + delta))
+            new_value = max(5, round(current + delta))
             climate_entity._runtime_shutoff_timer_minutes = new_value
             climate_entity._timer_override_touched = True
+            # Se il timer è GIÀ in conto alla rovescia (accensione manuale
+            # avvenuta prima di questa regolazione), il nuovo valore deve
+            # valere subito anche per quel conteggio in corso — altrimenti
+            # regolare i minuti dalla card non avrebbe alcun effetto finché
+            # non scatta un'accensione manuale successiva. Riprogrammiamo
+            # da adesso con il nuovo totale di minuti.
+            if climate_entity._shutoff_timer_cancel is not None:
+                climate_entity._shutoff_timer_cancel()
+                climate_entity._shutoff_timer_until = dt_util.utcnow() + timedelta(minutes=new_value)
+                climate_entity._shutoff_timer_cancel = async_call_later(
+                    hass, timedelta(minutes=new_value), climate_entity._async_shutoff_timer_expired
+                )
             climate_entity.async_write_ha_state()
 
     hass.services.async_register(DOMAIN, "adjust_target", _handle_adjust_target)

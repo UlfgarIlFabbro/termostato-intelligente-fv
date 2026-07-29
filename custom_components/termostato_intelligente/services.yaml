@@ -123,10 +123,10 @@ adjust_manual_shutoff_timer_minutes:
       name: Variazione
       description: Di quanti minuti aumentare (positivo) o diminuire (negativo) il valore attuale.
       required: true
-      default: 1
+      default: 5
       selector:
         number:
           min: -60
           max: 60
-          step: 1
+          step: 5
           mode: box
