@@ -519,6 +519,7 @@ def _schema_soglie_termiche(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_TURN_ON_OFFSET, defaults, DEFAULT_TURN_ON_OFFSET): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=5, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_TEMP_DELTA, defaults, DEFAULT_TEMP_DELTA): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_EXTREME_DELTA, defaults, DEFAULT_EXTREME_DELTA): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=8, step=0.5, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_MANUAL_SHUTOFF_TIMER_MIN, defaults, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=480, step=5, unit_of_measurement="min", mode="box")),
     })
 
 

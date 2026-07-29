@@ -55,7 +55,8 @@
           "below_offset": "Margin below target to slow down (°C)",
           "turn_on_offset": "Minimum offset to turn on from solar (°C)",
           "temp_delta": "Setpoint delta in warm/strong bands (°C)",
-          "extreme_delta": "Setpoint delta in extreme heat band (°C)"
+          "extreme_delta": "Setpoint delta in extreme heat band (°C)",
+          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)"
         },
         "data_description": {
           "target_temp_default": "Desired room temperature. Example: 25°C.",
@@ -65,7 +66,8 @@
           "below_offset": "Below target - this: AC slows down to avoid over-cooling. Example: 0.1°C → slows below 24.9°C.",
           "turn_on_offset": "Turns on from solar only if room > target + this. Example: 1.5°C → only above 26.5°C.",
           "temp_delta": "How much the setpoint is lowered in normal bands. Example: 1.0°C → sends 24°C with target 25°C.",
-          "extreme_delta": "How much the setpoint is lowered in extreme heat. Example: 2.0°C → sends 23°C in extreme heat."
+          "extreme_delta": "How much the setpoint is lowered in extreme heat. Example: 2.0°C → sends 23°C in extreme heat.",
+          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card."
         }
       },
       "energia": {
@@ -550,7 +552,8 @@
           "below_offset": "Margin below target to slow down (°C)",
           "turn_on_offset": "Minimum offset to turn on from solar (°C)",
           "temp_delta": "Setpoint delta warm/strong bands (°C)",
-          "extreme_delta": "Setpoint delta extreme heat band (°C)"
+          "extreme_delta": "Setpoint delta extreme heat band (°C)",
+          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)"
         },
         "data_description": {
           "target_temp_default": "Desired room temperature. Example: 25°C.",
@@ -560,7 +563,8 @@
           "below_offset": "Below target - this: AC slows down. Example: 0.1°C → slows below 24.9°C.",
           "turn_on_offset": "Turns on from solar only if room > target + this. Example: 1.5°C → only above 26.5°C.",
           "temp_delta": "How much the setpoint is lowered in normal bands. Example: 1.0°C.",
-          "extreme_delta": "How much the setpoint is lowered in extreme heat. Example: 2.0°C."
+          "extreme_delta": "How much the setpoint is lowered in extreme heat. Example: 2.0°C.",
+          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card."
         }
       },
       "energia": {

@@ -662,10 +662,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 saved_timer_enabled = last_state.attributes.get("timer_manuale_attivo")
                 if saved_timer_enabled is not None:
                     self._runtime_shutoff_timer_enabled = bool(saved_timer_enabled)
-                configured_timer_minutes = float(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_MIN, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN))
+                # Ripristiniamo l'override dei minuti SOLO se il timer era
+                # davvero attivo in precedenza — altrimenti un valore
+                # salvato che è semplicemente il vecchio default mai
+                # toccato (es. 0, prima che l'utente configurasse
+                # qualcosa) verrebbe scambiato per un override intenzionale
+                # e imposto sopra il valore appena configurato dall'utente,
+                # "congelando" per sempre il vecchio default.
                 saved_timer_minutes = last_state.attributes.get("timer_manuale_minuti_configurati")
-                if saved_timer_minutes is not None and float(saved_timer_minutes) != configured_timer_minutes:
-                    self._runtime_shutoff_timer_minutes = float(saved_timer_minutes)
+                if saved_timer_enabled and saved_timer_minutes is not None:
+                    configured_timer_minutes = float(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_MIN, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN))
+                    if float(saved_timer_minutes) != configured_timer_minutes:
+                        self._runtime_shutoff_timer_minutes = float(saved_timer_minutes)
             except (TypeError, ValueError) as exc:
                 _LOGGER.warning("%s: errore ripristino stato timer manuale: %s", self._attr_name, exc)
             try:
