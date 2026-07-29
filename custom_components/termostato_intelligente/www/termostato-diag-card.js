@@ -430,6 +430,17 @@ class TermostatoDiagCard extends HTMLElement {
           <span style="font-size:11px;color:var(--primary-text-color);">${modeLabel(mode)}</span>
         </button>`;
       }).join("");
+      // Pulsante spegni — dentro il popup, dato che ora il power in alto
+      // apre sempre questo menu (anche da acceso) invece di spegnere
+      // direttamente. Stile rosso distintivo, coerente col colore del
+      // power quando è spento.
+      const offButton = `<button data-mode="off" aria-label="Spegni"
+        style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
+        <span style="width:44px;height:44px;border-radius:50%;background:#d9302e;color:#fff;display:flex;align-items:center;justify-content:center;">
+          <ha-icon icon="mdi:power" style="--mdc-icon-size:22px;"></ha-icon>
+        </span>
+        <span style="font-size:11px;color:var(--primary-text-color);">Spegni</span>
+      </button>`;
       modePickerModalHtml = `
         <div data-mode-picker-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
           <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
@@ -441,6 +452,7 @@ class TermostatoDiagCard extends HTMLElement {
             </div>
             <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">
               ${pickerButtons}
+              ${offButton}
             </div>
           </div>
         </div>`;
@@ -474,19 +486,19 @@ class TermostatoDiagCard extends HTMLElement {
     // Priorità con frecce — regola immediatamente (step di 1), solo nel
     // modo Semplice+FV dove la priorità ha un effetto reale.
     const priorityControlHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
-        <span style="font-size:12px;opacity:0.75;display:flex;align-items:center;">
-          <ha-icon icon="mdi:flag" style="--mdc-icon-size:16px;"></ha-icon>
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;">
+        <span style="font-size:11px;opacity:0.75;display:flex;align-items:center;flex-shrink:0;">
+          <ha-icon icon="mdi:flag" style="--mdc-icon-size:14px;"></ha-icon>
         </span>
-        <div style="display:flex;align-items:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:3px;">
           <button data-priority-delta="-1" aria-label="Diminuisci priorità" title="Diminuisci priorità"
-            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
-          <span style="font-size:13px;font-weight:700;min-width:14px;text-align:center;flex-shrink:0;">${fvPriorita}</span>
+          <span style="font-size:12px;font-weight:700;min-width:12px;text-align:center;flex-shrink:0;">${fvPriorita}</span>
           <button data-priority-delta="1" aria-label="Aumenta priorità" title="Aumenta priorità"
-            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
         </div>
       </div>` : "";
@@ -498,19 +510,19 @@ class TermostatoDiagCard extends HTMLElement {
     const fanLabels = { low: "bassa", medium: "media", high: "alta" };
     const fanLabel = fanLabels[fanMode] || fanMode || "—";
     const fanControlHtml = fanMode !== undefined ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
-        <span style="font-size:12px;opacity:0.75;display:flex;align-items:center;">
-          <ha-icon icon="mdi:fan" style="--mdc-icon-size:16px;"></ha-icon>
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;">
+        <span style="font-size:11px;opacity:0.75;display:flex;align-items:center;flex-shrink:0;">
+          <ha-icon icon="mdi:fan" style="--mdc-icon-size:14px;"></ha-icon>
         </span>
-        <div style="display:flex;align-items:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:3px;">
           <button data-fan-delta="-1" aria-label="Diminuisci ventola" title="Diminuisci ventola"
-            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
-          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;flex-shrink:0;">${fanLabel}</span>
+          <span style="font-size:11px;font-weight:700;min-width:26px;text-align:center;flex-shrink:0;">${fanLabel}</span>
           <button data-fan-delta="1" aria-label="Aumenta ventola" title="Aumenta ventola"
-            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
         </div>
       </div>` : "";
@@ -521,29 +533,37 @@ class TermostatoDiagCard extends HTMLElement {
     const timerMinutesConfigured = stateObj.attributes.timer_manuale_minuti_configurati;
     const timerEnabled = !!stateObj.attributes.timer_manuale_attivo;
     const timerMinutesControlHtml = (timerMinutesConfigured && timerMinutesConfigured > 0) ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
-        <div style="display:flex;align-items:center;gap:4px;">
-          <button data-open-timer-confirm="1" aria-label="${timerEnabled ? "Timer acceso — tocca per disattivare" : "Timer spento — tocca per attivare"}" title="${timerEnabled ? "Timer acceso" : "Timer spento"}"
-            style="width:22px;height:22px;border-radius:50%;border:none;background:${timerEnabled ? "#2e9c4f" : "#d9302e"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:power" style="--mdc-icon-size:12px;"></ha-icon>
-          </button>
-          <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:16px;color:var(--secondary-text-color);"></ha-icon>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;">
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;gap:2px;">
+        <button data-open-timer-confirm="1" aria-label="${timerEnabled ? "Timer acceso — tocca per disattivare" : "Timer spento — tocca per attivare"}" title="${timerEnabled ? "Timer acceso" : "Timer spento"}"
+          style="width:20px;height:20px;border-radius:50%;border:none;background:${timerEnabled ? "#2e9c4f" : "#d9302e"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+          <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:12px;"></ha-icon>
+        </button>
+        <div style="display:flex;align-items:center;gap:2px;">
           <button data-timer-minutes-delta="-1" aria-label="Diminuisci minuti" title="Diminuisci minuti"
-            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
-          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;flex-shrink:0;">${Math.round(timerMinutesConfigured)} min</span>
+          <span title="Minuti" style="font-size:11px;font-weight:700;min-width:20px;text-align:center;flex-shrink:0;">${Math.round(timerMinutesConfigured)}</span>
           <button data-timer-minutes-delta="1" aria-label="Aumenta minuti" title="Aumenta minuti"
-            style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
         </div>
       </div>` : "";
 
-    const fanPriorityRowHtml = (fanControlHtml || priorityControlHtml || timerMinutesControlHtml)
-      ? `<div style="display:flex;gap:8px;margin-top:12px;">${fanControlHtml}${priorityControlHtml}${timerMinutesControlHtml}</div>`
+    // Le 3 celle diventano un'unica scatola bordata con divisori interni
+    // (stesso stile della riga stanza/clima/target sopra) invece di 3
+    // scatole separate — più compatta, e visivamente coerente col resto
+    // della card. Solo le celle effettivamente presenti vengono unite, e
+    // il bordo destro si applica a tutte tranne l'ultima.
+    const fanPriorityCells = [fanControlHtml, priorityControlHtml, timerMinutesControlHtml].filter(Boolean);
+    const fanPriorityRowHtml = fanPriorityCells.length > 0
+      ? `<div style="display:flex;border:0.5px solid var(--divider-color, #ccc);border-radius:10px;overflow:hidden;margin-top:12px;">
+          ${fanPriorityCells.map((cell, i) => i < fanPriorityCells.length - 1
+            ? cell.replace('min-width:0;', 'min-width:0;border-right:0.5px solid var(--divider-color, #ccc);')
+            : cell
+          ).join("")}
+        </div>`
       : "";
 
     // Popup di conferma per il timer — messaggio diverso a seconda che tu
@@ -638,14 +658,12 @@ class TermostatoDiagCard extends HTMLElement {
     const powerToggleBtn = this.querySelector("[data-power-toggle]");
     if (powerToggleBtn) {
       powerToggleBtn.addEventListener("click", () => {
-        if (realHvacState === "off") {
-          // Da spento: apriamo il popup di selezione modalità invece di
-          // accendere direttamente in raffreddamento.
-          this._modePickerOpen = true;
-          this._render();
-        } else {
-          this._callService("climate", "set_hvac_mode", { entity_id: entityId, hvac_mode: "off" });
-        }
+        // Apriamo sempre il popup di selezione modalità, sia da acceso
+        // che da spento — così chi vuole solo cambiare modalità (senza
+        // passare per uno spegnimento) può farlo con un tocco. Lo
+        // spegnimento diretto resta disponibile dentro il popup stesso.
+        this._modePickerOpen = true;
+        this._render();
       });
     }
 
