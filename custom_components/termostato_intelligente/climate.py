@@ -243,6 +243,8 @@ from .const import (
     CONF_SIMPLE_TURN_ON_OFFSET,
     CONF_SIMPLE_SHUTOFF_MARGIN,
     CONF_MANUAL_SHUTOFF_TIMER_MIN,
+    CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
+    DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_MIN,
     DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
@@ -400,6 +402,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._shutoff_timer_until: datetime | None = None  # quando scatterà lo spegnimento, per mostrarlo alla card
         self._runtime_shutoff_timer_enabled: bool | None = None  # override dalla card — None = usa il default (attivo se i minuti configurati sono > 0)
         self._runtime_shutoff_timer_minutes: float | None = None  # override dalla card per i minuti — None = usa il valore configurato
+        self._timer_override_touched: bool = False  # True SOLO se l'utente ha davvero premuto il pulsante/le frecce almeno una volta — evita di confondere un vecchio default mai toccato con un override intenzionale al ripristino dopo riavvio
         self._presence_since: datetime | None = None
         self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
         self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
@@ -534,6 +537,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "timer_spegnimento_fino_a": self._shutoff_timer_until.isoformat() if self._shutoff_timer_until else None,
             "timer_manuale_attivo": self._manual_shutoff_timer_enabled(),
             "timer_manuale_minuti_configurati": self._manual_shutoff_timer_minutes(),
+            "timer_override_toccato": self._timer_override_touched,
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
             "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
             "modalita_notturna_attiva": self._is_night_mode_active(),
@@ -659,20 +663,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             except (TypeError, ValueError) as exc:
                 _LOGGER.warning("%s: errore ripristino override target/priorità: %s", self._attr_name, exc)
             try:
-                saved_timer_enabled = last_state.attributes.get("timer_manuale_attivo")
-                if saved_timer_enabled is not None:
-                    self._runtime_shutoff_timer_enabled = bool(saved_timer_enabled)
-                # Ripristiniamo l'override dei minuti SOLO se il timer era
-                # davvero attivo in precedenza — altrimenti un valore
-                # salvato che è semplicemente il vecchio default mai
-                # toccato (es. 0, prima che l'utente configurasse
-                # qualcosa) verrebbe scambiato per un override intenzionale
-                # e imposto sopra il valore appena configurato dall'utente,
-                # "congelando" per sempre il vecchio default.
-                saved_timer_minutes = last_state.attributes.get("timer_manuale_minuti_configurati")
-                if saved_timer_enabled and saved_timer_minutes is not None:
-                    configured_timer_minutes = float(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_MIN, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN))
-                    if float(saved_timer_minutes) != configured_timer_minutes:
+                # Ripristiniamo gli override SOLO se l'utente ha DAVVERO
+                # interagito col timer almeno una volta (flag esplicito
+                # salvato apposta) — un confronto tra valore salvato e
+                # nuovo default configurato NON è affidabile: un vecchio
+                # default mai toccato può risultare "diverso" dal nuovo
+                # default per il solo fatto che la configurazione è
+                # cambiata, non perché l'utente abbia mai premuto nulla.
+                if last_state.attributes.get("timer_override_toccato"):
+                    self._timer_override_touched = True
+                    saved_timer_enabled = last_state.attributes.get("timer_manuale_attivo")
+                    if saved_timer_enabled is not None:
+                        self._runtime_shutoff_timer_enabled = bool(saved_timer_enabled)
+                    saved_timer_minutes = last_state.attributes.get("timer_manuale_minuti_configurati")
+                    if saved_timer_minutes is not None:
                         self._runtime_shutoff_timer_minutes = float(saved_timer_minutes)
             except (TypeError, ValueError) as exc:
                 _LOGGER.warning("%s: errore ripristino stato timer manuale: %s", self._attr_name, exc)
@@ -2565,10 +2569,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         """True se il timer di spegnimento automatico dopo accensione
         manuale è attivo — l'utente lo attiva/disattiva dalla card
         (override runtime); se non l'ha mai toccato, il valore di default
-        dipende solo dai minuti configurati (0 = mai attivo di default)."""
+        viene dal campo di configurazione dedicato (0 minuti disattiva
+        comunque tutto, a prescindere da questo campo)."""
         if self._runtime_shutoff_timer_enabled is not None:
             return self._runtime_shutoff_timer_enabled
-        return self._manual_shutoff_timer_minutes() > 0
+        if self._manual_shutoff_timer_minutes() <= 0:
+            return False
+        return bool(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_ENABLED, DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED))
 
     def _read_float(self, entity_id: str | None) -> float | None:
         if not entity_id:

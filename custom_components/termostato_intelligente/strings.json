@@ -56,7 +56,8 @@
           "turn_on_offset": "Minimum offset to turn on from solar (°C)",
           "temp_delta": "Setpoint delta in warm/strong bands (°C)",
           "extreme_delta": "Setpoint delta in extreme heat band (°C)",
-          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)"
+          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
+          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?"
         },
         "data_description": {
           "target_temp_default": "Desired room temperature. Example: 25°C.",
@@ -67,7 +68,8 @@
           "turn_on_offset": "Turns on from solar only if room > target + this. Example: 1.5°C → only above 26.5°C.",
           "temp_delta": "How much the setpoint is lowered in normal bands. Example: 1.0°C → sends 24°C with target 25°C.",
           "extreme_delta": "How much the setpoint is lowered in extreme heat. Example: 2.0°C → sends 23°C in extreme heat.",
-          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card."
+          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
+          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled."
         }
       },
       "energia": {
@@ -271,7 +273,8 @@
           "simple_no_auto_on_night": "▶ Do not turn on AC automatically at night",
           "simple_dry_enabled": "▶ Use dehumidifier before cooling",
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)",
-          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)"
+          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
+          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?"
         },
         "data_description": {
           "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
@@ -285,7 +288,8 @@
           "simple_no_auto_on_night": "If enabled: during night mode the thermostat never turns on the AC automatically, even if the temperature exceeds the configured threshold. If the AC was already on (e.g. you turned it on manually or it was left on from the afternoon), it continues to regulate and turn it off when the target temperature is reached or at end of night. Useful if you prefer to sleep without AC even on hot nights and want to control it manually.",
           "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
           "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings.",
-          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card."
+          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
+          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled."
         }
       },
       "energia_simple": {
@@ -553,7 +557,8 @@
           "turn_on_offset": "Minimum offset to turn on from solar (°C)",
           "temp_delta": "Setpoint delta warm/strong bands (°C)",
           "extreme_delta": "Setpoint delta extreme heat band (°C)",
-          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)"
+          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
+          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?"
         },
         "data_description": {
           "target_temp_default": "Desired room temperature. Example: 25°C.",
@@ -564,7 +569,8 @@
           "turn_on_offset": "Turns on from solar only if room > target + this. Example: 1.5°C → only above 26.5°C.",
           "temp_delta": "How much the setpoint is lowered in normal bands. Example: 1.0°C.",
           "extreme_delta": "How much the setpoint is lowered in extreme heat. Example: 2.0°C.",
-          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card."
+          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
+          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled."
         }
       },
       "energia": {
@@ -746,7 +752,8 @@
           "simple_no_auto_on_night": "▶ Do not turn on AC automatically at night",
           "simple_dry_enabled": "▶ Use dehumidifier before cooling",
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)",
-          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)"
+          "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
+          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?"
         },
         "data_description": {
           "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
@@ -760,7 +767,8 @@
           "simple_no_auto_on_night": "If enabled: during night mode the thermostat never turns on the AC automatically, even if the temperature exceeds the configured threshold. If the AC was already on (e.g. you turned it on manually or it was left on from the afternoon), it continues to regulate and turn it off when the target temperature is reached or at end of night. Useful if you prefer to sleep without AC even on hot nights and want to control it manually.",
           "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
           "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings.",
-          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card."
+          "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
+          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled."
         }
       },
       "energia_simple": {

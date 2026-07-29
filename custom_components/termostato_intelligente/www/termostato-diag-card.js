@@ -483,7 +483,7 @@ class TermostatoDiagCard extends HTMLElement {
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
           </button>
-          <span style="font-size:13px;font-weight:700;min-width:14px;text-align:center;">${fvPriorita}</span>
+          <span style="font-size:13px;font-weight:700;min-width:14px;text-align:center;flex-shrink:0;">${fvPriorita}</span>
           <button data-priority-delta="1" aria-label="Aumenta priorità" title="Aumenta priorità"
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
@@ -507,7 +507,7 @@ class TermostatoDiagCard extends HTMLElement {
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
           </button>
-          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;">${fanLabel}</span>
+          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;flex-shrink:0;">${fanLabel}</span>
           <button data-fan-delta="1" aria-label="Aumenta ventola" title="Aumenta ventola"
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
@@ -534,7 +534,7 @@ class TermostatoDiagCard extends HTMLElement {
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
           </button>
-          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;">${Math.round(timerMinutesConfigured)} min</span>
+          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;flex-shrink:0;">${Math.round(timerMinutesConfigured)} min</span>
           <button data-timer-minutes-delta="1" aria-label="Aumenta minuti" title="Aumenta minuti"
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
@@ -567,20 +567,7 @@ class TermostatoDiagCard extends HTMLElement {
         </div>`;
     }
 
-    // Master switch (automazione) — solo icona, nessuna etichetta
-    // testuale: il tooltip al passaggio del mouse chiarisce lo stato.
-    const masterSwitchEntity = stateObj.attributes.master_switch_entity_id;
-    const masterSwitchState = masterSwitchEntity ? this._hass.states[masterSwitchEntity] : null;
-    const masterSwitchOn = masterSwitchState ? masterSwitchState.state === "on" : true;
-    const masterSwitchControlHtml = masterSwitchEntity ? `
-      <button data-toggle-master-switch="1" aria-label="${masterSwitchOn ? "Automazione attiva — tocca per disattivare" : "Automazione disattivata — tocca per riattivare"}" title="${masterSwitchOn ? "Automazione attiva" : "Automazione disattivata"}"
-        style="width:24px;height:24px;border-radius:50%;border:none;background:${masterSwitchOn ? "#2e9c4f" : "#d9302e"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-        <ha-icon icon="mdi:robot" style="--mdc-icon-size:14px;"></ha-icon>
-      </button>` : "";
-
-    const masterTimerRowHtml = masterSwitchControlHtml
-      ? `<div style="display:flex;justify-content:flex-end;margin-top:8px;">${masterSwitchControlHtml}</div>`
-      : "";
+    const masterTimerRowHtml = "";
 
     this.innerHTML = `
       <ha-card style="overflow:hidden;background:transparent;--ha-card-background:transparent;border-radius:20px;">
@@ -679,15 +666,6 @@ class TermostatoDiagCard extends HTMLElement {
       });
     }
 
-    const masterSwitchBtn = this.querySelector("[data-toggle-master-switch]");
-    if (masterSwitchBtn) {
-      masterSwitchBtn.addEventListener("click", () => {
-        const masterSwitchEntity = stateObj.attributes.master_switch_entity_id;
-        if (masterSwitchEntity) {
-          this._callService("switch", "toggle", { entity_id: masterSwitchEntity });
-        }
-      });
-    }
     const openTimerConfirmBtn = this.querySelector("[data-open-timer-confirm]");
     if (openTimerConfirmBtn) {
       openTimerConfirmBtn.addEventListener("click", () => {

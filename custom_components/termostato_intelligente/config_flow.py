@@ -21,6 +21,8 @@ from .const import (
     CONF_SIMPLE_TURN_ON_OFFSET,
     CONF_SIMPLE_SHUTOFF_MARGIN,
     CONF_MANUAL_SHUTOFF_TIMER_MIN,
+    CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
+    DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_MIN,
     DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_NIGHT_END,
@@ -308,6 +310,7 @@ def _schema_simple_temperature(defaults: dict) -> vol.Schema:
         _f(vol.Required, CONF_SIMPLE_TARGET_DAY, defaults, DEFAULT_SIMPLE_TARGET_DAY): selector.NumberSelector(selector.NumberSelectorConfig(min=16, max=30, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_SIMPLE_TURN_ON_OFFSET, defaults, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT): selector.NumberSelector(selector.NumberSelectorConfig(min=0.3, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_SIMPLE_SHUTOFF_MARGIN, defaults, DEFAULT_SIMPLE_SHUTOFF_MARGIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=2.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_MANUAL_SHUTOFF_TIMER_ENABLED, defaults, DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_MANUAL_SHUTOFF_TIMER_MIN, defaults, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=480, step=5, unit_of_measurement="min", mode="box")),
         _f(vol.Optional, CONF_SIMPLE_DRY_ENABLED, defaults, DEFAULT_SIMPLE_DRY_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_DRY_MAX_MIN, defaults, DEFAULT_SIMPLE_DRY_MAX_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="min", mode="box")),
@@ -519,6 +522,7 @@ def _schema_soglie_termiche(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_TURN_ON_OFFSET, defaults, DEFAULT_TURN_ON_OFFSET): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=5, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_TEMP_DELTA, defaults, DEFAULT_TEMP_DELTA): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_EXTREME_DELTA, defaults, DEFAULT_EXTREME_DELTA): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=8, step=0.5, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_MANUAL_SHUTOFF_TIMER_ENABLED, defaults, DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_MANUAL_SHUTOFF_TIMER_MIN, defaults, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=480, step=5, unit_of_measurement="min", mode="box")),
     })
 

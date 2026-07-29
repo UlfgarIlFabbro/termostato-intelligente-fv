@@ -56,7 +56,8 @@
           "turn_on_offset": "Scarto minimo per accendere da fotovoltaico (°C)",
           "temp_delta": "Delta setpoint nelle fasce caldo/forte (°C)",
           "extreme_delta": "Delta setpoint nella fascia caldo estremo (°C)",
-          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)"
+          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
+          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?"
         },
         "data_description": {
           "target_temp_default": "La temperatura desiderata nella stanza. Esempio: 25°C.",
@@ -67,7 +68,8 @@
           "turn_on_offset": "Accende da FV solo se stanza > target + questo. Esempio: 1.5°C → accende solo sopra 26.5°C.",
           "temp_delta": "Di quanto si abbassa il setpoint nelle fasce normali. Esempio: 1.0°C → invia 24°C con target 25°C.",
           "extreme_delta": "Di quanto si abbassa il setpoint in caldo estremo. Esempio: 2.0°C → invia 23°C in caldo estremo.",
-          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card."
+          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
+          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato."
         }
       },
       "energia": {
@@ -271,7 +273,8 @@
           "simple_no_auto_on_night": "▶ Non accendere automaticamente il clima di notte",
           "simple_dry_enabled": "▶ Usa deumidificatore prima del raffreddamento",
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)",
-          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)"
+          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
+          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?"
         },
         "data_description": {
           "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
@@ -285,7 +288,8 @@
           "simple_no_auto_on_night": "Se attivato: durante la fascia notturna il termostato non accende mai il clima automaticamente, anche se la temperatura supera la soglia configurata. Se il clima era già acceso (es. lo hai acceso tu manualmente o era rimasto acceso dal pomeriggio), continua comunque a regolarlo e a spegnerlo quando raggiunge la temperatura target o a fine notte. Utile se preferisci dormire senza climatizzatore anche nelle notti calde e vuoi gestirlo tu manualmente.",
           "simple_dry_enabled": "Se attivato: quando la temperatura sale leggermente sopra il target, il climatizzatore parte prima in modalità deumidificatore (DRY) invece che in raffreddamento. Questo abbassa l'umidità e fa percepire la stanza più fresca consumando meno. Dopo il tempo massimo configurato (o se la temperatura sale ulteriormente) passa automaticamente al raffreddamento pieno. Particolarmente utile in climi umidi come quello pugliese, soprattutto nelle ore mattutine. Se la temperatura all'accensione è già troppo alta, parte direttamente in raffreddamento senza passare dal dry.",
           "simple_dry_max_min": "Quanto tempo al massimo il climatizzatore rimane in deumidificazione prima di passare al raffreddamento. Se durante questo tempo la stanza si raffredda abbastanza, si spegne senza passare al raffreddamento. Se invece la temperatura rimane alta o sale, dopo questo tempo passa automaticamente a raffreddare. Esempio: 30 minuti → dà al deumidificatore mezz'ora per abbassare l'umidità, poi se non basta raffredda. Valori più bassi (10-15 min) = meno deumidificazione, passa prima a raffreddare. Valori più alti (45-60 min) = più deumidificazione, utile nelle mattine con molta afa.",
-          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card."
+          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
+          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato."
         }
       },
       "energia_simple": {
@@ -553,7 +557,8 @@
           "turn_on_offset": "Scarto minimo per accendere da FV (°C)",
           "temp_delta": "Delta setpoint fasce caldo/forte (°C)",
           "extreme_delta": "Delta setpoint fascia caldo estremo (°C)",
-          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)"
+          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
+          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?"
         },
         "data_description": {
           "target_temp_default": "Temperatura desiderata nella stanza. Esempio: 25°C.",
@@ -564,7 +569,8 @@
           "turn_on_offset": "Accende da FV solo se stanza > target + questo. Esempio: 1.5°C → solo sopra 26.5°C.",
           "temp_delta": "Di quanto si abbassa il setpoint nelle fasce normali. Esempio: 1.0°C.",
           "extreme_delta": "Di quanto si abbassa il setpoint in caldo estremo. Esempio: 2.0°C.",
-          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card."
+          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
+          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato."
         }
       },
       "energia": {
@@ -746,7 +752,8 @@
           "simple_no_auto_on_night": "▶ Non accendere automaticamente il clima di notte",
           "simple_dry_enabled": "▶ Usa deumidificatore prima del raffreddamento",
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)",
-          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)"
+          "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
+          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?"
         },
         "data_description": {
           "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
@@ -760,7 +767,8 @@
           "simple_no_auto_on_night": "Se attivato: durante la fascia notturna il termostato non accende mai il clima automaticamente, anche se la temperatura supera la soglia configurata. Se il clima era già acceso (es. lo hai acceso tu manualmente o era rimasto acceso dal pomeriggio), continua comunque a regolarlo e a spegnerlo quando raggiunge la temperatura target o a fine notte. Utile se preferisci dormire senza climatizzatore anche nelle notti calde e vuoi gestirlo tu manualmente.",
           "simple_dry_enabled": "Se attivato: quando la temperatura sale leggermente sopra il target, il climatizzatore parte prima in modalità deumidificatore (DRY) invece che in raffreddamento. Questo abbassa l'umidità e fa percepire la stanza più fresca consumando meno. Dopo il tempo massimo configurato (o se la temperatura sale ulteriormente) passa automaticamente al raffreddamento pieno. Particolarmente utile in climi umidi come quello pugliese, soprattutto nelle ore mattutine. Se la temperatura all'accensione è già troppo alta, parte direttamente in raffreddamento senza passare dal dry.",
           "simple_dry_max_min": "Quanto tempo al massimo il climatizzatore rimane in deumidificazione prima di passare al raffreddamento. Se durante questo tempo la stanza si raffredda abbastanza, si spegne senza passare al raffreddamento. Se invece la temperatura rimane alta o sale, dopo questo tempo passa automaticamente a raffreddare. Esempio: 30 minuti → dà al deumidificatore mezz'ora per abbassare l'umidità, poi se non basta raffredda. Valori più bassi (10-15 min) = meno deumidificazione, passa prima a raffreddare. Valori più alti (45-60 min) = più deumidificazione, utile nelle mattine con molta afa.",
-          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card."
+          "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
+          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato."
         }
       },
       "energia_simple": {

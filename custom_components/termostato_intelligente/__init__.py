@@ -128,7 +128,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v0825"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v0827"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -286,14 +286,16 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         enabled = bool(call.data.get("enabled", True))
         for climate_entity in _find_climate_entities(call):
             climate_entity._runtime_shutoff_timer_enabled = enabled
+            climate_entity._timer_override_touched = True
             climate_entity.async_write_ha_state()
 
     async def _handle_adjust_manual_shutoff_timer_minutes(call) -> None:
         delta = float(call.data.get("delta", 0))
         for climate_entity in _find_climate_entities(call):
             current = climate_entity._manual_shutoff_timer_minutes()
-            new_value = max(5, round(current + delta))
+            new_value = max(1, round(current + delta))
             climate_entity._runtime_shutoff_timer_minutes = new_value
+            climate_entity._timer_override_touched = True
             climate_entity.async_write_ha_state()
 
     hass.services.async_register(DOMAIN, "adjust_target", _handle_adjust_target)
