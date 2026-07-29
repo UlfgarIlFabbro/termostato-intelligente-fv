@@ -132,6 +132,9 @@ class TermostatoDiagCard extends HTMLElement {
     if (this._modePickerOpen === undefined) {
       this._modePickerOpen = false;
     }
+    if (this._timerConfirmOpen === undefined) {
+      this._timerConfirmOpen = false;
+    }
     this._config = {
       title: "",
       color_by_state: true,
@@ -512,52 +515,26 @@ class TermostatoDiagCard extends HTMLElement {
         </div>
       </div>` : "";
 
-    // Ventola e priorità condividono la stessa riga, divisa in due colonne
-    // — se una delle due non è presente, l'altra occupa tutta la riga.
-    const fanPriorityRowHtml = (fanControlHtml || priorityControlHtml)
-      ? `<div style="display:flex;gap:8px;margin-top:12px;">${fanControlHtml}${priorityControlHtml}</div>`
-      : "";
-
-    // Master switch — disattiva completamente l'automazione per questo
-    // clima specifico (es. per usarlo come card manuale su uno scaldotto,
-    // regolando/accendendo/spegnendo senza che il termostato intervenga
-    // mai da solo). Compare solo se conosciamo l'entity_id reale dello
-    // switch (esposto dal backend).
-    const masterSwitchEntity = stateObj.attributes.master_switch_entity_id;
-    const masterSwitchState = masterSwitchEntity ? this._hass.states[masterSwitchEntity] : null;
-    const masterSwitchOn = masterSwitchState ? masterSwitchState.state === "on" : true;
-    const masterSwitchControlHtml = masterSwitchEntity ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
-        <span style="font-size:12px;opacity:0.75;display:flex;align-items:center;">
-          <ha-icon icon="mdi:robot" style="--mdc-icon-size:16px;"></ha-icon>
-        </span>
-        <button data-toggle-master-switch="1" aria-label="${masterSwitchOn ? "Automazione attiva — tocca per disattivare" : "Automazione disattivata — tocca per riattivare"}" title="${masterSwitchOn ? "Automazione attiva" : "Automazione disattivata"}"
-          style="width:36px;height:20px;border-radius:10px;border:none;background:${masterSwitchOn ? "#2e9c4f" : "#8a8a8a"};cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:${masterSwitchOn ? "flex-end" : "flex-start"};box-sizing:border-box;">
-          <span style="width:16px;height:16px;border-radius:50%;background:#fff;display:block;"></span>
-        </button>
-      </div>` : "";
-
-    // Timer di spegnimento manuale — icona-pulsante per attivare/disattivare
-    // (stato persistente, resta come l'ha lasciato l'utente) seguita dal
-    // controllo minuti con frecce, stesso stile del controllo priorità. I
-    // minuti sono sempre regolabili dalla card, anche a timer disattivato
-    // (così si può preparare il valore prima di attivarlo). Compare solo
-    // se un valore di minuti è stato effettivamente configurato almeno
-    // una volta (o regolato dalla card).
+    // Ventola, priorità e minuti del timer condividono la stessa riga,
+    // divisa in 3 colonne — quelle assenti vengono semplicemente omesse,
+    // le altre si dividono lo spazio rimanente.
     const timerMinutesConfigured = stateObj.attributes.timer_manuale_minuti_configurati;
     const timerEnabled = !!stateObj.attributes.timer_manuale_attivo;
-    const timerControlHtml = (timerMinutesConfigured && timerMinutesConfigured > 0) ? `
-      <div style="flex:1;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
-        <button data-toggle-shutoff-timer="1" aria-label="${timerEnabled ? `Timer attivo (spegne dopo ${timerMinutesConfigured} min) — tocca per disattivare` : "Timer disattivato — tocca per attivare"}" title="${timerEnabled ? "Timer attivo" : "Timer disattivato"}"
-          style="width:22px;height:22px;border-radius:50%;border:none;background:${timerEnabled ? "#2e9c4f" : "#8a8a8a"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-          <ha-icon icon="mdi:timer-outline" style="--mdc-icon-size:13px;"></ha-icon>
-        </button>
-        <div style="flex:1;display:flex;align-items:center;justify-content:space-between;">
+    const timerMinutesControlHtml = (timerMinutesConfigured && timerMinutesConfigured > 0) ? `
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(0,0,0,0.04);border-radius:10px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button data-open-timer-confirm="1" aria-label="${timerEnabled ? "Timer acceso — tocca per disattivare" : "Timer spento — tocca per attivare"}" title="${timerEnabled ? "Timer acceso" : "Timer spento"}"
+            style="width:22px;height:22px;border-radius:50%;border:none;background:${timerEnabled ? "#2e9c4f" : "#d9302e"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:power" style="--mdc-icon-size:12px;"></ha-icon>
+          </button>
+          <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:16px;color:var(--secondary-text-color);"></ha-icon>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
           <button data-timer-minutes-delta="-1" aria-label="Diminuisci minuti" title="Diminuisci minuti"
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:minus" style="--mdc-icon-size:11px;"></ha-icon>
           </button>
-          <span style="font-size:12px;font-weight:700;min-width:36px;text-align:center;">${Math.round(timerMinutesConfigured)} min</span>
+          <span style="font-size:12px;font-weight:700;min-width:30px;text-align:center;">${Math.round(timerMinutesConfigured)} min</span>
           <button data-timer-minutes-delta="1" aria-label="Aumenta minuti" title="Aumenta minuti"
             style="width:20px;height:20px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:plus" style="--mdc-icon-size:11px;"></ha-icon>
@@ -565,8 +542,44 @@ class TermostatoDiagCard extends HTMLElement {
         </div>
       </div>` : "";
 
-    const masterTimerRowHtml = (masterSwitchControlHtml || timerControlHtml)
-      ? `<div style="display:flex;gap:8px;margin-top:8px;">${masterSwitchControlHtml}${timerControlHtml}</div>`
+    const fanPriorityRowHtml = (fanControlHtml || priorityControlHtml || timerMinutesControlHtml)
+      ? `<div style="display:flex;gap:8px;margin-top:12px;">${fanControlHtml}${priorityControlHtml}${timerMinutesControlHtml}</div>`
+      : "";
+
+    // Popup di conferma per il timer — messaggio diverso a seconda che tu
+    // stia per attivarlo o disattivarlo, così è sempre chiaro cosa sta per
+    // succedere prima di confermare.
+    let timerConfirmModalHtml = "";
+    if (this._timerConfirmOpen && timerMinutesConfigured) {
+      const question = timerEnabled
+        ? "Il timer verrà disattivato: il clima non si spegnerà più automaticamente dopo un'accensione manuale. Continuare?"
+        : `Il clima si spegnerà sempre ${Math.round(timerMinutesConfigured)} minuti dopo un'accensione manuale. Attivare?`;
+      timerConfirmModalHtml = `
+        <div data-timer-confirm-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+          <div style="background:var(--card-background-color, #fff);border-radius:16px;padding:20px;max-width:300px;width:100%;text-align:center;">
+            <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:28px;color:var(--secondary-text-color);margin-bottom:8px;"></ha-icon>
+            <div style="font-size:14px;margin-bottom:16px;">${question}</div>
+            <div style="display:flex;gap:8px;">
+              <button data-timer-confirm-no="1" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);cursor:pointer;">No</button>
+              <button data-timer-confirm-yes="1" style="flex:1;padding:8px;border-radius:10px;border:none;background:#2e9c4f;color:#fff;cursor:pointer;">Sì</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Master switch (automazione) — solo icona, nessuna etichetta
+    // testuale: il tooltip al passaggio del mouse chiarisce lo stato.
+    const masterSwitchEntity = stateObj.attributes.master_switch_entity_id;
+    const masterSwitchState = masterSwitchEntity ? this._hass.states[masterSwitchEntity] : null;
+    const masterSwitchOn = masterSwitchState ? masterSwitchState.state === "on" : true;
+    const masterSwitchControlHtml = masterSwitchEntity ? `
+      <button data-toggle-master-switch="1" aria-label="${masterSwitchOn ? "Automazione attiva — tocca per disattivare" : "Automazione disattivata — tocca per riattivare"}" title="${masterSwitchOn ? "Automazione attiva" : "Automazione disattivata"}"
+        style="width:24px;height:24px;border-radius:50%;border:none;background:${masterSwitchOn ? "#2e9c4f" : "#d9302e"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+        <ha-icon icon="mdi:robot" style="--mdc-icon-size:14px;"></ha-icon>
+      </button>` : "";
+
+    const masterTimerRowHtml = masterSwitchControlHtml
+      ? `<div style="display:flex;justify-content:flex-end;margin-top:8px;">${masterSwitchControlHtml}</div>`
       : "";
 
     this.innerHTML = `
@@ -598,6 +611,7 @@ class TermostatoDiagCard extends HTMLElement {
       </ha-card>
       ${notifyHistoryModalHtml}
       ${modePickerModalHtml}
+      ${timerConfirmModalHtml}
     `;
 
     this._attachControlListeners(stateObj);
@@ -674,11 +688,36 @@ class TermostatoDiagCard extends HTMLElement {
         }
       });
     }
-    const shutoffTimerBtn = this.querySelector("[data-toggle-shutoff-timer]");
-    if (shutoffTimerBtn) {
-      shutoffTimerBtn.addEventListener("click", () => {
+    const openTimerConfirmBtn = this.querySelector("[data-open-timer-confirm]");
+    if (openTimerConfirmBtn) {
+      openTimerConfirmBtn.addEventListener("click", () => {
+        this._timerConfirmOpen = true;
+        this._render();
+      });
+    }
+    const timerConfirmYesBtn = this.querySelector("[data-timer-confirm-yes]");
+    if (timerConfirmYesBtn) {
+      timerConfirmYesBtn.addEventListener("click", () => {
         const currentlyEnabled = !!stateObj.attributes.timer_manuale_attivo;
         this._callService("termostato_intelligente", "toggle_manual_shutoff_timer", { entity_id: entityId, enabled: !currentlyEnabled });
+        this._timerConfirmOpen = false;
+        this._render();
+      });
+    }
+    const timerConfirmNoBtn = this.querySelector("[data-timer-confirm-no]");
+    if (timerConfirmNoBtn) {
+      timerConfirmNoBtn.addEventListener("click", () => {
+        this._timerConfirmOpen = false;
+        this._render();
+      });
+    }
+    const timerConfirmBackdrop = this.querySelector("[data-timer-confirm-backdrop]");
+    if (timerConfirmBackdrop) {
+      timerConfirmBackdrop.addEventListener("click", (e) => {
+        if (e.target === timerConfirmBackdrop) {
+          this._timerConfirmOpen = false;
+          this._render();
+        }
       });
     }
     this.querySelectorAll("[data-timer-minutes-delta]").forEach((btn) => {
