@@ -785,6 +785,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 is_initial_boot_event = old_state is None
                 is_real_transition_to_off = old_state is not None and old_state.state != "off"
                 if not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
+                    # Notifica sempre lo spegnimento manuale rilevato,
+                    # indipendentemente dal fatto che il blocco riaccensione
+                    # sia configurato — l'utente vuole sapere che si è
+                    # spento, anche se non vuole bloccarne la riaccensione.
+                    _LOGGER.info("%s: spegnimento manuale rilevato (telecomando/app esterna)", self._attr_name)
+                    await self._async_simple_notify_ac_off(self.current_temperature or 0, self.target_temperature or 0)
                     if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
                         self._manual_off_since = dt_util.utcnow()
                         _LOGGER.info(
@@ -3120,6 +3126,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         d'inverno), non una decisione automatica del termostato."""
         self._shutoff_timer_cancel = None
         self._shutoff_timer_until = None
+        await self._async_simple_notify_ac_off(self.current_temperature or 0, self.target_temperature or 0)
         await self._async_turn_off_climate()
         self.async_write_ha_state()
 

@@ -470,7 +470,7 @@ class TermostatoDiagCard extends HTMLElement {
     const presetModes = presetModesRaw.includes("none") ? presetModesRaw : ["none", ...presetModesRaw];
     const currentPreset = (realClimateState && realClimateState.attributes.preset_mode) || "none";
     const presetLabels = {
-      none: "nessuna", eco: "eco", away: "fuoricasa", boost: "boost",
+      none: "No", eco: "eco", away: "fuoricasa", boost: "boost",
       sleep: "sonno", comfort: "comfort", home: "casa", activity: "attività",
     };
     const presetLabel = (p) => presetLabels[p] || p;
@@ -644,7 +644,7 @@ class TermostatoDiagCard extends HTMLElement {
     const fanLabels = { low: "bassa", medium: "media", high: "alta" };
     const fanLabel = fanLabels[fanMode] || fanMode || "—";
     const fanControlHtml = fanMode !== undefined ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;">
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:4px 6px;min-width:0;gap:6px;">
         <span style="font-size:11px;opacity:0.75;display:flex;align-items:center;flex-shrink:0;">
           <ha-icon icon="mdi:fan" style="--mdc-icon-size:14px;"></ha-icon>
         </span>
@@ -667,7 +667,7 @@ class TermostatoDiagCard extends HTMLElement {
     const timerMinutesConfigured = stateObj.attributes.timer_manuale_minuti_configurati;
     const timerEnabled = !!stateObj.attributes.timer_manuale_attivo;
     const timerMinutesControlHtml = (timerMinutesConfigured && timerMinutesConfigured > 0) ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;gap:2px;">
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:4px 6px;min-width:0;gap:6px;">
         <button data-open-timer-confirm="1" aria-label="${timerEnabled ? "Timer acceso — tocca per disattivare" : "Timer spento — tocca per attivare"}" title="${timerEnabled ? "Timer acceso" : "Timer spento"}"
           style="width:20px;height:20px;border-radius:50%;border:none;background:${timerEnabled ? "#2e9c4f" : "#d9302e"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
           <ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:12px;"></ha-icon>
@@ -697,7 +697,7 @@ class TermostatoDiagCard extends HTMLElement {
     // climatizzatore reale espone davvero dei preset (es. lo scaldotto
     // non li espone, quindi qui non compare nulla).
     const presetControlHtml = presetModesRaw.length > 0 ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;">
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:4px 6px;min-width:0;gap:6px;">
         <ha-icon icon="mdi:tune-variant" style="--mdc-icon-size:14px;color:var(--secondary-text-color);flex-shrink:0;"></ha-icon>
         <div style="display:flex;align-items:center;gap:3px;">
           <button data-open-preset-picker="1" aria-label="Cambia modalità preset" title="Diminuisci/scegli modalità"
