@@ -138,6 +138,15 @@ class TermostatoDiagCard extends HTMLElement {
     if (this._timerConfirmOpen === undefined) {
       this._timerConfirmOpen = false;
     }
+    if (this._presetPickerOpen === undefined) {
+      this._presetPickerOpen = false;
+    }
+    if (this._swingPickerOpen === undefined) {
+      this._swingPickerOpen = false;
+    }
+    if (this._priorityPopupOpen === undefined) {
+      this._priorityPopupOpen = false;
+    }
     this._config = {
       title: "",
       color_by_state: true,
@@ -419,6 +428,16 @@ class TermostatoDiagCard extends HTMLElement {
     // Stesso stile (backdrop scuro + pannello bianco arrotondato) del
     // popup storico notifiche, per coerenza visiva tra i due popup della
     // card. Le icone qui sono grandi quanto power/modalità in alto.
+    // Dati preset letti subito, prima di qualsiasi popup che li usi.
+    const presetModesRaw = (realClimateState && Array.isArray(realClimateState.attributes.preset_modes)) ? realClimateState.attributes.preset_modes : [];
+    const presetModes = presetModesRaw.includes("none") ? presetModesRaw : ["none", ...presetModesRaw];
+    const currentPreset = (realClimateState && realClimateState.attributes.preset_mode) || "none";
+    const presetLabels = {
+      none: "nessuna", eco: "eco", away: "fuoricasa", boost: "boost",
+      sleep: "sonno", comfort: "comfort", home: "casa", activity: "attività",
+    };
+    const presetLabel = (p) => presetLabels[p] || p;
+
     let modePickerModalHtml = "";
     if (this._modePickerOpen) {
       const pickerButtons = realHvacModes.filter((m) => m !== "off").map((mode) => {
@@ -461,6 +480,90 @@ class TermostatoDiagCard extends HTMLElement {
         </div>`;
     }
 
+    // Popup selezione preset — griglia con tutte le modalità che il
+    // climatizzatore reale espone (sonno/eco/fuoricasa/boost/...), sempre
+    // con "nessuna" tra le opzioni anche se il dispositivo non la elenca
+    // esplicitamente.
+    let presetPickerModalHtml = "";
+    if (this._presetPickerOpen && presetModesRaw.length > 0) {
+      const presetIcons = {
+        none: "mdi:circle-off-outline", eco: "mdi:leaf", away: "mdi:home-export-outline",
+        boost: "mdi:rocket-launch-outline", sleep: "mdi:power-sleep", comfort: "mdi:sofa-outline",
+        home: "mdi:home-outline", activity: "mdi:run",
+      };
+      const presetButtons = presetModes.map((p) => {
+        const active = p === currentPreset;
+        const bg = active ? "#2e9c4f" : "var(--card-background-color, #fff)";
+        const fg = active ? "#fff" : "var(--secondary-text-color)";
+        const border = active ? "none" : "1px solid var(--divider-color, #ccc)";
+        return `<button data-preset="${p}" aria-label="${presetLabel(p)}"
+          style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
+          <span style="width:44px;height:44px;border-radius:50%;background:${bg};color:${fg};border:${border};box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+            <ha-icon icon="${presetIcons[p] || "mdi:tune-variant"}" style="--mdc-icon-size:22px;"></ha-icon>
+          </span>
+          <span style="font-size:11px;color:var(--primary-text-color);">${presetLabel(p)}</span>
+        </button>`;
+      }).join("");
+      presetPickerModalHtml = `
+        <div data-preset-picker-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+          <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div style="font-size:14px;font-weight:700;">Scegli modalità</div>
+              <button data-close-preset-picker="1" style="border:none;background:none;cursor:pointer;padding:4px;">
+                <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
+              </button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">
+              ${presetButtons}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Swing — lettura diretta dal climatizzatore reale, come i preset.
+    // Icona barrata quando lo swing è spento/assente, verde quando è
+    // attivo qualsiasi valore diverso da "off".
+    const swingModesRaw = (realClimateState && Array.isArray(realClimateState.attributes.swing_modes)) ? realClimateState.attributes.swing_modes : [];
+    const swingModes = swingModesRaw.includes("off") ? swingModesRaw : ["off", ...swingModesRaw];
+    const currentSwing = (realClimateState && realClimateState.attributes.swing_mode) || "off";
+    const swingActive = currentSwing !== "off";
+    const swingLabels = { off: "spento", vertical: "verticale", horizontal: "orizzontale", both: "entrambi", on: "attivo" };
+    const swingLabel = (s) => swingLabels[s] || s;
+
+    let presetPopupPlaceholder = ""; // solo per leggibilità, non usato
+
+    let swingPickerModalHtml = "";
+    if (this._swingPickerOpen && swingModesRaw.length > 0) {
+      const swingButtons = swingModes.map((s) => {
+        const active = s === currentSwing;
+        const bg = active ? "#2e9c4f" : "var(--card-background-color, #fff)";
+        const fg = active ? "#fff" : "var(--secondary-text-color)";
+        const border = active ? "none" : "1px solid var(--divider-color, #ccc)";
+        const icon = s === "off" ? "mdi:arrow-oscillating-off" : "mdi:arrow-oscillating";
+        return `<button data-swing="${s}" aria-label="${swingLabel(s)}"
+          style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
+          <span style="width:44px;height:44px;border-radius:50%;background:${bg};color:${fg};border:${border};box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+            <ha-icon icon="${icon}" style="--mdc-icon-size:22px;"></ha-icon>
+          </span>
+          <span style="font-size:11px;color:var(--primary-text-color);">${swingLabel(s)}</span>
+        </button>`;
+      }).join("");
+      swingPickerModalHtml = `
+        <div data-swing-picker-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+          <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div style="font-size:14px;font-weight:700;">Scegli swing</div>
+              <button data-close-swing-picker="1" style="border:none;background:none;cursor:pointer;padding:4px;">
+                <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
+              </button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">
+              ${swingButtons}
+            </div>
+          </div>
+        </div>`;
+    }
+
     // Target con frecce — regola immediatamente (step di 1°), disponibile
     // solo nel modo Semplice/Semplice+FV (dove il target è sempre
     // ricalcolato da configurazione + eventuale regolazione da card).
@@ -488,23 +591,49 @@ class TermostatoDiagCard extends HTMLElement {
 
     // Priorità con frecce — regola immediatamente (step di 1), solo nel
     // modo Semplice+FV dove la priorità ha un effetto reale.
-    const priorityControlHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
-      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;">
-        <span style="font-size:11px;opacity:0.75;display:flex;align-items:center;flex-shrink:0;">
-          <ha-icon icon="mdi:flag" style="--mdc-icon-size:14px;"></ha-icon>
-        </span>
-        <div style="display:flex;align-items:center;gap:3px;">
-          <button data-priority-delta="-1" aria-label="Diminuisci priorità" title="Diminuisci priorità"
-            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
-          </button>
-          <span style="font-size:12px;font-weight:700;min-width:12px;text-align:center;flex-shrink:0;">${fvPriorita}</span>
-          <button data-priority-delta="1" aria-label="Aumenta priorità" title="Aumenta priorità"
-            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-            <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
-          </button>
-        </div>
-      </div>` : "";
+    // Priorità — ora un'icona compatta in basso a destra (invece di una
+    // riga con frecce): un tocco apre un piccolo popup con +/- grandi per
+    // regolarla.
+    const priorityIconHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
+      <button data-open-priority-popup="1" aria-label="Priorità FV: ${fvPriorita} — tocca per regolare" title="Priorità ${fvPriorita}"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:#378add;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:13px;font-weight:700;flex-shrink:0;">
+        ${fvPriorita}
+      </button>` : "";
+
+    // Swing — icona compatta accanto alla priorità: barrata/grigia se
+    // spento, verde se attivo qualsiasi valore. Un tocco apre il popup di
+    // selezione. Assente del tutto se il climatizzatore reale non espone
+    // swing_modes (es. uno scaldotto).
+    const swingIconHtml = swingModesRaw.length > 0 ? `
+      <button data-open-swing-picker="1" aria-label="Swing: ${swingLabel(currentSwing)} — tocca per cambiare" title="Swing: ${swingLabel(currentSwing)}"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:${swingActive ? "#2e9c4f" : "var(--card-background-color, #fff)"};color:${swingActive ? "#fff" : "var(--secondary-text-color)"};border:${swingActive ? "none" : "1px solid var(--divider-color, #ccc)"};box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+        <ha-icon icon="${swingActive ? "mdi:arrow-oscillating" : "mdi:arrow-oscillating-off"}" style="--mdc-icon-size:15px;"></ha-icon>
+      </button>` : "";
+
+    const priorityAndSwingRowHtml = (priorityIconHtml || swingIconHtml)
+      ? `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">${swingIconHtml}${priorityIconHtml}</div>`
+      : "";
+
+    // Popup priorità — solo +/- grandi, dato che è un numero continuo (non
+    // un set fisso di opzioni come preset/swing).
+    let priorityPopupModalHtml = "";
+    if (this._priorityPopupOpen && priorityIconHtml) {
+      priorityPopupModalHtml = `
+        <div data-priority-popup-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+          <div style="background:var(--card-background-color, #fff);border-radius:16px;padding:20px;max-width:260px;width:100%;text-align:center;">
+            <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Priorità FV</div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:16px;">
+              <button data-priority-delta="-1" aria-label="Diminuisci priorità" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;">
+                <ha-icon icon="mdi:minus" style="--mdc-icon-size:16px;"></ha-icon>
+              </button>
+              <span style="font-size:24px;font-weight:700;min-width:32px;">${fvPriorita}</span>
+              <button data-priority-delta="1" aria-label="Aumenta priorità" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;">
+                <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px;"></ha-icon>
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }
 
     // Ventola con frecce esplicite (prima era un click nascosto sull'icona
     // che ciclava le velocità — poco scopribile, sostituito con lo stesso
@@ -559,7 +688,29 @@ class TermostatoDiagCard extends HTMLElement {
     // scatole separate — più compatta, e visivamente coerente col resto
     // della card. Solo le celle effettivamente presenti vengono unite, e
     // il bordo destro si applica a tutte tranne l'ultima.
-    const fanPriorityCells = [fanControlHtml, priorityControlHtml, timerMinutesControlHtml].filter(Boolean);
+    // Modalità preset (sonno/eco/fuoricasa/boost/nessuna...) — sostituisce
+    // la priorità in questa riga. Le frecce non ciclano direttamente (i
+    // preset possono essere numerosi) — aprono lo stesso popup a griglia
+    // già usato per lo swing/le modalità hvac. Compare solo se il
+    // climatizzatore reale espone davvero dei preset (es. lo scaldotto
+    // non li espone, quindi qui non compare nulla).
+    const presetControlHtml = presetModesRaw.length > 0 ? `
+      <div style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:4px 6px;min-width:0;">
+        <ha-icon icon="mdi:tune-variant" style="--mdc-icon-size:14px;color:var(--secondary-text-color);flex-shrink:0;"></ha-icon>
+        <div style="display:flex;align-items:center;gap:3px;">
+          <button data-open-preset-picker="1" aria-label="Cambia modalità preset" title="Diminuisci/scegli modalità"
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
+          </button>
+          <span style="font-size:11px;font-weight:700;min-width:36px;text-align:center;flex-shrink:0;">${presetLabel(currentPreset)}</span>
+          <button data-open-preset-picker="1" aria-label="Cambia modalità preset" title="Aumenta/scegli modalità"
+            style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+            <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
+          </button>
+        </div>
+      </div>` : "";
+
+    const fanPriorityCells = [fanControlHtml, presetControlHtml, timerMinutesControlHtml].filter(Boolean);
     const dividerBorderColor = colors ? colors.border : "#000";
     const fanPriorityRowHtml = fanPriorityCells.length > 0
       ? `<div style="display:flex;border:2px solid ${dividerBorderColor};border-radius:10px;overflow:hidden;margin-top:12px;">
@@ -616,6 +767,7 @@ class TermostatoDiagCard extends HTMLElement {
           </div>
           ${fanPriorityRowHtml}
           ${masterTimerRowHtml}
+          ${priorityAndSwingRowHtml}
           ${attrsHtml}
           ${notifyHistoryHtml}
         </div>
@@ -623,6 +775,9 @@ class TermostatoDiagCard extends HTMLElement {
       ${notifyHistoryModalHtml}
       ${modePickerModalHtml}
       ${timerConfirmModalHtml}
+      ${presetPickerModalHtml}
+      ${swingPickerModalHtml}
+      ${priorityPopupModalHtml}
     `;
 
     this._attachControlListeners(stateObj);
@@ -686,6 +841,90 @@ class TermostatoDiagCard extends HTMLElement {
       modePickerBackdrop.addEventListener("click", (e) => {
         if (e.target === modePickerBackdrop) {
           this._modePickerOpen = false;
+          this._render();
+        }
+      });
+    }
+
+    this.querySelectorAll("[data-open-preset-picker]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._presetPickerOpen = true;
+        this._render();
+      });
+    });
+    const closePresetPickerBtn = this.querySelector("[data-close-preset-picker]");
+    if (closePresetPickerBtn) {
+      closePresetPickerBtn.addEventListener("click", () => {
+        this._presetPickerOpen = false;
+        this._render();
+      });
+    }
+    const presetPickerBackdrop = this.querySelector("[data-preset-picker-backdrop]");
+    if (presetPickerBackdrop) {
+      presetPickerBackdrop.addEventListener("click", (e) => {
+        if (e.target === presetPickerBackdrop) {
+          this._presetPickerOpen = false;
+          this._render();
+        }
+      });
+    }
+    this.querySelectorAll("[data-preset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const preset = btn.getAttribute("data-preset");
+        if (realClimateEntity) {
+          this._callService("climate", "set_preset_mode", { entity_id: realClimateEntity, preset_mode: preset });
+        }
+        this._presetPickerOpen = false;
+        this._render();
+      });
+    });
+
+    const openSwingPickerBtn = this.querySelector("[data-open-swing-picker]");
+    if (openSwingPickerBtn) {
+      openSwingPickerBtn.addEventListener("click", () => {
+        this._swingPickerOpen = true;
+        this._render();
+      });
+    }
+    const closeSwingPickerBtn = this.querySelector("[data-close-swing-picker]");
+    if (closeSwingPickerBtn) {
+      closeSwingPickerBtn.addEventListener("click", () => {
+        this._swingPickerOpen = false;
+        this._render();
+      });
+    }
+    const swingPickerBackdrop = this.querySelector("[data-swing-picker-backdrop]");
+    if (swingPickerBackdrop) {
+      swingPickerBackdrop.addEventListener("click", (e) => {
+        if (e.target === swingPickerBackdrop) {
+          this._swingPickerOpen = false;
+          this._render();
+        }
+      });
+    }
+    this.querySelectorAll("[data-swing]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const swing = btn.getAttribute("data-swing");
+        if (realClimateEntity) {
+          this._callService("climate", "set_swing_mode", { entity_id: realClimateEntity, swing_mode: swing });
+        }
+        this._swingPickerOpen = false;
+        this._render();
+      });
+    });
+
+    const openPriorityPopupBtn = this.querySelector("[data-open-priority-popup]");
+    if (openPriorityPopupBtn) {
+      openPriorityPopupBtn.addEventListener("click", () => {
+        this._priorityPopupOpen = true;
+        this._render();
+      });
+    }
+    const priorityPopupBackdrop = this.querySelector("[data-priority-popup-backdrop]");
+    if (priorityPopupBackdrop) {
+      priorityPopupBackdrop.addEventListener("click", (e) => {
+        if (e.target === priorityPopupBackdrop) {
+          this._priorityPopupOpen = false;
           this._render();
         }
       });

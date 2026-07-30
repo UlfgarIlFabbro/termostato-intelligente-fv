@@ -1818,6 +1818,28 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if sib_use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
             if sib_temp < sib_target + sib_offset:
                 continue  # il sibling non è comunque pronto ad accendersi ora
+
+            # Non basta che il sibling abbia la temperatura giusta — deve
+            # avere anche LE SUE condizioni FV/batteria soddisfatte,
+            # altrimenti non è realmente pronto e non ha senso aspettarlo
+            # indefinitamente. Bug reale osservato: una stanza a priorità
+            # più bassa ma soglia batteria più permissiva restava bloccata
+            # in attesa di una sorella a priorità più alta ma soglia più
+            # severa, anche quando quella sorella non poteva ancora
+            # accendersi per conto suo.
+            if sibling._fv_sensor and sibling._consumption_sensor:
+                sib_fv = sibling._read_float(sibling._fv_sensor)
+                sib_consumo = sibling._read_float(sibling._consumption_sensor)
+                if sib_fv is None or sib_consumo is None:
+                    continue  # dati FV del sibling non disponibili — non è verificabile come pronto
+                sib_margin = float(get_conf(sibling.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+                if not (sib_fv > sib_consumo + sib_margin):
+                    continue  # il sibling non ha comunque abbastanza surplus FV — non è pronto
+                if sibling._battery_sensor:
+                    sib_soc = sibling._read_float(sibling._battery_sensor)
+                    sib_soc_min = float(get_conf(sibling.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
+                    if sib_soc is None or sib_soc < sib_soc_min:
+                        continue  # il sibling non ha raggiunto la SUA soglia batteria — non è pronto
             sib_priority = sibling._effective_priority()
             if sib_priority < my_priority:
                 _LOGGER.debug("%s: [semplificato FV] cedo il turno a %s (priorità più alta)", self._attr_name, sibling._attr_name)
