@@ -283,6 +283,31 @@ class TermostatoDiagCard extends HTMLElement {
           </div>`;
       }
 
+    // Swing — lettura diretta dal climatizzatore reale. Icona barrata
+    // quando lo swing è spento/assente, verde quando è attivo qualsiasi
+    // valore diverso da "off". Calcolato qui, prima del blocco badge,
+    // perché va inserito nella stessa riga (a destra).
+    const swingModesRaw = (realClimateState && Array.isArray(realClimateState.attributes.swing_modes)) ? realClimateState.attributes.swing_modes : [];
+    const swingModes = swingModesRaw.includes("off") ? swingModesRaw : ["off", ...swingModesRaw];
+    const currentSwing = (realClimateState && realClimateState.attributes.swing_mode) || "off";
+    const swingActive = currentSwing !== "off";
+    const swingLabels = { off: "spento", vertical: "verticale", horizontal: "orizzontale", both: "entrambi", on: "attivo" };
+    const swingLabel = (s) => swingLabels[s] || s;
+
+    const priorityIconHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
+      <button data-open-priority-popup="1" aria-label="Priorità FV: ${fvPriorita} — tocca per regolare" title="Priorità ${fvPriorita}"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:#378add;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:13px;font-weight:700;flex-shrink:0;">
+        ${fvPriorita}
+      </button>` : "";
+
+    const swingIconHtml = swingModesRaw.length > 0 ? `
+      <button data-open-swing-picker="1" aria-label="Swing: ${swingLabel(currentSwing)} — tocca per cambiare" title="Swing: ${swingLabel(currentSwing)}"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:${swingActive ? "#2e9c4f" : "var(--card-background-color, #fff)"};color:${swingActive ? "#fff" : "var(--secondary-text-color)"};border:${swingActive ? "none" : "1px solid var(--divider-color, #ccc)"};box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+        <ha-icon icon="${swingActive ? "mdi:arrow-oscillating" : "mdi:arrow-oscillating-off"}" style="--mdc-icon-size:15px;"></ha-icon>
+      </button>` : "";
+
+    const prioritySwingIconsHtml = swingIconHtml + priorityIconHtml;
+
     let attrsHtml = "";
     if (showAttrs.length > 0) {
       // Tipi che hanno un concetto naturale di "attivo/presente" — se
@@ -367,10 +392,22 @@ class TermostatoDiagCard extends HTMLElement {
         ? [...items].sort((a, b) => (a.isInactive === b.isInactive) ? 0 : (a.isInactive ? 1 : -1))
         : items;
       const itemsHtml = orderedItems.map((it) => it.html);
+      const badgesContent = itemsHtml.join("");
+      const hasPrioritySwing = !!prioritySwingIconsHtml;
       const wrapper = this._config.display_style === "badges"
-        ? `<div style="display:flex;flex-wrap:wrap;margin-top:10px;">${itemsHtml.join("")}</div>`
-        : `<div style="margin-top:10px;">${itemsHtml.join("")}</div>`;
-      attrsHtml = items.length > 0 ? wrapper : "";
+        ? `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-top:10px;gap:4px;">
+            <div style="display:flex;flex-wrap:wrap;">${badgesContent}</div>
+            ${hasPrioritySwing ? `<div style="display:flex;gap:8px;flex-shrink:0;">${prioritySwingIconsHtml}</div>` : ""}
+          </div>`
+        : `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+            <div>${badgesContent}</div>
+            ${hasPrioritySwing ? `<div style="display:flex;gap:8px;flex-shrink:0;">${prioritySwingIconsHtml}</div>` : ""}
+          </div>`;
+      attrsHtml = (items.length > 0 || hasPrioritySwing) ? wrapper : "";
+    } else if (prioritySwingIconsHtml) {
+      // Nessun attributo badge selezionato, ma priorità/swing sì —
+      // mostriamo comunque la riga, solo con questi due allineati a destra.
+      attrsHtml = `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">${prioritySwingIconsHtml}</div>`;
     }
 
 
@@ -520,16 +557,6 @@ class TermostatoDiagCard extends HTMLElement {
         </div>`;
     }
 
-    // Swing — lettura diretta dal climatizzatore reale, come i preset.
-    // Icona barrata quando lo swing è spento/assente, verde quando è
-    // attivo qualsiasi valore diverso da "off".
-    const swingModesRaw = (realClimateState && Array.isArray(realClimateState.attributes.swing_modes)) ? realClimateState.attributes.swing_modes : [];
-    const swingModes = swingModesRaw.includes("off") ? swingModesRaw : ["off", ...swingModesRaw];
-    const currentSwing = (realClimateState && realClimateState.attributes.swing_mode) || "off";
-    const swingActive = currentSwing !== "off";
-    const swingLabels = { off: "spento", vertical: "verticale", horizontal: "orizzontale", both: "entrambi", on: "attivo" };
-    const swingLabel = (s) => swingLabels[s] || s;
-
     let presetPopupPlaceholder = ""; // solo per leggibilità, non usato
 
     let swingPickerModalHtml = "";
@@ -588,31 +615,6 @@ class TermostatoDiagCard extends HTMLElement {
         <div style="font-size:18px;font-weight:700;line-height:1;">${tempDisplay}</div>
       </div>`;
 
-
-    // Priorità con frecce — regola immediatamente (step di 1), solo nel
-    // modo Semplice+FV dove la priorità ha un effetto reale.
-    // Priorità — ora un'icona compatta in basso a destra (invece di una
-    // riga con frecce): un tocco apre un piccolo popup con +/- grandi per
-    // regolarla.
-    const priorityIconHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `
-      <button data-open-priority-popup="1" aria-label="Priorità FV: ${fvPriorita} — tocca per regolare" title="Priorità ${fvPriorita}"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:#378add;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:13px;font-weight:700;flex-shrink:0;">
-        ${fvPriorita}
-      </button>` : "";
-
-    // Swing — icona compatta accanto alla priorità: barrata/grigia se
-    // spento, verde se attivo qualsiasi valore. Un tocco apre il popup di
-    // selezione. Assente del tutto se il climatizzatore reale non espone
-    // swing_modes (es. uno scaldotto).
-    const swingIconHtml = swingModesRaw.length > 0 ? `
-      <button data-open-swing-picker="1" aria-label="Swing: ${swingLabel(currentSwing)} — tocca per cambiare" title="Swing: ${swingLabel(currentSwing)}"
-        style="width:28px;height:28px;border-radius:50%;border:none;background:${swingActive ? "#2e9c4f" : "var(--card-background-color, #fff)"};color:${swingActive ? "#fff" : "var(--secondary-text-color)"};border:${swingActive ? "none" : "1px solid var(--divider-color, #ccc)"};box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-        <ha-icon icon="${swingActive ? "mdi:arrow-oscillating" : "mdi:arrow-oscillating-off"}" style="--mdc-icon-size:15px;"></ha-icon>
-      </button>` : "";
-
-    const priorityAndSwingRowHtml = (priorityIconHtml || swingIconHtml)
-      ? `<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">${swingIconHtml}${priorityIconHtml}</div>`
-      : "";
 
     // Popup priorità — solo +/- grandi, dato che è un numero continuo (non
     // un set fisso di opzioni come preset/swing).
@@ -702,7 +704,7 @@ class TermostatoDiagCard extends HTMLElement {
             style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:minus" style="--mdc-icon-size:10px;"></ha-icon>
           </button>
-          <span style="font-size:11px;font-weight:700;min-width:36px;text-align:center;flex-shrink:0;">${presetLabel(currentPreset)}</span>
+          <span data-open-preset-picker="1" style="font-size:11px;font-weight:700;min-width:36px;text-align:center;flex-shrink:0;cursor:pointer;">${presetLabel(currentPreset)}</span>
           <button data-open-preset-picker="1" aria-label="Cambia modalità preset" title="Aumenta/scegli modalità"
             style="width:18px;height:18px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
             <ha-icon icon="mdi:plus" style="--mdc-icon-size:10px;"></ha-icon>
@@ -767,7 +769,6 @@ class TermostatoDiagCard extends HTMLElement {
           </div>
           ${fanPriorityRowHtml}
           ${masterTimerRowHtml}
-          ${priorityAndSwingRowHtml}
           ${attrsHtml}
           ${notifyHistoryHtml}
         </div>
