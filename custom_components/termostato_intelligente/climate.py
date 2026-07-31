@@ -1526,6 +1526,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 )
                 return
             if temp >= target + turn_on_offset:
+                self._simple_night_auto_on = self._simple_is_night()
+                self._fv_auto_on = False
                 if dry_enabled:
                     _LOGGER.info("%s: [semplificato] accensione DRY (int, temp=%.0f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
@@ -1533,8 +1535,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 else:
                     _LOGGER.info("%s: [semplificato] accensione COOL (int, temp=%.0f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_night_auto_on = self._simple_is_night()
-                self._fv_auto_on = False
                 ac_type_int = "notturna" if self._simple_is_night() else "termica"
                 await self._async_simple_notify_ac_on(temp, target, ac_type=ac_type_int)
             return
@@ -1652,6 +1652,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 _LOGGER.debug("%s: accensione (ext) bloccata — spento manualmente di recente", self._attr_name)
                 return
             if temp >= target + turn_on_offset:
+                self._simple_night_auto_on = self._simple_is_night()
+                self._fv_auto_on = False
                 if dry_enabled:
                     _LOGGER.info("%s: [semplificato] accensione DRY (ext, temp=%.1f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
@@ -1659,8 +1661,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 else:
                     _LOGGER.info("%s: [semplificato] accensione COOL (ext, temp=%.1f)", self._attr_name, temp)
                     await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-                self._simple_night_auto_on = self._simple_is_night()
-                self._fv_auto_on = False
                 ac_type_ext = "notturna" if self._simple_is_night() else "termica"
                 await self._async_simple_notify_ac_on(temp, target, ac_type=ac_type_ext)
             return
@@ -1854,6 +1854,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # Accensione — sempre DRY prima (se abilitato)
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
         now = dt_util.utcnow()
+        self._fv_auto_on = True
         if dry_enabled:
             _LOGGER.info("%s: [semplificato FV] accensione DRY (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
             await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
@@ -1865,7 +1866,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         coord["last_fv_turn_on"] = now
         self._fv_turnon_confirmed_since = None
-        self._fv_auto_on = True
         self._simple_night_auto_on = False
         soc_val = self._read_float(self._battery_sensor) or 0
         await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv, consumo=consumo, soc=soc_val)
@@ -1998,6 +1998,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 return  # non ancora confermato abbastanza a lungo
 
             dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+            self._fv_auto_on = True
             if dry_enabled:
                 _LOGGER.info("%s: [semplificato FV] riaccensione DRY dopo calo FV (confermata %s min)", self._attr_name, turn_on_total_minutes)
                 await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
@@ -2308,6 +2309,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # Accende se non è già acceso e supera la soglia
         if not is_on and temp >= target + threshold:
             internal_temp = self._read_float(self._climate_entity, attr="current_temperature")
+            self._fv_auto_on = True
             if dry_enabled:
                 _LOGGER.info("%s: [emergenza] accensione DRY (temp=%.1f)", self._attr_name, temp)
                 await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
@@ -2465,6 +2467,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         _LOGGER.info("%s: [power limit] riaccensione dopo calo consumo", self._attr_name)
+        self._fv_auto_on = True
         await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         await self._async_power_limit_notify(is_on=True)
 
@@ -2655,9 +2658,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if sib_priority < my_priority:
                 return
         fv = self._read_float(self._fv_sensor) or 0
+        self._fv_auto_on = True
         await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         coord["last_fv_turn_on"] = dt_util.utcnow()
-        self._fv_auto_on = True
         await self._async_notify_power_event(
             reason=REASON_FV, is_on=True,
             extra={"fv": round(fv), "temp": round(temp, 1), "target": round(target, 1)},
@@ -2689,8 +2692,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if temp <= target + night_turn_on_offset:
             return
         _LOGGER.debug("%s: accensione notturna (temp=%.1f)", self._attr_name, temp)
+        # Impostiamo i flag PRIMA di chiamare il servizio — e ENTRAMBE le
+        # varianti (questa funzione è condivisa tra modo Completo e
+        # Semplice/Semplice+FV, ma il listener di rilevamento accensione
+        # manuale del modo Semplice controlla `_simple_night_auto_on`, una
+        # variabile DIVERSA da `_night_auto_on`). Senza questo, ogni
+        # accensione notturna automatica veniva scambiata per manuale,
+        # facendo scattare erroneamente il timer di spegnimento a tempo.
+        self._night_auto_on = True
+        self._simple_night_auto_on = True
         await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
-        self._night_auto_on = True  # segnala che è stato acceso automaticamente di notte
         await self._async_notify_power_event(
             reason=REASON_NIGHT, is_on=True,
             extra={"temp": round(temp, 1), "target": round(target, 1)},
@@ -3087,6 +3098,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         snap, self._snapshot = self._snapshot, None
         if snap["hvac_mode"] == "off":
             return
+        self._fv_auto_on = True  # ripristino da snapshot, non è una nuova accensione manuale
         await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         if snap.get("temperature") is not None:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]}, blocking=True)
@@ -3137,6 +3149,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         snap, self._snapshot = self._snapshot, None
         if snap["hvac_mode"] == "off":
             return
+        self._fv_auto_on = True  # ripristino da snapshot, non è una nuova accensione manuale
         await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
         if snap.get("temperature") is not None:
             await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]}, blocking=True)
