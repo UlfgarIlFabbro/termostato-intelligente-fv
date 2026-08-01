@@ -465,3 +465,35 @@ DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — te
 DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_START = "\U0001f319 {{ name }}: inizio modalità notturna (target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_END = "\U0001f305 {{ name }}: fine modalità notturna, climatizzatore spento."
+
+# ==========================================================================
+# MODALITÀ STAGIONALE (Estate/Inverno/Manuale) — v0.9.0
+# ==========================================================================
+CONF_SEASON_MODE = "season_mode"  # "estate" | "inverno" | "manuale"
+SEASON_SUMMER = "estate"
+SEASON_WINTER = "inverno"
+SEASON_MANUAL = "manuale"
+DEFAULT_SEASON_MODE = SEASON_SUMMER  # chi non tocca il campo resta esattamente come oggi
+
+# Campi inverno — soglie specchiate rispetto a quelle estive, separate per
+# non dover ricordarsi di cambiarle ad ogni cambio stagione
+CONF_WINTER_TURN_ON_OFFSET = "winter_turn_on_offset"  # di quanti gradi SOTTO il target prima di accendere
+CONF_WINTER_SHUTOFF_MARGIN = "winter_shutoff_margin"  # margine SOPRA il target prima di spegnere
+CONF_WINTER_SOC_MIN = "winter_soc_min"  # soglia batteria minima per l'accensione FV in inverno (più alta di quella estiva — batteria preziosa)
+CONF_WINTER_FLOOR_SENSOR = "winter_floor_sensor"  # binary_sensor dell'anello riscaldamento a pavimento (opzionale)
+
+DEFAULT_WINTER_TURN_ON_OFFSET = 0.5
+DEFAULT_WINTER_SHUTOFF_MARGIN = 0.2
+DEFAULT_WINTER_SOC_MIN = 90.0
+
+# Emergenza riscaldamento — nuovo, specchio di quella raffrescamento
+# esistente (le cui chiavi tecniche restano invariate per compatibilità,
+# solo l'etichetta visibile cambia da "Emergenza caldo" a "Emergenza
+# accendi raffrescamento").
+CONF_EMERGENCY_WINTER_HEAT_THRESHOLD = "emergency_winter_heat_threshold"
+CONF_EMERGENCY_WINTER_HEAT_END_THRESHOLD = "emergency_winter_heat_end_threshold"
+DEFAULT_EMERGENCY_WINTER_HEAT_THRESHOLD = 1.5
+DEFAULT_EMERGENCY_WINTER_HEAT_END_THRESHOLD = 0.7
+
+DEFAULT_SIMPLE_MSG_AC_ON_WINTER = "\U0001f525 {{ name }}: acceso riscaldamento ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_ON_WINTER_FLOOR = "\U0001f525 {{ name }}: assistenza riscaldamento a pavimento ({{ temp }}\u00b0C, FV {{ fv }}W, surplus {{ surplus }}W, batteria {{ batteria }}%)."

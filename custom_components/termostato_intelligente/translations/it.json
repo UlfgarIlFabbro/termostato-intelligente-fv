@@ -12,7 +12,7 @@
       "options": {
         "semplificato": "🟢 Semplificato",
         "semplificato_fv": "🔵 Semplificato con fotovoltaico",
-        "completo": "⚙️ Completo"
+        "completo": "⚙️ Completo (OBSOLETO — verrà rimosso in futuro)"
       }
     },
     "power_limit_mode": {

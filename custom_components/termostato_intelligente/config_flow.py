@@ -353,8 +353,8 @@ def _schema_energia_simple(defaults: dict, sunset_str: str = "", cutoff_str: str
     })
 
 
-def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
-    return vol.Schema({
+def _schema_simple_notifiche(defaults: dict, has_fv: bool = True) -> vol.Schema:
+    fields = {
         # --- Google Home ---
         _f(vol.Optional, CONF_TTS_PLAYERS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="media_player", multiple=True)),
         _f(vol.Optional, CONF_TTS_ENGINE, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="tts")),
@@ -368,7 +368,10 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TTS_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_TTS, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_TTS): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS): selector.BooleanSelector(),
+    }
+    if has_fv:
+        fields[_f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TTS, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TTS)] = selector.BooleanSelector()
+    fields.update({
         # --- Telegram ---
         _f(vol.Optional, CONF_NOTIFY_TARGETS, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="notify", multiple=True)),
         _f(vol.Optional, CONF_NOTIFY_CHAT_IDS, defaults): selector.TextSelector(),
@@ -382,8 +385,10 @@ def _schema_simple_notifiche(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_NIGHT_START, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NOTIFY_TEL_NIGHT_END, defaults, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_QUIET_NIGHT_NOTIFY, defaults, DEFAULT_SIMPLE_QUIET_NIGHT_NOTIFY): selector.BooleanSelector(),
-        _f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM): selector.BooleanSelector(),
     })
+    if has_fv:
+        fields[_f(vol.Optional, CONF_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM, defaults, DEFAULT_FV_SENSOR_OFFLINE_NOTIFY_TELEGRAM)] = selector.BooleanSelector()
+    return vol.Schema(fields)
 
 
 
@@ -709,7 +714,7 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
         if user_input is not None:
             self._data.update(user_input)
             return await self.async_step_protezione_potenza()
-        return self.async_show_form(step_id="simple_notifiche", data_schema=_schema_simple_notifiche(self._data))
+        return self.async_show_form(step_id="simple_notifiche", data_schema=_schema_simple_notifiche(self._data, has_fv=(self._data.get(CONF_CONFIG_MODE) == CONFIG_MODE_SIMPLE_FV)))
 
     async def async_step_protezione_potenza(self, user_input=None):
         if user_input is not None:
@@ -859,7 +864,7 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             self._data.update(user_input)
             return await self.async_step_protezione_potenza()
-        return self.async_show_form(step_id="simple_notifiche", data_schema=_schema_simple_notifiche(self._data))
+        return self.async_show_form(step_id="simple_notifiche", data_schema=_schema_simple_notifiche(self._data, has_fv=(self._data.get(CONF_CONFIG_MODE) == CONFIG_MODE_SIMPLE_FV)))
 
     async def async_step_protezione_potenza(self, user_input=None):
         if user_input is not None:

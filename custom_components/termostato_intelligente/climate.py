@@ -904,18 +904,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         if fan_mode not in FAN_MODES_ALLOWED:
             fan_mode = FAN_MODES_ALLOWED[0]
-        await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan_mode}, blocking=True)
+        await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan_mode})
         self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
             await self._async_turn_off_climate()
         elif hvac_mode == HVACMode.DRY:
-            await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+            await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
             self._schedule_dry_timer("set_hvac_mode_manuale_da_ui")
             self._reset_manual_off_block("accensione_dry_manuale_da_ui")
         else:
-            await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "cool"}, blocking=True)
+            await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "cool"})
             self._reset_manual_off_block("accensione_cool_manuale_da_ui")
         self.async_write_ha_state()
 
@@ -1530,11 +1530,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._fv_auto_on = False
                 if dry_enabled:
                     _LOGGER.info("%s: [semplificato] accensione DRY (int, temp=%.0f)", self._attr_name, temp)
-                    await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                    await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
                     self._schedule_dry_timer("accensione_dry_internal")
                 else:
                     _LOGGER.info("%s: [semplificato] accensione COOL (int, temp=%.0f)", self._attr_name, temp)
-                    await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                    await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
                 ac_type_int = "notturna" if self._simple_is_night() else "termica"
                 await self._async_simple_notify_ac_on(temp, target, ac_type=ac_type_int)
             return
@@ -1590,11 +1590,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         fan_needs_update = reference_fan != fan
 
         if setpoint_needs_update:
-            await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint}, blocking=True)
+            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint})
             self._last_sent_setpoint = new_setpoint
             self._last_sent_setpoint_at = dt_util.utcnow()
         if fan_needs_update:
-            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
+            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan})
             self._last_sent_fan = fan
         if setpoint_needs_update or fan_needs_update:
             await self._async_simple_notify_temp_change(temp, target, fan)
@@ -1656,11 +1656,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 self._fv_auto_on = False
                 if dry_enabled:
                     _LOGGER.info("%s: [semplificato] accensione DRY (ext, temp=%.1f)", self._attr_name, temp)
-                    await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                    await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
                     self._schedule_dry_timer("accensione_dry_external")
                 else:
                     _LOGGER.info("%s: [semplificato] accensione COOL (ext, temp=%.1f)", self._attr_name, temp)
-                    await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                    await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
                 ac_type_ext = "notturna" if self._simple_is_night() else "termica"
                 await self._async_simple_notify_ac_on(temp, target, ac_type=ac_type_ext)
             return
@@ -1706,11 +1706,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         fan_needs_update = reference_fan != fan
 
         if setpoint_needs_update:
-            await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint_r}, blocking=True)
+            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint_r})
             self._last_sent_setpoint = new_setpoint_r
             self._last_sent_setpoint_at = dt_util.utcnow()
         if fan_needs_update:
-            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}, blocking=True)
+            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan})
             self._last_sent_fan = fan
         if setpoint_needs_update or fan_needs_update:
             await self._async_simple_notify_temp_change(temp, target, fan)
@@ -1857,11 +1857,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._fv_auto_on = True
         if dry_enabled:
             _LOGGER.info("%s: [semplificato FV] accensione DRY (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
-            await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+            await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
             self._schedule_dry_timer("accensione_fv_turn_on_simple")
         else:
             _LOGGER.info("%s: [semplificato FV] accensione COOL (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
-            await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+            await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
             self._cancel_dry_timer("accensione_fv_cool_no_dry")
 
         coord["last_fv_turn_on"] = now
@@ -2001,11 +2001,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._fv_auto_on = True
             if dry_enabled:
                 _LOGGER.info("%s: [semplificato FV] riaccensione DRY dopo calo FV (confermata %s min)", self._attr_name, turn_on_total_minutes)
-                await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
                 self._schedule_dry_timer("riaccensione_fv_dopo_calo")
             else:
                 _LOGGER.info("%s: [semplificato FV] riaccensione COOL dopo calo FV (confermata %s min)", self._attr_name, turn_on_total_minutes)
-                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
                 self._cancel_dry_timer("riaccensione_fv_cool_no_dry")
             self._fv_surplus_buffer = []
             self._fv_low_since = None
@@ -2312,11 +2312,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._fv_auto_on = True
             if dry_enabled:
                 _LOGGER.info("%s: [emergenza] accensione DRY (temp=%.1f)", self._attr_name, temp)
-                await self.hass.services.async_call("climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"}, blocking=True)
+                await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
                 self._schedule_dry_timer("accensione_emergenza_dry")
             else:
                 _LOGGER.info("%s: [emergenza] accensione COOL (temp=%.1f)", self._attr_name, temp)
-                await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+                await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
                 self._cancel_dry_timer("accensione_emergenza_cool_no_dry")
             await self._async_simple_notify_ac_on(temp, target, ac_type="emergenza")
 
@@ -2468,7 +2468,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         _LOGGER.info("%s: [power limit] riaccensione dopo calo consumo", self._attr_name)
         self._fv_auto_on = True
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
         await self._async_power_limit_notify(is_on=True)
 
     async def _async_power_limit_notify(self, is_on: bool, consumo: float = 0) -> None:
@@ -2659,7 +2659,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 return
         fv = self._read_float(self._fv_sensor) or 0
         self._fv_auto_on = True
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
         coord["last_fv_turn_on"] = dt_util.utcnow()
         await self._async_notify_power_event(
             reason=REASON_FV, is_on=True,
@@ -2701,7 +2701,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # facendo scattare erroneamente il timer di spegnimento a tempo.
         self._night_auto_on = True
         self._simple_night_auto_on = True
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
         await self._async_notify_power_event(
             reason=REASON_NIGHT, is_on=True,
             extra={"temp": round(temp, 1), "target": round(target, 1)},
@@ -2896,14 +2896,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             except (TypeError, ValueError):
                 pass
         if current_temp_rounded is None or current_temp_rounded != new_temp_rounded:
-            await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": new_temp_rounded}, blocking=True)
+            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_temp_rounded})
             mode = self._get_config_mode()
             if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
                 await self._async_simple_notify_temp_change(temp, target)
             else:
                 await self._async_notify_temp_change(current_temp_rounded, new_temp_rounded, fan_mode, temp, target)
         if current_fan != fan_mode:
-            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan_mode}, blocking=True)
+            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan_mode})
 
     # ------------------------------------------------------------------
     # Boost presenza
@@ -2918,7 +2918,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         boost_offset = float(get_conf(self.entry, CONF_PRESENCE_BOOST_OFFSET, DEFAULT_PRESENCE_BOOST_OFFSET))
         elapsed = dt_util.utcnow() - self._presence_since
         if elapsed >= timedelta(minutes=boost_minutes) and temp > target + boost_offset and self.fan_mode != "medium":
-            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": "medium"}, blocking=True)
+            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": "medium"})
 
     # ------------------------------------------------------------------
     # Gestione finestra
@@ -2975,6 +2975,27 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._manual_off_since = None
             return False
         return True
+
+    async def _async_safe_climate_call(self, service: str, data: dict) -> bool:
+        """Chiama un servizio sul climatizzatore reale con gestione errori.
+
+        Se il dispositivo è irraggiungibile (offline, integrazione del
+        produttore in errore, ecc.), l'eccezione viene catturata e loggata
+        invece di propagarsi — evitando che quel singolo ciclo si interrompa
+        a metà lasciando lo stato interno incoerente. Il prossimo ciclo
+        periodico riproverà normalmente. Restituisce True se il comando è
+        andato a buon fine, False altrimenti (il chiamante può ignorare il
+        valore se non gli serve distinguere i due casi).
+        """
+        try:
+            await self.hass.services.async_call("climate", service, data, blocking=True)
+            return True
+        except Exception as exc:  # noqa: BLE001 — qualsiasi errore del dispositivo/integrazione reale
+            _LOGGER.warning(
+                "%s: comando '%s' non riuscito (climatizzatore irraggiungibile?) — riprovo al prossimo ciclo: %s",
+                self._attr_name, service, exc,
+            )
+            return False
 
     async def _async_turn_off_climate(self) -> None:
         """Spegne il climatizzatore marcandolo come spegnimento PROGRAMMATO
@@ -3099,11 +3120,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if snap["hvac_mode"] == "off":
             return
         self._fv_auto_on = True  # ripristino da snapshot, non è una nuova accensione manuale
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
         if snap.get("temperature") is not None:
-            await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]}, blocking=True)
+            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]})
         if snap.get("fan_mode") is not None:
-            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": snap["fan_mode"]}, blocking=True)
+            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": snap["fan_mode"]})
 
     async def _async_window_opened(self) -> None:
         if self.hvac_mode != HVACMode.COOL:
@@ -3150,11 +3171,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if snap["hvac_mode"] == "off":
             return
         self._fv_auto_on = True  # ripristino da snapshot, non è una nuova accensione manuale
-        await self.hass.services.async_call("climate", "turn_on", {"entity_id": self._climate_entity}, blocking=True)
+        await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
         if snap.get("temperature") is not None:
-            await self.hass.services.async_call("climate", "set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]}, blocking=True)
+            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": snap["temperature"]})
         if snap.get("fan_mode") is not None:
-            await self.hass.services.async_call("climate", "set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": snap["fan_mode"]}, blocking=True)
+            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": snap["fan_mode"]})
 
     # ------------------------------------------------------------------
     # Gestione porta

@@ -12,7 +12,7 @@
       "options": {
         "semplificato": "🟢 Simple",
         "semplificato_fv": "🔵 Simple with solar",
-        "completo": "⚙️ Full"
+        "completo": "⚙️ Full (DEPRECATED — will be removed in the future)"
       }
     },
     "power_limit_mode": {
