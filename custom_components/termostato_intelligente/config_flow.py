@@ -23,6 +23,28 @@ from .const import (
     CONF_MANUAL_SHUTOFF_TIMER_MIN,
     CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
+    CONF_SEASON_MODE,
+    SEASON_SUMMER,
+    SEASON_WINTER,
+    SEASON_AUTO,
+    SEASON_MANUAL,
+    SEASON_OFF,
+    DEFAULT_SEASON_MODE,
+    CONF_WINTER_TARGET_DAY,
+    CONF_WINTER_TARGET_NIGHT,
+    CONF_WINTER_TURN_ON_OFFSET,
+    CONF_WINTER_SHUTOFF_MARGIN,
+    CONF_WINTER_SOC_MIN,
+    CONF_WINTER_FLOOR_SENSOR,
+    DEFAULT_WINTER_TARGET_DAY,
+    DEFAULT_WINTER_TARGET_NIGHT,
+    DEFAULT_WINTER_TURN_ON_OFFSET,
+    DEFAULT_WINTER_SHUTOFF_MARGIN,
+    DEFAULT_WINTER_SOC_MIN,
+    CONF_EMERGENCY_WINTER_HEAT_THRESHOLD,
+    CONF_EMERGENCY_WINTER_HEAT_END_THRESHOLD,
+    DEFAULT_EMERGENCY_WINTER_HEAT_THRESHOLD,
+    DEFAULT_EMERGENCY_WINTER_HEAT_END_THRESHOLD,
     DEFAULT_MANUAL_SHUTOFF_TIMER_MIN,
     DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_NIGHT_END,
@@ -307,6 +329,12 @@ def _schema_simple_entita(defaults: dict) -> vol.Schema:
 
 def _schema_simple_temperature(defaults: dict) -> vol.Schema:
     return vol.Schema({
+        _f(vol.Optional, CONF_SEASON_MODE, defaults, DEFAULT_SEASON_MODE): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[SEASON_SUMMER, SEASON_WINTER, SEASON_AUTO, SEASON_MANUAL, SEASON_OFF],
+                translation_key="season_mode",
+            )
+        ),
         _f(vol.Required, CONF_SIMPLE_TARGET_DAY, defaults, DEFAULT_SIMPLE_TARGET_DAY): selector.NumberSelector(selector.NumberSelectorConfig(min=16, max=30, step=0.5, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_SIMPLE_TURN_ON_OFFSET, defaults, DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT): selector.NumberSelector(selector.NumberSelectorConfig(min=0.3, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
         _f(vol.Optional, CONF_SIMPLE_SHUTOFF_MARGIN, defaults, DEFAULT_SIMPLE_SHUTOFF_MARGIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=2.0, step=0.1, unit_of_measurement="°C", mode="box")),
@@ -320,6 +348,21 @@ def _schema_simple_temperature(defaults: dict) -> vol.Schema:
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_ENABLED, defaults, DEFAULT_NIGHT_END_SHUTOFF_ENABLED): selector.BooleanSelector(),
         _f(vol.Optional, CONF_NIGHT_END_SHUTOFF_AUTO_ONLY, defaults, DEFAULT_NIGHT_END_SHUTOFF_AUTO_ONLY): selector.BooleanSelector(),
         _f(vol.Optional, CONF_SIMPLE_NO_AUTO_ON_NIGHT, defaults, DEFAULT_SIMPLE_NO_AUTO_ON_NIGHT): selector.BooleanSelector(),
+    })
+
+
+def _schema_inverno(defaults: dict) -> vol.Schema:
+    """❄️ Schermata dedicata al funzionamento invernale — separata e ben
+    evidenziata, visibile solo quando la modalità stagionale lo richiede."""
+    return vol.Schema({
+        _f(vol.Required, CONF_WINTER_TARGET_DAY, defaults, DEFAULT_WINTER_TARGET_DAY): selector.NumberSelector(selector.NumberSelectorConfig(min=14, max=26, step=0.5, unit_of_measurement="°C", mode="box")),
+        _f(vol.Required, CONF_WINTER_TARGET_NIGHT, defaults, DEFAULT_WINTER_TARGET_NIGHT): selector.NumberSelector(selector.NumberSelectorConfig(min=14, max=26, step=0.5, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_WINTER_TURN_ON_OFFSET, defaults, DEFAULT_WINTER_TURN_ON_OFFSET): selector.NumberSelector(selector.NumberSelectorConfig(min=0.2, max=2.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_WINTER_SHUTOFF_MARGIN, defaults, DEFAULT_WINTER_SHUTOFF_MARGIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=2.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_WINTER_SOC_MIN, defaults, DEFAULT_WINTER_SOC_MIN): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=100, step=1, unit_of_measurement="%", mode="box")),
+        _f(vol.Optional, CONF_WINTER_FLOOR_SENSOR, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+        _f(vol.Optional, CONF_EMERGENCY_WINTER_HEAT_THRESHOLD, defaults, DEFAULT_EMERGENCY_WINTER_HEAT_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.5, max=5.0, step=0.1, unit_of_measurement="°C", mode="box")),
+        _f(vol.Optional, CONF_EMERGENCY_WINTER_HEAT_END_THRESHOLD, defaults, DEFAULT_EMERGENCY_WINTER_HEAT_END_THRESHOLD): selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=3.0, step=0.1, unit_of_measurement="°C", mode="box")),
     })
 
 
@@ -689,11 +732,24 @@ class TermostatoIntelligenteConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_simple_temperature(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_SIMPLE)
-            if mode == CONFIG_MODE_SIMPLE_FV:
-                return await self.async_step_energia_simple()
-            return await self.async_step_simple_notifiche()
+            if self._data.get(CONF_SEASON_MODE) in (SEASON_WINTER, SEASON_AUTO):
+                return await self.async_step_inverno()
+            return await self._async_after_temperature_step()
         return self.async_show_form(step_id="simple_temperature", data_schema=_schema_simple_temperature(self._data))
+
+    async def async_step_inverno(self, user_input=None):
+        """❄️ Schermata dedicata all'inverno — mostrata solo se la stagione
+        selezionata è Inverno o Auto."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self._async_after_temperature_step()
+        return self.async_show_form(step_id="inverno", data_schema=_schema_inverno(self._data))
+
+    async def _async_after_temperature_step(self):
+        mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_SIMPLE)
+        if mode == CONFIG_MODE_SIMPLE_FV:
+            return await self.async_step_energia_simple()
+        return await self.async_step_simple_notifiche()
 
     async def async_step_energia_simple(self, user_input=None):
         """Step FV per il modo semplificato con fotovoltaico."""
@@ -841,11 +897,24 @@ class TermostatoIntelligenteOptionsFlow(config_entries.OptionsFlow):
     async def async_step_simple_temperature(self, user_input=None):
         if user_input is not None:
             self._data.update(user_input)
-            mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_SIMPLE)
-            if mode == CONFIG_MODE_SIMPLE_FV:
-                return await self.async_step_energia_simple()
-            return await self.async_step_simple_notifiche()
+            if self._data.get(CONF_SEASON_MODE) in (SEASON_WINTER, SEASON_AUTO):
+                return await self.async_step_inverno()
+            return await self._async_after_temperature_step()
         return self.async_show_form(step_id="simple_temperature", data_schema=_schema_simple_temperature(self._data))
+
+    async def async_step_inverno(self, user_input=None):
+        """❄️ Schermata dedicata all'inverno — mostrata solo se la stagione
+        selezionata è Inverno o Auto."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self._async_after_temperature_step()
+        return self.async_show_form(step_id="inverno", data_schema=_schema_inverno(self._data))
+
+    async def _async_after_temperature_step(self):
+        mode = self._data.get(CONF_CONFIG_MODE, CONFIG_MODE_SIMPLE)
+        if mode == CONFIG_MODE_SIMPLE_FV:
+            return await self.async_step_energia_simple()
+        return await self.async_step_simple_notifiche()
 
     async def async_step_energia_simple(self, user_input=None):
         if user_input is not None:

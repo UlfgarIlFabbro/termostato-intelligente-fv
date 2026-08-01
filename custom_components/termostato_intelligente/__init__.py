@@ -14,6 +14,12 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
+    CONF_SEASON_MODE,
+    SEASON_SUMMER,
+    SEASON_WINTER,
+    SEASON_AUTO,
+    SEASON_MANUAL,
+    SEASON_OFF,
     DEFAULT_EMERGENCY_HEAT_END_THRESHOLD,
     DEFAULT_EMERGENCY_HEAT_THRESHOLD,
     DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
@@ -128,7 +134,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v0838"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v090b2"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -310,11 +316,27 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 )
             climate_entity.async_write_ha_state()
 
+    async def _handle_set_season_mode(call) -> None:
+        season = call.data.get("season")
+        if season not in (SEASON_SUMMER, SEASON_WINTER, SEASON_AUTO, SEASON_MANUAL, SEASON_OFF):
+            return
+        for climate_entity in _find_climate_entities(call):
+            entry = climate_entity.entry
+            new_options = dict(entry.options)
+            new_options[CONF_SEASON_MODE] = season
+            hass.config_entries.async_update_entry(entry, options=new_options)
+            # async_update_entry attiva automaticamente _async_update_listener,
+            # che ricarica l'entry — la nuova stagione si applica subito, con
+            # un ricaricamento pulito invece di un override runtime in
+            # memoria (evitiamo lo stesso tipo di bug di persistenza già
+            # trovato per timer ed altri override in questa integrazione).
+
     hass.services.async_register(DOMAIN, "adjust_target", _handle_adjust_target)
     hass.services.async_register(DOMAIN, "adjust_priority", _handle_adjust_priority)
     hass.services.async_register(DOMAIN, "set_shutoff_timer", _handle_set_shutoff_timer)
     hass.services.async_register(DOMAIN, "toggle_manual_shutoff_timer", _handle_toggle_manual_shutoff_timer)
     hass.services.async_register(DOMAIN, "adjust_manual_shutoff_timer_minutes", _handle_adjust_manual_shutoff_timer_minutes)
+    hass.services.async_register(DOMAIN, "set_season_mode", _handle_set_season_mode)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

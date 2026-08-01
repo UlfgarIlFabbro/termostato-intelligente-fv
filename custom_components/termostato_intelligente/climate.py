@@ -245,6 +245,31 @@ from .const import (
     CONF_MANUAL_SHUTOFF_TIMER_MIN,
     CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
+    CONF_SEASON_MODE,
+    SEASON_SUMMER,
+    SEASON_WINTER,
+    SEASON_AUTO,
+    SEASON_MANUAL,
+    SEASON_OFF,
+    DEFAULT_SEASON_MODE,
+    CONF_WINTER_TARGET_DAY,
+    CONF_WINTER_TARGET_NIGHT,
+    CONF_WINTER_TURN_ON_OFFSET,
+    CONF_WINTER_SHUTOFF_MARGIN,
+    CONF_WINTER_SOC_MIN,
+    CONF_WINTER_FLOOR_SENSOR,
+    DEFAULT_WINTER_TARGET_DAY,
+    DEFAULT_WINTER_TARGET_NIGHT,
+    DEFAULT_WINTER_TURN_ON_OFFSET,
+    DEFAULT_WINTER_SHUTOFF_MARGIN,
+    DEFAULT_WINTER_SOC_MIN,
+    CONF_EMERGENCY_WINTER_HEAT_THRESHOLD,
+    CONF_EMERGENCY_WINTER_HEAT_END_THRESHOLD,
+    DEFAULT_EMERGENCY_WINTER_HEAT_THRESHOLD,
+    DEFAULT_EMERGENCY_WINTER_HEAT_END_THRESHOLD,
+    DEFAULT_SIMPLE_MSG_AC_ON_WINTER,
+    DEFAULT_SIMPLE_MSG_AC_ON_WINTER_FLOOR,
+    SEASON_AUTO_SWITCH_COOLDOWN_HOURS,
     DEFAULT_MANUAL_SHUTOFF_TIMER_MIN,
     DEFAULT_SIMPLE_SHUTOFF_MARGIN,
     CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN,
@@ -597,6 +622,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "sonda_esterna_entity_id": self._temp_sensor,
             # --- diagnostica specifica del modo Completo ---
             "modalita_configurazione": self._get_config_mode(),
+            "modalita_stagionale": self._get_season_mode(),
             "fv_priorita": self._effective_priority(),
             "target_giorno_override": self._runtime_target_day_override,
             "target_notte_override": self._runtime_target_night_override,
@@ -837,7 +863,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     # prescindere da tutto il resto (FV, notte, finestra),
                     # proprio come vuole chi usa il clima manualmente (es.
                     # uno scaldotto) e vuole solo una sicurezza a tempo.
-                    if self._manual_shutoff_timer_enabled():
+                    if self._manual_shutoff_timer_enabled() and self._get_season_mode() != SEASON_OFF:
                         timer_minutes = self._manual_shutoff_timer_minutes()
                         if timer_minutes > 0:
                             if self._shutoff_timer_cancel is not None:
@@ -1001,6 +1027,24 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def _async_periodic_update_simple(self, now: datetime | None = None) -> None:
         """Loop periodico per modo semplificato e semplificato con FV."""
+        season = self._get_season_mode()
+        if season == SEASON_MANUAL:
+            # In Manuale il master switch deve restare sempre disattivato —
+            # se per qualche motivo risultasse acceso (es. riacceso per
+            # errore, o residuo da prima del cambio stagione), lo forziamo
+            # spento ad ogni ciclo, così l'automazione non riparte mai
+            # finché la stagione resta su Manuale.
+            if self._switch_state(SWITCH_KEY_MASTER, True):
+                master_entity = self._switch_entity_id(SWITCH_KEY_MASTER)
+                if master_entity:
+                    _LOGGER.info("%s: stagione Manuale — disattivo automaticamente il master switch", self._attr_name)
+                    try:
+                        await self.hass.services.async_call("switch", "turn_off", {"entity_id": master_entity}, blocking=True)
+                    except Exception as exc:
+                        _LOGGER.warning("%s: impossibile disattivare il master switch: %s", self._attr_name, exc)
+        if season == SEASON_OFF or season == SEASON_MANUAL:
+            return  # nessuna regolazione — solo il timer manuale resta attivo (Manuale) o nulla del tutto (Off)
+
         # --- Fallback DRY→COOL ---
         # Il meccanismo primario è async_track_point_in_time schedulato da _schedule_dry_timer.
         # Questo fallback copre il caso raro in cui il Gree era unavailable al momento
@@ -1015,9 +1059,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                         "%s: [DRY-TRACE] fallback polling — timer già scaduto, transizione ora (set_hvac_mode cool)",
                         self._attr_name,
                     )
-                    await self.hass.services.async_call(
-                        "climate", "set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "cool"}, blocking=True
-                    )
+                    await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "cool"})
                     self._cancel_dry_timer("fallback_polling_dry_end_scaduto")
 
         use_internal = self._should_use_internal_probe()
@@ -1031,6 +1073,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         temp = self._simple_read_temp()
         if temp is None:
             return
+        self._record_temp_reading(temp)
 
         # Protezione potenza — ha precedenza su tutto
         await self._async_handle_power_limit()
@@ -1042,7 +1085,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         night_just_started = not self._simple_was_night and night_now
         self._simple_was_night = night_now
 
-        target = self._simple_current_target()
+        # Il target mostrato nella notifica notte, e la regolazione termica
+        # che segue, dipendono dalla stagione — in Auto seguono lo stesso
+        # criterio già usato nel ciclo FV (cosa è già acceso ora).
+        real_state = self.hass.states.get(self._climate_entity)
+        real_hvac = real_state.state if real_state else "off"
+        use_winter_target = season == SEASON_WINTER or (season == SEASON_AUTO and real_hvac == "heat")
+        target = self._winter_current_target() if use_winter_target else self._simple_current_target()
 
         # Notifica inizio modalità notturna
         if night_just_started:
@@ -1061,8 +1110,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             _LOGGER.debug("%s: [semplificato] ora di limbo post-notte — nessuna azione", self._attr_name)
             return
 
-        # Regolazione termica
-        await self._async_handle_thermal_simple(temp, target, use_internal)
+        # Regolazione termica — solo per un clima già acceso nella direzione
+        # coerente (l'accensione da spento è gestita dal ciclo FV dedicato)
+        if use_winter_target:
+            await self._async_handle_thermal_winter_simple(temp, target, use_internal)
+        else:
+            await self._async_handle_thermal_simple(temp, target, use_internal)
 
         # NOTA: accensione/spegnimento FV (emergenza, turn-on, shutoff) non è
         # più gestita qui — ha un ciclo dedicato più veloce, vedi
@@ -1074,42 +1127,94 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         notte) che gira più lentamente — così il rilevamento di un surplus
         insufficiente può essere confermato in pochi minuti invece di dover
         aspettare N cicli lunghi del loop generale.
+
+        Comportamento per stagione:
+        - Off: nulla, mai (anche il timer manuale è disattivato altrove)
+        - Manuale: nulla — solo il timer manuale resta attivo (gestito altrove)
+        - Estate: comportamento originale, invariato
+        - Inverno: equivalente specchiato, target/soglie invernali
+        - Auto: entrambe le logiche, mai in contemporanea sullo stesso stato,
+          con un raffreddamento di ore tra un cambio di direzione e l'altro
         """
         mode = self._get_config_mode()
         if mode != CONFIG_MODE_SIMPLE_FV:
             return
         if not self._switch_state(SWITCH_KEY_MASTER, True):
-            # Termostato disabilitato dall'utente — non fare assolutamente nulla
+            return
+        season = self._get_season_mode()
+        if season == SEASON_OFF or season == SEASON_MANUAL:
             return
         if self._is_window_open():
-            # Finestra aperta — non accendere/spegnere per FV, non ha senso
-            # climatizzare con la finestra aperta. La gestione finestra ha
-            # la sua logica dedicata (notifica + eventuale spegnimento).
             return
         if self._power_limit_off:
-            # Spento per superamento potenza contrattuale — non riaccendere
-            # da qui, nemmeno se le condizioni FV sarebbero favorevoli. La
-            # riaccensione dopo un blocco potenza è gestita ESCLUSIVAMENTE
-            # da _async_handle_power_limit (con isteresi, minuti di attesa
-            # e stagger tra istanze) — riaccendere subito dal ciclo FV
-            # vanificherebbe la protezione, rischiando di far risuperare
-            # la soglia pochi istanti dopo lo spegnimento di sicurezza.
             return
+
         use_internal = self._should_use_internal_probe()
         temp = self._simple_read_temp()
         if temp is None:
             return
-        target = self._simple_current_target()
+        self._record_temp_reading(temp)
+
+        real_state = self.hass.states.get(self._climate_entity)
+        real_hvac = real_state.state if real_state else "off"
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
-        # Gestione emergenza caldo — ha precedenza sul FV normale
-        await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
-        if self._switch_state(SWITCH_KEY_EMERGENCY, False):
+
+        run_summer = season == SEASON_SUMMER
+        run_winter = season == SEASON_WINTER
+        already_on_direction = None  # "cool"/"dry" o "heat" se il clima è già acceso in una direzione specifica
+        if season == SEASON_AUTO:
+            if real_hvac == "heat":
+                run_winter = True
+                already_on_direction = "heat"
+            elif real_hvac in ("cool", "dry"):
+                run_summer = True
+                already_on_direction = "cool"
+            else:
+                # Clima spento — proviamo le direzioni ammesse IN SEQUENZA
+                # nello stesso ciclo, non solo la prima: altrimenti se il
+                # primo ramo ammesso non produce alcuna accensione (es.
+                # temperatura non abbastanza calda per l'estate, ma
+                # abbastanza fredda per l'inverno), il secondo ramo non
+                # verrebbe mai valutato in questo ciclo.
+                run_summer = self._auto_mode_direction_allowed("cool")
+                run_winter = self._auto_mode_direction_allowed("heat")
+
+        if run_summer:
+            target = self._simple_current_target()
+            await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
+            if self._switch_state(SWITCH_KEY_EMERGENCY, False):
+                return
+            if self._switch_state(SWITCH_KEY_FV, True) and self._simple_within_fv_window():
+                real_before = self.hass.states.get(self._climate_entity)
+                was_off = real_before is None or real_before.state in ("off", "unknown", "unavailable")
+                await self._async_handle_fv_turn_on_simple(temp, target)
+                if was_off and season == SEASON_AUTO:
+                    real_after = self.hass.states.get(self._climate_entity)
+                    if real_after and real_after.state in ("cool", "dry"):
+                        self._auto_mode_record_direction("cool")
+                        already_on_direction = "cool"  # ha appena acceso — non provare più anche l'inverno in questo ciclo
+            if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
+                await self._async_handle_fv_shutoff_simple(temp, target)
+            await self._async_handle_fv_sensor_offline_shutoff()
+            if already_on_direction is not None:
+                return  # clima già acceso (prima o dopo questo ramo) — non ha senso valutare anche l'inverno ora
+
+        if run_winter:
+            target = self._winter_current_target()
+            await self._async_handle_emergency_heat(temp, target, use_internal, dry_enabled)
+            if self._switch_state(SWITCH_KEY_EMERGENCY, False):
+                return
+            if self._switch_state(SWITCH_KEY_FV, True):
+                real_before = self.hass.states.get(self._climate_entity)
+                was_off = real_before is None or real_before.state in ("off", "unknown", "unavailable")
+                await self._async_handle_winter_turn_on_simple(temp, target)
+                if was_off and season == SEASON_AUTO:
+                    real_after = self.hass.states.get(self._climate_entity)
+                    if real_after and real_after.state == "heat":
+                        self._auto_mode_record_direction("heat")
+            await self._async_handle_winter_shutoff_simple(temp, target)
+            await self._async_handle_fv_sensor_offline_shutoff()
             return
-        if self._switch_state(SWITCH_KEY_FV, True) and self._simple_within_fv_window():
-            await self._async_handle_fv_turn_on_simple(temp, target)
-        if bool(get_conf(self.entry, CONF_FV_SHUTOFF_ENABLED, DEFAULT_FV_SHUTOFF_ENABLED)):
-            await self._async_handle_fv_shutoff_simple(temp, target)
-        await self._async_handle_fv_sensor_offline_shutoff()
 
     def _is_fv_sensor_offline(self, threshold_min: float) -> bool:
         """True se il sensore di produzione FV è offline (letteralmente
@@ -1255,7 +1360,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 )
                 self._pending_probe_notification = "triggered"
             else:
-                _LOGGER.info(
+                _LOGGER.warning(
                     "%s: sonda esterna ripristinata — torno a usarla normalmente",
                     self._attr_name,
                 )
@@ -1420,6 +1525,66 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         """Fascia di silenzio notturna semplificata = stessa fascia notturna."""
         return self._simple_is_night()
 
+    def _get_season_mode(self) -> str:
+        return get_conf(self.entry, CONF_SEASON_MODE, DEFAULT_SEASON_MODE)
+
+    def _winter_current_target(self) -> float:
+        """Equivalente di _simple_current_target() ma per l'inverno — nessun
+        override runtime dalla card per ora (non richiesto), solo i valori
+        configurati nella schermata Inverno."""
+        if self._simple_is_night():
+            return float(get_conf(self.entry, CONF_WINTER_TARGET_NIGHT, DEFAULT_WINTER_TARGET_NIGHT))
+        return float(get_conf(self.entry, CONF_WINTER_TARGET_DAY, DEFAULT_WINTER_TARGET_DAY))
+
+    def _record_temp_reading(self, temp: float | None) -> None:
+        """Registra una lettura di temperatura con timestamp, per poter poi
+        rilevare se la temperatura è in discesa (accensione invernale
+        opportunistica). Mantiene solo gli ultimi 20 minuti di storico —
+        margine oltre i 10 richiesti, per tollerare cicli saltati."""
+        if temp is None:
+            return
+        if not hasattr(self, "_winter_temp_history"):
+            self._winter_temp_history: list[tuple[datetime, float]] = []
+        now = dt_util.utcnow()
+        self._winter_temp_history.append((now, temp))
+        cutoff = now - timedelta(minutes=20)
+        self._winter_temp_history = [(t, v) for t, v in self._winter_temp_history if t >= cutoff]
+
+    def _is_temp_descending(self, minutes: float = 10) -> bool:
+        """True se la temperatura attuale è più bassa di quella registrata
+        circa N minuti fa (la lettura disponibile più vicina a quel
+        momento). Se non c'è ancora abbastanza storico, restituisce False
+        per prudenza (meglio aspettare un ciclo in più che accendere sulla
+        base di un dato incompleto)."""
+        history = getattr(self, "_winter_temp_history", [])
+        if len(history) < 2:
+            return False
+        now = dt_util.utcnow()
+        target_time = now - timedelta(minutes=minutes)
+        # Trovo la lettura più vicina (per timestamp) a "minutes fa"
+        past_reading = min(history, key=lambda item: abs((item[0] - target_time).total_seconds()))
+        current_reading = history[-1]
+        return current_reading[1] < past_reading[1]
+
+    def _auto_mode_direction_allowed(self, wanting: str) -> bool:
+        """Solo per la modalità Auto: impedisce di passare da raffrescamento
+        a riscaldamento (o viceversa) troppo ravvicinati nelle giornate di
+        mezza stagione. `wanting` è 'cool' o 'heat' — la direzione che si
+        vorrebbe accendere ora. Non blocca mai la PRIMA accensione (nessuna
+        direzione precedente registrata)."""
+        last_dir = getattr(self, "_auto_last_hvac_direction", None)
+        last_at = getattr(self, "_auto_last_hvac_direction_at", None)
+        if last_dir is None or last_at is None or last_dir == wanting:
+            return True
+        elapsed = dt_util.utcnow() - last_at
+        return elapsed >= timedelta(hours=SEASON_AUTO_SWITCH_COOLDOWN_HOURS)
+
+    def _auto_mode_record_direction(self, direction: str) -> None:
+        """Registra la direzione appena accesa, per il controllo cooldown
+        sopra. Da chiamare ad ogni accensione automatica riuscita in modo Auto."""
+        self._auto_last_hvac_direction = direction
+        self._auto_last_hvac_direction_at = dt_util.utcnow()
+
     async def _async_handle_thermal_simple(
         self, temp: float, target: float, use_internal: bool
     ) -> None:
@@ -1493,7 +1658,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._cancel_dry_timer("spegnimento_target_int")
                     self._simple_night_auto_on = False
                     self._fv_auto_on = False
-                    await self._async_simple_notify_ac_off(temp, target)
+                    await self._async_simple_notify_ac_off(temp, target, use_internal=True)
                     return
             else:
                 self._simple_shutoff_since = None
@@ -1634,7 +1799,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._cancel_dry_timer("spegnimento_target_ext")
                     self._simple_night_auto_on = False
                     self._fv_auto_on = False
-                    await self._async_simple_notify_ac_off(temp, target)
+                    await self._async_simple_notify_ac_off(temp, target, use_internal=False)
                     return
             else:
                 self._simple_shutoff_since = None
@@ -1869,6 +2034,195 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._simple_night_auto_on = False
         soc_val = self._read_float(self._battery_sensor) or 0
         await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv, consumo=consumo, soc=soc_val)
+
+    async def _async_handle_winter_turn_on_simple(self, temp: float, target: float) -> None:
+        """Accensione invernale (riscaldamento) da FV — sempre basata sulla
+        temperatura in DISCESA, con o senza sensore anello pavimento.
+
+        Accende solo se:
+        1. Clima completamente spento
+        2. Temperatura in discesa rispetto a 10 minuti fa
+        3. Temperatura dentro la zona [target-scarto ; target)
+        4. Se configurato, l'anello del pavimento non è già acceso (evita spreco)
+        5. FV surplus > margine E SOC > soglia inverno (più restrittiva)
+        6. Priorità e stagger rispettati (solo tra sorelle anch'esse in inverno)
+        7. Timer di conferma 15 minuti (stesso principio anti-oscillazione dell'estate)
+        """
+        real_state = self.hass.states.get(self._climate_entity)
+        if real_state and real_state.state not in ("off", "unknown", "unavailable"):
+            return
+        if self._simple_is_in_limbo():
+            return
+        if self._is_manual_off_block_active():
+            return
+
+        winter_offset = float(get_conf(self.entry, CONF_WINTER_TURN_ON_OFFSET, DEFAULT_WINTER_TURN_ON_OFFSET))
+        if not (target - winter_offset <= temp < target):
+            return  # fuori dalla zona di intervento
+
+        if not self._is_temp_descending(minutes=10):
+            return  # non sta scendendo — nessun bisogno di anticipare l'impianto principale
+
+        floor_sensor = get_conf(self.entry, CONF_WINTER_FLOOR_SENSOR)
+        if floor_sensor:
+            floor_state = self.hass.states.get(floor_sensor)
+            if floor_state is None or floor_state.state in ("unknown", "unavailable"):
+                return  # non verificabile — prudenza, aspetto che torni disponibile
+            if floor_state.state == "on":
+                return  # l'anello sta già scaldando questa stanza, nessun bisogno di assistenza
+
+        if not (self._fv_sensor and self._consumption_sensor and self._battery_sensor):
+            return
+        fv = self._read_float(self._fv_sensor)
+        consumo = self._read_float(self._consumption_sensor)
+        if fv is None or consumo is None:
+            return
+
+        margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+        soc_min = float(get_conf(self.entry, CONF_WINTER_SOC_MIN, DEFAULT_WINTER_SOC_MIN))
+
+        if self._battery_sensor:
+            soc = self._read_float(self._battery_sensor)
+            if soc is None:
+                return
+            if soc < soc_min:
+                return
+
+        if not (fv > consumo + margin):
+            self._fv_turnon_confirmed_since = None
+            return
+
+        now_confirm = dt_util.utcnow()
+        if self._fv_turnon_confirmed_since is None:
+            self._fv_turnon_confirmed_since = now_confirm
+            return
+        turn_on_total_minutes = float(get_conf(self.entry, CONF_FV_TURN_ON_TOTAL_MINUTES, DEFAULT_FV_TURN_ON_TOTAL_MINUTES))
+        if (now_confirm - self._fv_turnon_confirmed_since) < timedelta(minutes=turn_on_total_minutes):
+            return
+
+        coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
+        stagger_min = float(get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN))
+        last_on = coord.get("last_fv_turn_on")
+        if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
+            return
+
+        # Priorità — solo tra sorelle anch'esse in modalità Inverno o Auto,
+        # stessa logica già corretta per l'estate (verifica anche le
+        # condizioni reali del sibling, non solo la temperatura).
+        my_priority = self._effective_priority()
+        for entry_data in self.hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            sibling = entry_data.get("climate")
+            if sibling is None or sibling is self:
+                continue
+            if sibling._get_config_mode() != CONFIG_MODE_SIMPLE_FV:
+                continue
+            if sibling._get_season_mode() not in (SEASON_WINTER, SEASON_AUTO):
+                continue
+            sib_real_state = self.hass.states.get(sibling._climate_entity)
+            if sib_real_state is None or sib_real_state.state not in ("off", "unknown", "unavailable"):
+                continue
+            if not sibling._switch_state(SWITCH_KEY_MASTER, True):
+                continue
+            if not sibling._switch_state(SWITCH_KEY_FV, True):
+                continue
+            if sibling._simple_is_in_limbo() or sibling._is_manual_off_block_active():
+                continue
+            sib_temp = sibling._simple_read_temp()
+            if sib_temp is None:
+                continue
+            sib_target = sibling._winter_current_target()
+            sib_offset = float(get_conf(sibling.entry, CONF_WINTER_TURN_ON_OFFSET, DEFAULT_WINTER_TURN_ON_OFFSET))
+            if not (sib_target - sib_offset <= sib_temp < sib_target):
+                continue
+            if not sibling._is_temp_descending(minutes=10):
+                continue
+            if sibling._fv_sensor and sibling._consumption_sensor:
+                sib_fv = sibling._read_float(sibling._fv_sensor)
+                sib_consumo = sibling._read_float(sibling._consumption_sensor)
+                if sib_fv is None or sib_consumo is None:
+                    continue
+                sib_margin = float(get_conf(sibling.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+                if not (sib_fv > sib_consumo + sib_margin):
+                    continue
+                if sibling._battery_sensor:
+                    sib_soc = sibling._read_float(sibling._battery_sensor)
+                    sib_soc_min = float(get_conf(sibling.entry, CONF_WINTER_SOC_MIN, DEFAULT_WINTER_SOC_MIN))
+                    if sib_soc is None or sib_soc < sib_soc_min:
+                        continue
+            sib_priority = sibling._effective_priority()
+            if sib_priority < my_priority:
+                _LOGGER.debug("%s: [inverno FV] cedo il turno a %s (priorità più alta)", self._attr_name, sibling._attr_name)
+                return
+
+        # Accensione — solo riscaldamento, niente equivalente del DRY
+        now = dt_util.utcnow()
+        self._fv_auto_on = True
+        _LOGGER.info("%s: [inverno FV] accensione HEAT (fv=%.0fW, consumo=%.0fW, temp in discesa)", self._attr_name, fv, consumo)
+        await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "heat"})
+        coord["last_fv_turn_on"] = now
+        self._fv_turnon_confirmed_since = None
+        self._simple_night_auto_on = False
+        soc_val = self._read_float(self._battery_sensor) or 0
+        await self._async_simple_notify_ac_on(temp, target, ac_type="fv_winter", fv=fv, consumo=consumo, soc=soc_val)
+
+    async def _async_handle_thermal_winter_simple(
+        self, temp: float, target: float, use_internal: bool
+    ) -> None:
+        """Regolazione termica invernale per un clima già acceso in HEAT
+        (es. durante l'emergenza riscaldamento). Setpoint graduale semplice
+        (specchiato dell'estate: +1° invece di -1°), spegnimento quando il
+        target è raggiunto con margine."""
+        real_state = self.hass.states.get(self._climate_entity)
+        if real_state is None or real_state.state != "heat":
+            return
+        shutoff_margin = float(get_conf(self.entry, CONF_WINTER_SHUTOFF_MARGIN, DEFAULT_WINTER_SHUTOFF_MARGIN))
+        if temp >= target + shutoff_margin:
+            _LOGGER.info("%s: [inverno] spegnimento target (temp=%.1f >= target+margine=%.1f)", self._attr_name, temp, target + shutoff_margin)
+            await self._async_simple_notify_ac_off(temp, target, use_internal=use_internal)
+            await self._async_turn_off_climate()
+            self._fv_auto_on = False
+            return
+        internal_temp = self._read_float(self._climate_entity, attr="current_temperature")
+        if internal_temp is None:
+            internal_temp = temp
+        new_setpoint = self._round_setpoint(internal_temp + 1) if use_internal else round(internal_temp + 1, 1)
+        await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint})
+
+    async def _async_handle_winter_shutoff_simple(self, temp: float, target: float) -> None:
+        """Spegnimento invernale — più semplice di quello estivo (niente
+        casi legati al tramonto, come concordato): spegne se acceso dal FV
+        e (temperatura ha raggiunto il target OPPURE il surplus non è più
+        sufficiente). Il calo di batteria non serve come controllo separato
+        — è già coperto dal controllo surplus, dato che la batteria smette
+        di caricarsi/si scarica solo quando il FV non basta più."""
+        if not self._fv_auto_on:
+            return  # non è stato acceso da noi per FV — non tocchiamo nulla
+        current_state = self.hass.states.get(self._climate_entity)
+        is_heat_on = current_state is not None and current_state.state == "heat"
+        if not is_heat_on:
+            return
+
+        if temp >= target:
+            _LOGGER.info("%s: [inverno FV] spegnimento — target raggiunto (temp=%.1f >= target=%.1f)", self._attr_name, temp, target)
+            await self._async_simple_notify_ac_off(temp, target)
+            await self._async_turn_off_climate()
+            self._fv_auto_on = False
+            return
+
+        if not (self._fv_sensor and self._consumption_sensor):
+            return
+        fv = self._read_float(self._fv_sensor)
+        consumo = self._read_float(self._consumption_sensor)
+        if fv is None or consumo is None:
+            return
+        margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+        if not (fv > consumo + margin):
+            _LOGGER.info("%s: [inverno FV] spegnimento — surplus insufficiente", self._attr_name)
+            await self._async_simple_notify_ac_off(temp, target)
+            await self._async_turn_off_climate()
+            self._fv_auto_on = False
 
     # ------------------------------------------------------------------
     # Notifiche modo semplificato
@@ -2132,6 +2486,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         elif ac_type == "emergenza":
             tpl = DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY
             vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+        elif ac_type == "fv_winter":
+            tpl = DEFAULT_SIMPLE_MSG_AC_ON_WINTER_FLOOR
+            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1),
+                    "fv": round(fv), "surplus": surplus, "batteria": round(soc, 1)}
         else:
             tpl = DEFAULT_SIMPLE_MSG_AC_ON
             vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
@@ -2141,9 +2499,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_ON, DEFAULT_SIMPLE_NOTIFY_TEL_AC_ON)):
             await self._async_simple_notify(msg)
 
-    async def _async_simple_notify_ac_off(self, temp: float, target: float, fv_shutoff: bool = False) -> None:
+    async def _async_simple_notify_ac_off(self, temp: float, target: float, fv_shutoff: bool = False, use_internal: bool | None = None) -> None:
         tpl = DEFAULT_SIMPLE_MSG_AC_OFF_FV if fv_shutoff else DEFAULT_SIMPLE_MSG_AC_OFF
-        msg = await self._async_render(tpl, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
+        if use_internal is None:
+            use_internal = self._should_use_internal_probe()  # fallback per i chiamanti che non lo specificano ancora
+        probe_label = "interna" if use_internal else "esterna"
+        msg = await self._async_render(tpl, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1), "sonda": probe_label})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
@@ -2245,18 +2606,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def _async_handle_emergency_heat(
         self, temp: float, target: float, use_internal: bool, dry_enabled: bool
     ) -> None:
-        """Gestisce l'emergenza caldo nel modo semplificato FV e completo.
+        """Gestisce l'emergenza (raffrescamento in Estate, riscaldamento in
+        Inverno) nel modo semplificato FV e completo — stesso switch,
+        comportamento specchiato in base alla stagione corrente.
 
-        Quando lo switch emergenza è attivo:
+        Estate — "Emergenza accendi raffrescamento":
         - Accende se temp ≥ target + soglia_emergenza (ignorando FV)
-        - Spegne per logica termica normale
-        - Si disattiva automaticamente 5 min prima della notte
         - Si disattiva se temp scende sotto target + soglia_fine_emergenza
+
+        Inverno — "Emergenza accendi riscaldamento":
+        - Accende se temp ≤ target − soglia_emergenza_inverno (ignorando FV)
+        - Si disattiva se temp risale sopra target − soglia_fine_emergenza_inverno
+
+        In entrambi i casi: si disattiva automaticamente 5 min prima della notte.
         """
         config_mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
         if config_mode not in (CONFIG_MODE_SIMPLE_FV, CONFIG_MODE_FULL):
             return
 
+        is_winter = self._get_season_mode() == SEASON_WINTER
         emergency_on = self._switch_state(SWITCH_KEY_EMERGENCY, False)
 
         # --- Disattivazione automatica pre-notte ---
@@ -2275,7 +2643,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 pre_night_dt = night_start_dt - timedelta(minutes=EMERGENCY_PRE_NIGHT_MIN)
                 if now_local >= pre_night_dt and not self._simple_is_night():
                     _LOGGER.info("%s: [emergenza] disattivazione pre-notte", self._attr_name)
-                    # Spegni clima e disattiva switch
                     await self._async_turn_off_climate()
                     await self._async_emergency_set_switch(False)
                     await self._async_emergency_notify(False, temp, target)
@@ -2284,9 +2651,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         # --- Disattivazione per temperatura rientrata ---
         if emergency_on:
-            end_threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_END_THRESHOLD, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD))
-            if temp <= target + end_threshold:
-                _LOGGER.info("%s: [emergenza] temperatura rientrata (temp=%.1f ≤ target+%.1f)", self._attr_name, temp, end_threshold)
+            if is_winter:
+                end_threshold = float(get_conf(self.entry, CONF_EMERGENCY_WINTER_HEAT_END_THRESHOLD, DEFAULT_EMERGENCY_WINTER_HEAT_END_THRESHOLD))
+                rientrata = temp >= target - end_threshold
+            else:
+                end_threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_END_THRESHOLD, DEFAULT_EMERGENCY_HEAT_END_THRESHOLD))
+                rientrata = temp <= target + end_threshold
+            if rientrata:
+                _LOGGER.info("%s: [emergenza] temperatura rientrata (temp=%.1f)", self._attr_name, temp)
                 await self._async_emergency_set_switch(False)
                 await self._async_emergency_notify(False, temp, target)
                 self._emergency_notified = False
@@ -2296,15 +2668,28 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not emergency_on:
             return
 
-        threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_THRESHOLD, DEFAULT_EMERGENCY_HEAT_THRESHOLD))
-        real_state = self.hass.states.get(self._climate_entity)
-        current_mode = real_state.state if real_state else "off"
-        is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
-
         # Notifica accensione emergenza (una sola volta)
         if not self._emergency_notified:
             await self._async_emergency_notify(True, temp, target)
             self._emergency_notified = True
+
+        if is_winter:
+            threshold = float(get_conf(self.entry, CONF_EMERGENCY_WINTER_HEAT_THRESHOLD, DEFAULT_EMERGENCY_WINTER_HEAT_THRESHOLD))
+            real_state = self.hass.states.get(self._climate_entity)
+            is_on = real_state is not None and real_state.state == "heat"
+            if not is_on and temp <= target - threshold:
+                self._fv_auto_on = True
+                _LOGGER.info("%s: [emergenza inverno] accensione HEAT (temp=%.1f)", self._attr_name, temp)
+                await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "heat"})
+                await self._async_simple_notify_ac_on(temp, target, ac_type="emergenza")
+            if is_on:
+                await self._async_handle_thermal_winter_simple(temp, target, use_internal)
+            return
+
+        threshold = float(get_conf(self.entry, CONF_EMERGENCY_HEAT_THRESHOLD, DEFAULT_EMERGENCY_HEAT_THRESHOLD))
+        real_state = self.hass.states.get(self._climate_entity)
+        current_mode = real_state.state if real_state else "off"
+        is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
         # Accende se non è già acceso e supera la soglia
         if not is_on and temp >= target + threshold:

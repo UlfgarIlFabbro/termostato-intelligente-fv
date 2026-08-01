@@ -461,27 +461,39 @@ DEFAULT_SIMPLE_MSG_AC_ON = "\u2600\ufe0f {{ name }}: acceso per temperatura ({{ 
 DEFAULT_SIMPLE_MSG_AC_ON_FV = "\u26a1 {{ name }}: acceso dal FV ({{ temp }}\u00b0C, FV {{ fv }}W, surplus {{ surplus }}W, batteria {{ soc }}%)."
 DEFAULT_SIMPLE_MSG_AC_ON_NIGHT = "\U0001f319 {{ name }}: acceso modalità notturna ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY = "\U0001f525 {{ name }}: acceso emergenza caldo ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
-DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — temperatura raggiunta ({{ temp }}\u00b0C)."
-DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C)."
+DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — temperatura raggiunta ({{ temp }}\u00b0C, sonda {{ sonda }})."
+DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C, sonda {{ sonda }})."
 DEFAULT_SIMPLE_MSG_NIGHT_START = "\U0001f319 {{ name }}: inizio modalità notturna (target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_END = "\U0001f305 {{ name }}: fine modalità notturna, climatizzatore spento."
 
 # ==========================================================================
 # MODALITÀ STAGIONALE (Estate/Inverno/Manuale) — v0.9.0
 # ==========================================================================
-CONF_SEASON_MODE = "season_mode"  # "estate" | "inverno" | "manuale"
+CONF_SEASON_MODE = "season_mode"  # "estate" | "inverno" | "auto" | "manuale" | "off"
 SEASON_SUMMER = "estate"
 SEASON_WINTER = "inverno"
-SEASON_MANUAL = "manuale"
+SEASON_AUTO = "auto"  # entrambe le logiche attive, ciascuna con le proprie soglie
+SEASON_MANUAL = "manuale"  # termica+FV disattivati, timer manuale attivo, master switch auto-disattivato
+SEASON_OFF = "off"  # tutto disattivato, incluso il timer manuale — zero interferenze
 DEFAULT_SEASON_MODE = SEASON_SUMMER  # chi non tocca il campo resta esattamente come oggi
+
+# Tempo minimo tra uno spegnimento raffrescamento e un'accensione riscaldamento
+# (o viceversa) in modalità Auto, per evitare cicli ravvicinati nelle giornate
+# di mezza stagione (caso limite discusso e accettato, mitigato ma non eliminato
+# dal timer di conferma FV già esistente)
+SEASON_AUTO_SWITCH_COOLDOWN_HOURS = 20
 
 # Campi inverno — soglie specchiate rispetto a quelle estive, separate per
 # non dover ricordarsi di cambiarle ad ogni cambio stagione
+CONF_WINTER_TARGET_DAY = "winter_target_day"  # sostituisce il target giorno estivo quando la stagione è inverno
+CONF_WINTER_TARGET_NIGHT = "winter_target_night"  # sostituisce il target notte estivo quando la stagione è inverno
 CONF_WINTER_TURN_ON_OFFSET = "winter_turn_on_offset"  # di quanti gradi SOTTO il target prima di accendere
 CONF_WINTER_SHUTOFF_MARGIN = "winter_shutoff_margin"  # margine SOPRA il target prima di spegnere
 CONF_WINTER_SOC_MIN = "winter_soc_min"  # soglia batteria minima per l'accensione FV in inverno (più alta di quella estiva — batteria preziosa)
 CONF_WINTER_FLOOR_SENSOR = "winter_floor_sensor"  # binary_sensor dell'anello riscaldamento a pavimento (opzionale)
 
+DEFAULT_WINTER_TARGET_DAY = 20.0
+DEFAULT_WINTER_TARGET_NIGHT = 19.5
 DEFAULT_WINTER_TURN_ON_OFFSET = 0.5
 DEFAULT_WINTER_SHUTOFF_MARGIN = 0.2
 DEFAULT_WINTER_SOC_MIN = 90.0

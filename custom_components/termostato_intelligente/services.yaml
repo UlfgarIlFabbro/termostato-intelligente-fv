@@ -130,3 +130,31 @@ adjust_manual_shutoff_timer_minutes:
           max: 60
           step: 5
           mode: box
+
+set_season_mode:
+  name: Imposta modalità stagionale
+  description: >-
+    Cambia la modalità stagionale (Estate/Inverno/Auto/Manuale/Off) e la
+    salva permanentemente in configurazione — l'integrazione si ricarica
+    automaticamente per applicarla subito.
+  fields:
+    entity_id:
+      name: Termostato
+      description: L'entità termostato da cambiare.
+      required: true
+      selector:
+        entity:
+          integration: termostato_intelligente
+          domain: climate
+    season:
+      name: Stagione
+      description: estate / inverno / auto / manuale / off
+      required: true
+      selector:
+        select:
+          options:
+            - estate
+            - inverno
+            - auto
+            - manuale
+            - "off"

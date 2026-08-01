@@ -20,6 +20,15 @@
         "unico": "🔵 Single AC on circuit",
         "multiplo": "🟢 Multiple AC on same circuit"
       }
+    },
+    "season_mode": {
+      "options": {
+        "estate": "☀️ Summer",
+        "inverno": "❄️ Winter",
+        "auto": "🔄 Auto (both seasons)",
+        "manuale": "✋ Manual (timer/safety only, everything else disabled)",
+        "off": "⛔ Off (everything disabled, including the timer)"
+      }
     }
   },
   "config": {
@@ -274,7 +283,8 @@
           "simple_dry_enabled": "▶ Use dehumidifier before cooling",
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)",
           "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
-          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?"
+          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?",
+          "season_mode": "Seasonal mode"
         },
         "data_description": {
           "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
@@ -289,7 +299,8 @@
           "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
           "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings.",
           "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
-          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled."
+          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled.",
+          "season_mode": "Summer: cooling only (existing behavior). Winter: heating only. Auto: manages both, switching based on temperature, with a minimum time between switches to avoid rapid cycling in mid-season. Manual: no automation — only the shutoff timer and safety protections (e.g. open window) stay active — the master switch is automatically disabled. Off: everything off, including the timer — zero interference, fully manual control via the original remote."
         }
       },
       "energia_simple": {
@@ -506,6 +517,30 @@
         },
         "data_description": {
           "config_mode": "🟢 SIMPLE — Few essential fields, automatic logic.\n🔵 SIMPLE WITH SOLAR — Like Simple + solar management.\n⚙️ FULL — All advanced parameters."
+        }
+      },
+      "inverno": {
+        "title": "❄️ Winter",
+        "description": "Settings used when the seasonal mode is Winter or Auto.",
+        "data": {
+          "winter_target_day": "Winter day target",
+          "winter_target_night": "Winter night target",
+          "winter_turn_on_offset": "Winter turn-on offset",
+          "winter_shutoff_margin": "Winter shutoff margin",
+          "winter_soc_min": "Minimum FV battery threshold — winter",
+          "winter_floor_sensor": "Floor heating loop sensor",
+          "emergency_winter_heat_threshold": "Emergency turn on heating — threshold",
+          "emergency_winter_heat_end_threshold": "Emergency turn on heating — end threshold"
+        },
+        "data_description": {
+          "winter_target_day": "Target day temperature when the season is Winter or Auto (in Auto, while heating is active).",
+          "winter_target_night": "Target night temperature when the season is Winter or Auto.",
+          "winter_turn_on_offset": "How many degrees below target the temperature must drop before turning on — used with or without the floor loop sensor.",
+          "winter_shutoff_margin": "How many degrees above target the temperature must rise before turning off.",
+          "winter_soc_min": "Below this battery percentage, heating won't turn on from solar — higher than the summer one, since battery is precious in winter.",
+          "winter_floor_sensor": "Optional — if configured, the solar-powered assist won't turn on the AC if the floor loop is already heating this room, avoiding waste. Leave empty if you don't have this system.",
+          "emergency_winter_heat_threshold": "How many degrees below target the temperature must drop before emergency heating kicks in, ignoring solar.",
+          "emergency_winter_heat_end_threshold": "How many degrees above the turn-on threshold the temperature must rise before emergency mode turns off automatically."
         }
       }
     },
@@ -753,7 +788,8 @@
           "simple_dry_enabled": "▶ Use dehumidifier before cooling",
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)",
           "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
-          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?"
+          "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?",
+          "season_mode": "Seasonal mode"
         },
         "data_description": {
           "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
@@ -768,7 +804,8 @@
           "simple_dry_enabled": "If enabled: when the temperature rises slightly above the target, the AC starts in dehumidifier mode (DRY) instead of full cooling. This lowers humidity and makes the room feel fresher while using less power. After the configured maximum time (or if temperature rises further) it automatically switches to full cooling. Particularly useful in humid climates, especially during morning hours. If the temperature at start is already too high, it starts directly in cooling mode without going through dry.",
           "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings.",
           "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
-          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled."
+          "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled.",
+          "season_mode": "Summer: cooling only (existing behavior). Winter: heating only. Auto: manages both, switching based on temperature, with a minimum time between switches to avoid rapid cycling in mid-season. Manual: no automation — only the shutoff timer and safety protections (e.g. open window) stay active — the master switch is automatically disabled. Off: everything off, including the timer — zero interference, fully manual control via the original remote."
         }
       },
       "energia_simple": {
@@ -985,6 +1022,30 @@
           "emergency_notify_telegram": "If enabled: Telegram alerts when heat emergency starts and ends.",
           "emergency_msg_on": "Message sent when heat emergency starts. Variables: {{ name }} = thermostat name, {{ temp }} = current temperature, {{ target }} = target temperature.",
           "emergency_msg_off": "Message sent when heat emergency ends. Same variables available."
+        }
+      },
+      "inverno": {
+        "title": "❄️ Winter",
+        "description": "Settings used when the seasonal mode is Winter or Auto.",
+        "data": {
+          "winter_target_day": "Winter day target",
+          "winter_target_night": "Winter night target",
+          "winter_turn_on_offset": "Winter turn-on offset",
+          "winter_shutoff_margin": "Winter shutoff margin",
+          "winter_soc_min": "Minimum FV battery threshold — winter",
+          "winter_floor_sensor": "Floor heating loop sensor",
+          "emergency_winter_heat_threshold": "Emergency turn on heating — threshold",
+          "emergency_winter_heat_end_threshold": "Emergency turn on heating — end threshold"
+        },
+        "data_description": {
+          "winter_target_day": "Target day temperature when the season is Winter or Auto (in Auto, while heating is active).",
+          "winter_target_night": "Target night temperature when the season is Winter or Auto.",
+          "winter_turn_on_offset": "How many degrees below target the temperature must drop before turning on — used with or without the floor loop sensor.",
+          "winter_shutoff_margin": "How many degrees above target the temperature must rise before turning off.",
+          "winter_soc_min": "Below this battery percentage, heating won't turn on from solar — higher than the summer one, since battery is precious in winter.",
+          "winter_floor_sensor": "Optional — if configured, the solar-powered assist won't turn on the AC if the floor loop is already heating this room, avoiding waste. Leave empty if you don't have this system.",
+          "emergency_winter_heat_threshold": "How many degrees below target the temperature must drop before emergency heating kicks in, ignoring solar.",
+          "emergency_winter_heat_end_threshold": "How many degrees above the turn-on threshold the temperature must rise before emergency mode turns off automatically."
         }
       }
     }

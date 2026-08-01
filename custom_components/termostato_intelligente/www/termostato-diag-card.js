@@ -147,6 +147,9 @@ class TermostatoDiagCard extends HTMLElement {
     if (this._priorityPopupOpen === undefined) {
       this._priorityPopupOpen = false;
     }
+    if (this._seasonPickerOpen === undefined) {
+      this._seasonPickerOpen = false;
+    }
     this._config = {
       title: "",
       color_by_state: true,
@@ -197,6 +200,19 @@ class TermostatoDiagCard extends HTMLElement {
     // vincolo tecnico), non solo al nostro stato riportato.
     const realClimateEntity = stateObj.attributes.climatizzatore_reale;
     const realClimateState = realClimateEntity ? this._hass.states[realClimateEntity] : null;
+
+    // Stagione — icona/etichetta per ciascuna delle 5 modalità, usate sia
+    // per il pulsante compatto che per lo sfondo grande e il popup.
+    const seasonMode = stateObj.attributes.modalita_stagionale || "estate";
+    const seasonMeta = {
+      estate: { icon: "mdi:weather-sunny", label: "Estate" },
+      inverno: { icon: "mdi:image-filter-hdr", label: "Inverno" },
+      auto: { icon: "mdi:autorenew", label: "Auto" },
+      manuale: { icon: "mdi:hand-back-right-outline", label: "Manuale" },
+      off: { icon: "mdi:power-off", label: "Off" },
+    };
+    const currentSeasonMeta = seasonMeta[seasonMode] || seasonMeta.estate;
+    const isWinterManaged = seasonMode === "inverno" || (seasonMode === "auto" && realClimateState && realClimateState.state === "heat"); // in inverno (o auto+attualmente in heat) gestiamo heat, non cool/dry
     const realHvacState = realClimateState ? realClimateState.state : stateObj.state;
 
     const unmanagedMode = !!stateObj.attributes.modalita_esterna_non_gestita;
@@ -212,8 +228,8 @@ class TermostatoDiagCard extends HTMLElement {
     // sfondo colorato per stato che a quello neutro quando il clima è spento.
     const bgOpacity = this._config.background_opacity !== undefined ? this._config.background_opacity : 0.5;
     const cardStyle = colors
-      ? `background-color:${applyOpacity(colors.bg, bgOpacity)};border:2px solid ${colors.border};box-shadow:0 2px 30px ${colors.shadow};border-radius:20px;padding:12px;`
-      : `background-color:var(--card-background-color, #fff);border-radius:20px;padding:12px;`;
+      ? `position:relative;background-color:${applyOpacity(colors.bg, bgOpacity)};border:2px solid ${colors.border};box-shadow:0 2px 30px ${colors.shadow};border-radius:20px;padding:12px;`
+      : `position:relative;background-color:var(--card-background-color, #fff);border-radius:20px;padding:12px;`;
 
     const temp = stateObj.attributes.temperature;
     const curTemp = stateObj.attributes.current_temperature;
@@ -421,7 +437,7 @@ class TermostatoDiagCard extends HTMLElement {
     const realHvacModes = (realClimateState && Array.isArray(realClimateState.attributes.hvac_modes))
       ? realClimateState.attributes.hvac_modes
       : ["cool", "dry"]; // fallback prudente se il clima reale non è ancora disponibile
-    const managedModes = ["cool", "dry"]; // le uniche 2 che il NOSTRO wrapper sa impostare direttamente
+    const managedModes = isWinterManaged ? ["heat"] : ["cool", "dry"]; // in inverno gestiamo solo heat, il contrario dell'estate
     const modeLabel = (mode) => mode === "cool" ? "Raffreddamento" : mode === "dry" ? "Deumidificatore"
       : mode === "heat" ? "Riscaldamento" : mode === "fan_only" ? "Solo ventilazione"
       : mode === "auto" ? "Auto" : mode === "heat_cool" ? "Caldo/freddo" : mode;
@@ -446,6 +462,14 @@ class TermostatoDiagCard extends HTMLElement {
         </span>`
       : "";
 
+    // Pulsante stagione — icona compatta, un tocco apre il popup di
+    // selezione (5 opzioni). Posizionato subito prima del power, come
+    // richiesto.
+    const seasonBtn = `<button data-open-season-picker="1" aria-label="Stagione: ${currentSeasonMeta.label} — tocca per cambiare" title="Stagione: ${currentSeasonMeta.label}"
+      style="width:28px;height:28px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);color:var(--primary-text-color);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
+      <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:15px;"></ha-icon>
+    </button>`;
+
     // Pulsante accensione/spegnimento — ingrandito, stessa dimensione
     // dell'icona modalità. Da acceso spegne direttamente (invariato). Da
     // spento, invece di accendere subito in raffreddamento, apre un popup
@@ -457,6 +481,7 @@ class TermostatoDiagCard extends HTMLElement {
 
     const modeButtonsHtml = `<div style="display:flex;align-items:center;gap:8px;height:38px;position:relative;">
       ${activeModeIconHtml}
+      ${seasonBtn}
       ${powerBtn}
       ${unmanagedBadge}
     </div>`;
@@ -586,6 +611,39 @@ class TermostatoDiagCard extends HTMLElement {
             </div>
             <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">
               ${swingButtons}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    let seasonPickerModalHtml = "";
+    if (this._seasonPickerOpen) {
+      const seasonOrder = ["estate", "inverno", "auto", "manuale", "off"];
+      const seasonButtons = seasonOrder.map((s) => {
+        const meta = seasonMeta[s];
+        const active = s === seasonMode;
+        const bg = active ? "#2e9c4f" : "var(--card-background-color, #fff)";
+        const fg = active ? "#fff" : "var(--secondary-text-color)";
+        const border = active ? "none" : "1px solid var(--divider-color, #ccc)";
+        return `<button data-season="${s}" aria-label="${meta.label}"
+          style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
+          <span style="width:44px;height:44px;border-radius:50%;background:${bg};color:${fg};border:${border};box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+            <ha-icon icon="${meta.icon}" style="--mdc-icon-size:22px;"></ha-icon>
+          </span>
+          <span style="font-size:11px;color:var(--primary-text-color);">${meta.label}</span>
+        </button>`;
+      }).join("");
+      seasonPickerModalHtml = `
+        <div data-season-picker-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+          <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div style="font-size:14px;font-weight:700;">Scegli stagione</div>
+              <button data-close-season-picker="1" style="border:none;background:none;cursor:pointer;padding:4px;">
+                <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
+              </button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">
+              ${seasonButtons}
             </div>
           </div>
         </div>`;
@@ -749,6 +807,8 @@ class TermostatoDiagCard extends HTMLElement {
     this.innerHTML = `
       <ha-card style="overflow:hidden;background:transparent;--ha-card-background:transparent;border-radius:20px;">
         <div style="${cardStyle}">
+          <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:min(70%, 220px);position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);opacity:0.3;pointer-events:none;z-index:0;color:${colors ? colors.border : "var(--secondary-text-color)"};"></ha-icon>
+          <div style="position:relative;z-index:1;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">${title}</div>
             ${modeButtonsHtml}
@@ -771,6 +831,7 @@ class TermostatoDiagCard extends HTMLElement {
           ${masterTimerRowHtml}
           ${attrsHtml}
           ${notifyHistoryHtml}
+          </div>
         </div>
       </ha-card>
       ${notifyHistoryModalHtml}
@@ -779,6 +840,7 @@ class TermostatoDiagCard extends HTMLElement {
       ${presetPickerModalHtml}
       ${swingPickerModalHtml}
       ${priorityPopupModalHtml}
+      ${seasonPickerModalHtml}
     `;
 
     this._attachControlListeners(stateObj);
@@ -930,6 +992,38 @@ class TermostatoDiagCard extends HTMLElement {
         }
       });
     }
+
+    const openSeasonPickerBtn = this.querySelector("[data-open-season-picker]");
+    if (openSeasonPickerBtn) {
+      openSeasonPickerBtn.addEventListener("click", () => {
+        this._seasonPickerOpen = true;
+        this._render();
+      });
+    }
+    const closeSeasonPickerBtn = this.querySelector("[data-close-season-picker]");
+    if (closeSeasonPickerBtn) {
+      closeSeasonPickerBtn.addEventListener("click", () => {
+        this._seasonPickerOpen = false;
+        this._render();
+      });
+    }
+    const seasonPickerBackdrop = this.querySelector("[data-season-picker-backdrop]");
+    if (seasonPickerBackdrop) {
+      seasonPickerBackdrop.addEventListener("click", (e) => {
+        if (e.target === seasonPickerBackdrop) {
+          this._seasonPickerOpen = false;
+          this._render();
+        }
+      });
+    }
+    this.querySelectorAll("[data-season]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const season = btn.getAttribute("data-season");
+        this._callService("termostato_intelligente", "set_season_mode", { entity_id: entityId, season });
+        this._seasonPickerOpen = false;
+        this._render();
+      });
+    });
 
     const openTimerConfirmBtn = this.querySelector("[data-open-timer-confirm]");
     if (openTimerConfirmBtn) {

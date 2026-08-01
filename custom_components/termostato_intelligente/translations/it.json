@@ -20,6 +20,15 @@
         "unico": "🔵 Unico clima sul contatore",
         "multiplo": "🟢 Più clima sullo stesso contatore"
       }
+    },
+    "season_mode": {
+      "options": {
+        "estate": "☀️ Estate",
+        "inverno": "❄️ Inverno",
+        "auto": "🔄 Auto (entrambe le stagioni)",
+        "manuale": "✋ Manuale (solo timer/sicurezza, resto disattivato)",
+        "off": "⛔ Off (tutto disattivato, incluso il timer)"
+      }
     }
   },
   "config": {
@@ -274,7 +283,8 @@
           "simple_dry_enabled": "▶ Usa deumidificatore prima del raffreddamento",
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)",
           "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
-          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?"
+          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?",
+          "season_mode": "Modalità stagionale"
         },
         "data_description": {
           "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
@@ -289,7 +299,8 @@
           "simple_dry_enabled": "Se attivato: quando la temperatura sale leggermente sopra il target, il climatizzatore parte prima in modalità deumidificatore (DRY) invece che in raffreddamento. Questo abbassa l'umidità e fa percepire la stanza più fresca consumando meno. Dopo il tempo massimo configurato (o se la temperatura sale ulteriormente) passa automaticamente al raffreddamento pieno. Particolarmente utile in climi umidi come quello pugliese, soprattutto nelle ore mattutine. Se la temperatura all'accensione è già troppo alta, parte direttamente in raffreddamento senza passare dal dry.",
           "simple_dry_max_min": "Quanto tempo al massimo il climatizzatore rimane in deumidificazione prima di passare al raffreddamento. Se durante questo tempo la stanza si raffredda abbastanza, si spegne senza passare al raffreddamento. Se invece la temperatura rimane alta o sale, dopo questo tempo passa automaticamente a raffreddare. Esempio: 30 minuti → dà al deumidificatore mezz'ora per abbassare l'umidità, poi se non basta raffredda. Valori più bassi (10-15 min) = meno deumidificazione, passa prima a raffreddare. Valori più alti (45-60 min) = più deumidificazione, utile nelle mattine con molta afa.",
           "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
-          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato."
+          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato.",
+          "season_mode": "Estate: gestisce solo il raffrescamento (comportamento di sempre). Inverno: gestisce solo il riscaldamento. Auto: gestisce entrambe, passando dall'una all'altra in base alla temperatura, con un tempo minimo tra un cambio e l'altro per evitare cicli ravvicinati in mezza stagione. Manuale: nessuna automazione — resta attivo solo il timer di spegnimento e le protezioni di sicurezza (es. finestra aperta) — il master switch viene disattivato automaticamente. Off: tutto spento, incluso il timer — zero interferenze, gestione completamente manuale col telecomando originale."
         }
       },
       "energia_simple": {
@@ -506,6 +517,30 @@
         },
         "data_description": {
           "config_mode": "🟢 SEMPLIFICATO — Pochi campi essenziali, logica automatica.\n🔵 SEMPLIFICATO CON FOTOVOLTAICO — Come il semplificato + gestione FV.\n⚙️ COMPLETO — Tutti i parametri avanzati."
+        }
+      },
+      "inverno": {
+        "title": "❄️ Inverno",
+        "description": "Impostazioni usate quando la modalità stagionale è Inverno o Auto.",
+        "data": {
+          "winter_target_day": "Target giorno inverno",
+          "winter_target_night": "Target notte inverno",
+          "winter_turn_on_offset": "Scarto accensione inverno",
+          "winter_shutoff_margin": "Margine spegnimento inverno",
+          "winter_soc_min": "Soglia batteria minima FV — inverno",
+          "winter_floor_sensor": "Sensore anello riscaldamento a pavimento",
+          "emergency_winter_heat_threshold": "Emergenza accendi riscaldamento — soglia",
+          "emergency_winter_heat_end_threshold": "Emergenza accendi riscaldamento — soglia fine"
+        },
+        "data_description": {
+          "winter_target_day": "Temperatura target di giorno quando la stagione è Inverno o Auto (in Auto, mentre è attivo il riscaldamento).",
+          "winter_target_night": "Temperatura target di notte quando la stagione è Inverno o Auto.",
+          "winter_turn_on_offset": "Di quanti gradi sotto il target la temperatura deve scendere prima di poter accendere — usato sia con che senza sensore anello pavimento.",
+          "winter_shutoff_margin": "Di quanti gradi sopra il target la temperatura deve salire prima di spegnere.",
+          "winter_soc_min": "Sotto questa percentuale di batteria, il riscaldamento non si accende da fotovoltaico — più alta di quella estiva, dato che in inverno la batteria è preziosa.",
+          "winter_floor_sensor": "Opzionale — se configurato, l'assistenza da fotovoltaico non accende il condizionatore se l'anello del pavimento sta già scaldando questa stanza, evitando lo spreco. Lascia vuoto se non hai questo impianto.",
+          "emergency_winter_heat_threshold": "Di quanti gradi sotto il target la temperatura deve scendere prima che l'emergenza riscaldamento intervenga, ignorando il fotovoltaico.",
+          "emergency_winter_heat_end_threshold": "Di quanti gradi sopra la soglia di accensione la temperatura deve risalire prima che l'emergenza si disattivi automaticamente."
         }
       }
     },
@@ -753,7 +788,8 @@
           "simple_dry_enabled": "▶ Usa deumidificatore prima del raffreddamento",
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)",
           "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
-          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?"
+          "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?",
+          "season_mode": "Modalità stagionale"
         },
         "data_description": {
           "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
@@ -768,7 +804,8 @@
           "simple_dry_enabled": "Se attivato: quando la temperatura sale leggermente sopra il target, il climatizzatore parte prima in modalità deumidificatore (DRY) invece che in raffreddamento. Questo abbassa l'umidità e fa percepire la stanza più fresca consumando meno. Dopo il tempo massimo configurato (o se la temperatura sale ulteriormente) passa automaticamente al raffreddamento pieno. Particolarmente utile in climi umidi come quello pugliese, soprattutto nelle ore mattutine. Se la temperatura all'accensione è già troppo alta, parte direttamente in raffreddamento senza passare dal dry.",
           "simple_dry_max_min": "Quanto tempo al massimo il climatizzatore rimane in deumidificazione prima di passare al raffreddamento. Se durante questo tempo la stanza si raffredda abbastanza, si spegne senza passare al raffreddamento. Se invece la temperatura rimane alta o sale, dopo questo tempo passa automaticamente a raffreddare. Esempio: 30 minuti → dà al deumidificatore mezz'ora per abbassare l'umidità, poi se non basta raffredda. Valori più bassi (10-15 min) = meno deumidificazione, passa prima a raffreddare. Valori più alti (45-60 min) = più deumidificazione, utile nelle mattine con molta afa.",
           "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
-          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato."
+          "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato.",
+          "season_mode": "Estate: gestisce solo il raffrescamento (comportamento di sempre). Inverno: gestisce solo il riscaldamento. Auto: gestisce entrambe, passando dall'una all'altra in base alla temperatura, con un tempo minimo tra un cambio e l'altro per evitare cicli ravvicinati in mezza stagione. Manuale: nessuna automazione — resta attivo solo il timer di spegnimento e le protezioni di sicurezza (es. finestra aperta) — il master switch viene disattivato automaticamente. Off: tutto spento, incluso il timer — zero interferenze, gestione completamente manuale col telecomando originale."
         }
       },
       "energia_simple": {
@@ -985,6 +1022,30 @@
           "emergency_notify_telegram": "Se attivato: Telegram avvisa quando inizia e finisce l'emergenza caldo.",
           "emergency_msg_on": "Messaggio inviato quando inizia l'emergenza caldo. Variabili: {{ name }} = nome termostato, {{ temp }} = temperatura attuale, {{ target }} = temperatura target.",
           "emergency_msg_off": "Messaggio inviato quando l'emergenza caldo termina. Stesse variabili disponibili."
+        }
+      },
+      "inverno": {
+        "title": "❄️ Inverno",
+        "description": "Impostazioni usate quando la modalità stagionale è Inverno o Auto.",
+        "data": {
+          "winter_target_day": "Target giorno inverno",
+          "winter_target_night": "Target notte inverno",
+          "winter_turn_on_offset": "Scarto accensione inverno",
+          "winter_shutoff_margin": "Margine spegnimento inverno",
+          "winter_soc_min": "Soglia batteria minima FV — inverno",
+          "winter_floor_sensor": "Sensore anello riscaldamento a pavimento",
+          "emergency_winter_heat_threshold": "Emergenza accendi riscaldamento — soglia",
+          "emergency_winter_heat_end_threshold": "Emergenza accendi riscaldamento — soglia fine"
+        },
+        "data_description": {
+          "winter_target_day": "Temperatura target di giorno quando la stagione è Inverno o Auto (in Auto, mentre è attivo il riscaldamento).",
+          "winter_target_night": "Temperatura target di notte quando la stagione è Inverno o Auto.",
+          "winter_turn_on_offset": "Di quanti gradi sotto il target la temperatura deve scendere prima di poter accendere — usato sia con che senza sensore anello pavimento.",
+          "winter_shutoff_margin": "Di quanti gradi sopra il target la temperatura deve salire prima di spegnere.",
+          "winter_soc_min": "Sotto questa percentuale di batteria, il riscaldamento non si accende da fotovoltaico — più alta di quella estiva, dato che in inverno la batteria è preziosa.",
+          "winter_floor_sensor": "Opzionale — se configurato, l'assistenza da fotovoltaico non accende il condizionatore se l'anello del pavimento sta già scaldando questa stanza, evitando lo spreco. Lascia vuoto se non hai questo impianto.",
+          "emergency_winter_heat_threshold": "Di quanti gradi sotto il target la temperatura deve scendere prima che l'emergenza riscaldamento intervenga, ignorando il fotovoltaico.",
+          "emergency_winter_heat_end_threshold": "Di quanti gradi sopra la soglia di accensione la temperatura deve risalire prima che l'emergenza si disattivi automaticamente."
         }
       }
     }
