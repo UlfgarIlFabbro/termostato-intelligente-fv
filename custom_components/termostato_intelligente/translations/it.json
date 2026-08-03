@@ -385,7 +385,11 @@
           "simple_quiet_night_notify": "▶ Silenzia Telegram durante la notte",
           "simple_notify_tel_ac_off_fv": "▶ Spegnimento per FV insufficiente",
           "fv_sensor_offline_notify_tts": "Avviso vocale per sensore FV offline",
-          "fv_sensor_offline_notify_telegram": "Avviso Telegram per sensore FV offline"
+          "fv_sensor_offline_notify_telegram": "Avviso Telegram per sensore FV offline",
+          "simple_notify_tts_manual_on": "Google Home — Accensione manuale",
+          "simple_notify_tel_manual_on": "Telegram — Accensione manuale",
+          "simple_notify_tts_manual_off": "Google Home — Spegnimento manuale",
+          "simple_notify_tel_manual_off": "Telegram — Spegnimento manuale"
         },
         "data_description": {
           "tts_media_players": "Seleziona uno o più altoparlanti Google Home o Nest su cui il termostato parlerà. Lascia vuoto per non usare la voce.",
@@ -414,7 +418,11 @@
           "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna.",
           "simple_notify_tel_ac_off_fv": "Telegram avvisa quando il clima si spegne perché il fotovoltaico non produce abbastanza. Il messaggio indica che si tratta di uno spegnimento automatico FV, non per temperatura raggiunta.",
           "fv_sensor_offline_notify_tts": "Se attivo, avvisa su Google Home quando il sensore di produzione fotovoltaica va offline e quando un climatizzatore viene spento di conseguenza.",
-          "fv_sensor_offline_notify_telegram": "Se attivo, avvisa su Telegram quando il sensore di produzione fotovoltaica va offline e quando un climatizzatore viene spento di conseguenza."
+          "fv_sensor_offline_notify_telegram": "Se attivo, avvisa su Telegram quando il sensore di produzione fotovoltaica va offline e quando un climatizzatore viene spento di conseguenza.",
+          "simple_notify_tts_manual_on": "Annuncia quando viene rilevata un'accensione manuale (telecomando, app del produttore — non dalla card).",
+          "simple_notify_tel_manual_on": "Invia un messaggio quando viene rilevata un'accensione manuale.",
+          "simple_notify_tts_manual_off": "Annuncia quando viene rilevato uno spegnimento manuale (telecomando, app del produttore — non dalla card).",
+          "simple_notify_tel_manual_off": "Invia un messaggio quando viene rilevato uno spegnimento manuale."
         }
       },
       "protezione_potenza": {
@@ -890,7 +898,11 @@
           "simple_quiet_night_notify": "▶ Silenzia Telegram durante la notte",
           "simple_notify_tel_ac_off_fv": "▶ Spegnimento per FV insufficiente",
           "fv_sensor_offline_notify_tts": "Avviso vocale per sensore FV offline",
-          "fv_sensor_offline_notify_telegram": "Avviso Telegram per sensore FV offline"
+          "fv_sensor_offline_notify_telegram": "Avviso Telegram per sensore FV offline",
+          "simple_notify_tts_manual_on": "Google Home — Accensione manuale",
+          "simple_notify_tel_manual_on": "Telegram — Accensione manuale",
+          "simple_notify_tts_manual_off": "Google Home — Spegnimento manuale",
+          "simple_notify_tel_manual_off": "Telegram — Spegnimento manuale"
         },
         "data_description": {
           "tts_media_players": "Seleziona uno o più altoparlanti Google Home o Nest su cui il termostato parlerà. Lascia vuoto per non usare la voce.",
@@ -919,7 +931,11 @@
           "simple_quiet_night_notify": "Se attivato: Telegram non invia messaggi automatici durante la fascia notturna.",
           "simple_notify_tel_ac_off_fv": "Telegram avvisa quando il clima si spegne perché il fotovoltaico non produce abbastanza. Il messaggio indica che si tratta di uno spegnimento automatico FV, non per temperatura raggiunta.",
           "fv_sensor_offline_notify_tts": "Se attivo, avvisa su Google Home quando il sensore di produzione fotovoltaica va offline e quando un climatizzatore viene spento di conseguenza.",
-          "fv_sensor_offline_notify_telegram": "Se attivo, avvisa su Telegram quando il sensore di produzione fotovoltaica va offline e quando un climatizzatore viene spento di conseguenza."
+          "fv_sensor_offline_notify_telegram": "Se attivo, avvisa su Telegram quando il sensore di produzione fotovoltaica va offline e quando un climatizzatore viene spento di conseguenza.",
+          "simple_notify_tts_manual_on": "Annuncia quando viene rilevata un'accensione manuale (telecomando, app del produttore — non dalla card).",
+          "simple_notify_tel_manual_on": "Invia un messaggio quando viene rilevata un'accensione manuale.",
+          "simple_notify_tts_manual_off": "Annuncia quando viene rilevato uno spegnimento manuale (telecomando, app del produttore — non dalla card).",
+          "simple_notify_tel_manual_off": "Invia un messaggio quando viene rilevato uno spegnimento manuale."
         }
       },
       "cambia_modalita": {

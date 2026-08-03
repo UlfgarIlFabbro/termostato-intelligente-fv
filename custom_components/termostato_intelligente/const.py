@@ -167,6 +167,8 @@ DEFAULT_EMERGENCY_NOTIFY_TTS = False
 DEFAULT_EMERGENCY_NOTIFY_TELEGRAM = True
 DEFAULT_EMERGENCY_MSG_ON = "Ho acceso il condizionatore {{ name }} per emergenza caldo."
 DEFAULT_EMERGENCY_MSG_OFF = "Fine emergenza caldo, il condizionatore {{ name }} riprende a funzionare normalmente."
+DEFAULT_EMERGENCY_WINTER_MSG_ON = "Ho acceso il riscaldamento {{ name }} per emergenza freddo."
+DEFAULT_EMERGENCY_WINTER_MSG_OFF = "Fine emergenza freddo, il riscaldamento {{ name }} riprende a funzionare normalmente."
 
 # Minuti prima della notte per spegnere e disattivare emergenza
 EMERGENCY_PRE_NIGHT_MIN = 5
@@ -457,12 +459,13 @@ DEFAULT_SIMPLE_MSG_WINDOW_OPEN = (
     "Il clima si spegnerà tra {{ delay }} minuti se non viene chiusa."
 )
 DEFAULT_SIMPLE_MSG_WINDOW_CLOSE = "\u2705 {{ name }}: finestra chiusa, climatizzatore riacceso."
+DEFAULT_SIMPLE_MSG_WINDOW_SHUTOFF = "\u26a0\ufe0f {{ name }}: climatizzatore spento — sono passati {{ minuti }} minuti e la finestra non è stata chiusa."
 DEFAULT_SIMPLE_MSG_AC_ON = "\u2600\ufe0f {{ name }}: acceso per temperatura ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_AC_ON_FV = "\u26a1 {{ name }}: acceso dal FV ({{ temp }}\u00b0C, FV {{ fv }}W, surplus {{ surplus }}W, batteria {{ soc }}%)."
 DEFAULT_SIMPLE_MSG_AC_ON_NIGHT = "\U0001f319 {{ name }}: acceso modalità notturna ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY = "\U0001f525 {{ name }}: acceso emergenza caldo ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
-DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — temperatura raggiunta ({{ temp }}\u00b0C, sonda {{ sonda }})."
-DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C, sonda {{ sonda }})."
+DEFAULT_SIMPLE_MSG_AC_OFF = "\U0001f4a4 {{ name }}: climatizzatore spento — temperatura raggiunta ({{ temp }}\u00b0C, target {{ target }}\u00b0C, sonda {{ sonda }})."
+DEFAULT_SIMPLE_MSG_AC_OFF_FV = "\u26a1 {{ name }}: climatizzatore spento — produzione FV insufficiente ({{ temp }}\u00b0C, target {{ target }}\u00b0C, sonda {{ sonda }})."
 DEFAULT_SIMPLE_MSG_NIGHT_START = "\U0001f319 {{ name }}: inizio modalità notturna (target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_NIGHT_END = "\U0001f305 {{ name }}: fine modalità notturna, climatizzatore spento."
 
@@ -509,3 +512,20 @@ DEFAULT_EMERGENCY_WINTER_HEAT_END_THRESHOLD = 0.7
 
 DEFAULT_SIMPLE_MSG_AC_ON_WINTER = "\U0001f525 {{ name }}: acceso riscaldamento ({{ temp }}\u00b0C, target {{ target }}\u00b0C)."
 DEFAULT_SIMPLE_MSG_AC_ON_WINTER_FLOOR = "\U0001f525 {{ name }}: assistenza riscaldamento a pavimento ({{ temp }}\u00b0C, FV {{ fv }}W, surplus {{ surplus }}W, batteria {{ batteria }}%)."
+
+# ==========================================================================
+# Notifiche accensione/spegnimento manuale — selezionabili separatamente
+# ==========================================================================
+CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON = "simple_notify_tts_manual_on"
+CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON = "simple_notify_tel_manual_on"
+CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF = "simple_notify_tts_manual_off"
+CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF = "simple_notify_tel_manual_off"
+
+DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_ON = False
+DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_ON = True
+DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_OFF = False
+DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF = True
+
+DEFAULT_SIMPLE_MSG_MANUAL_ON = "\U0001f535 {{ name }}: acceso manualmente ({{ temp }}\u00b0C, target {{ target }}\u00b0C, sonda {{ sonda }})."
+DEFAULT_SIMPLE_MSG_MANUAL_OFF = "\U0001f534 {{ name }}: spento manualmente (telecomando/app esterna) — non dalla card."
+DEFAULT_SIMPLE_MSG_AC_OFF_TIMER = "\u23f1\ufe0f {{ name }}: climatizzatore spento — timer di {{ minuti }} minuti scaduto ({{ temp }}\u00b0C, sonda {{ sonda }})."

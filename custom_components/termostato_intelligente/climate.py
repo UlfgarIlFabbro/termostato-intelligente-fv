@@ -246,6 +246,17 @@ from .const import (
     CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
     CONF_SEASON_MODE,
+    CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON,
+    CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON,
+    CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF,
+    CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF,
+    DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_ON,
+    DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_ON,
+    DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_OFF,
+    DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF,
+    DEFAULT_SIMPLE_MSG_MANUAL_ON,
+    DEFAULT_SIMPLE_MSG_MANUAL_OFF,
+    DEFAULT_SIMPLE_MSG_AC_OFF_TIMER,
     SEASON_SUMMER,
     SEASON_WINTER,
     SEASON_AUTO,
@@ -280,6 +291,8 @@ from .const import (
     DEFAULT_EMERGENCY_HEAT_THRESHOLD,
     DEFAULT_EMERGENCY_MSG_OFF,
     DEFAULT_EMERGENCY_MSG_ON,
+    DEFAULT_EMERGENCY_WINTER_MSG_ON,
+    DEFAULT_EMERGENCY_WINTER_MSG_OFF,
     DEFAULT_EMERGENCY_NOTIFY_TELEGRAM,
     DEFAULT_EMERGENCY_NOTIFY_TTS,
     DEFAULT_POWER_LIMIT_ENABLED,
@@ -318,6 +331,7 @@ from .const import (
     DEFAULT_SIMPLE_MSG_NIGHT_START,
     DEFAULT_SIMPLE_MSG_WINDOW_CLOSE,
     DEFAULT_SIMPLE_MSG_WINDOW_OPEN,
+    DEFAULT_SIMPLE_MSG_WINDOW_SHUTOFF,
     DEFAULT_SIMPLE_NIGHT_END,
     DEFAULT_SIMPLE_NIGHT_START,
     DEFAULT_SIMPLE_SUNSET_ANTICIPATE_H,
@@ -811,12 +825,13 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 is_initial_boot_event = old_state is None
                 is_real_transition_to_off = old_state is not None and old_state.state != "off"
                 if not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
-                    # Notifica sempre lo spegnimento manuale rilevato,
-                    # indipendentemente dal fatto che il blocco riaccensione
-                    # sia configurato — l'utente vuole sapere che si è
-                    # spento, anche se non vuole bloccarne la riaccensione.
+                    # Notifica lo spegnimento manuale rilevato (ora
+                    # selezionabile), indipendentemente dal fatto che il
+                    # blocco riaccensione sia configurato — l'utente vuole
+                    # sapere che si è spento, anche se non vuole bloccarne
+                    # la riaccensione.
                     _LOGGER.info("%s: spegnimento manuale rilevato (telecomando/app esterna)", self._attr_name)
-                    await self._async_simple_notify_ac_off(self.current_temperature or 0, self.target_temperature or 0)
+                    await self._async_simple_notify_manual_off()
                     if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
                         self._manual_off_since = dt_util.utcnow()
                         _LOGGER.info(
@@ -857,6 +872,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 if old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
                     self._manual_accension_since = dt_util.utcnow()
                     _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
+                    temp_for_notify = self._simple_read_temp()
+                    target_for_notify = self._simple_current_target() if self._get_season_mode() != SEASON_WINTER else self._winter_current_target()
+                    if temp_for_notify is not None:
+                        await self._async_simple_notify_manual_on(temp_for_notify, target_for_notify)
                     # Timer di spegnimento automatico dopo accensione
                     # manuale — se l'utente l'ha attivato dalla card (o è
                     # configurato di default), programma lo spegnimento a
@@ -2220,7 +2239,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
         if not (fv > consumo + margin):
             _LOGGER.info("%s: [inverno FV] spegnimento — surplus insufficiente", self._attr_name)
-            await self._async_simple_notify_ac_off(temp, target)
+            await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
             await self._async_turn_off_climate()
             self._fv_auto_on = False
 
@@ -2510,6 +2529,49 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
             await self._async_simple_notify(msg)
 
+    async def _async_simple_notify_ac_off_timer(self, temp: float, minuti: float, use_internal: bool | None = None) -> None:
+        """Notifica DEDICATA per lo spegnimento causato dal timer manuale
+        scaduto — messaggio diverso da quello standard, per distinguere
+        chiaramente il motivo dello spegnimento (non temperatura raggiunta,
+        non FV insufficiente: è scaduto il tempo impostato)."""
+        if use_internal is None:
+            use_internal = self._should_use_internal_probe()
+        probe_label = "interna" if use_internal else "esterna"
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_OFF_TIMER, {"name": self._attr_name, "temp": round(temp, 1), "minuti": round(minuti), "sonda": probe_label})
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
+            await self._async_simple_notify(msg)
+
+    async def _async_simple_notify_manual_on(self, temp: float, target: float, use_internal: bool | None = None) -> None:
+        """Notifica per un'accensione MANUALE rilevata (telecomando, app del
+        produttore, o qualsiasi comando esterno alla nostra card) —
+        selezionabile separatamente dalle altre notifiche di accensione."""
+        if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_ON)) and \
+           not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_ON)):
+            return
+        if use_internal is None:
+            use_internal = self._should_use_internal_probe()
+        probe_label = "interna" if use_internal else "esterna"
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_MANUAL_ON, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1), "sonda": probe_label})
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_ON)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_ON)):
+            await self._async_simple_notify(msg)
+
+    async def _async_simple_notify_manual_off(self) -> None:
+        """Notifica per uno spegnimento MANUALE rilevato dall'esterno (non
+        dalla nostra card) — ora selezionabile, prima era sempre attiva
+        incondizionatamente."""
+        if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_OFF)) and \
+           not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF)):
+            return
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_MANUAL_OFF, {"name": self._attr_name})
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_OFF)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF)):
+            await self._async_simple_notify(msg)
+
     async def _async_simple_notify_temp_change(self, temp: float, target: float, fan: str | None = None) -> None:
         fan_labels = {"low": "bassa", "medium": "media", "high": "alta", "auto": "automatica"}
         fan_label = fan_labels.get(fan, fan) if fan else None
@@ -2598,6 +2660,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 await self._async_simple_speak(msg)
             if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_CLOSE)):
                 await self._async_simple_notify(msg)
+
+    async def _async_simple_notify_window_shutoff(self) -> None:
+        """Notifica lo spegnimento causato dalla finestra rimasta aperta
+        troppo a lungo — messaggio dedicato, diverso dall'avviso iniziale.
+        Rientra nello stesso controllo 'finestra aperta' (nessun interruttore
+        separato), dato che è la conseguenza diretta di quell'evento."""
+        name = self._get_display_name()
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_WINDOW_SHUTOFF, {"name": name, "minuti": SIMPLE_WINDOW_DELAY_MIN})
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_WINDOW_OPEN, DEFAULT_SIMPLE_NOTIFY_TTS_WINDOW_OPEN)):
+            await self._async_simple_speak(msg)
+        if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_WINDOW_OPEN, DEFAULT_SIMPLE_NOTIFY_TEL_WINDOW_OPEN)):
+            await self._async_simple_notify(msg)
 
     # ------------------------------------------------------------------
     # Emergenza caldo
@@ -2724,14 +2798,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 await switch.async_turn_off()
 
     async def _async_emergency_notify(self, is_on: bool, temp: float, target: float) -> None:
-        """Notifica attivazione/disattivazione emergenza caldo."""
+        """Notifica attivazione/disattivazione emergenza — messaggio
+        diverso per raffrescamento (estate) o riscaldamento (inverno),
+        stesso switch, stesso toggle di notifica."""
         notify_tts = bool(get_conf(self.entry, CONF_EMERGENCY_NOTIFY_TTS, DEFAULT_EMERGENCY_NOTIFY_TTS))
         notify_tel = bool(get_conf(self.entry, CONF_EMERGENCY_NOTIFY_TELEGRAM, DEFAULT_EMERGENCY_NOTIFY_TELEGRAM))
         if not notify_tts and not notify_tel:
             return
 
         config_mode = get_conf(self.entry, CONF_CONFIG_MODE, CONFIG_MODE_FULL)
-        if is_on:
+        is_winter = self._get_season_mode() == SEASON_WINTER
+        if is_winter:
+            tpl = DEFAULT_EMERGENCY_WINTER_MSG_ON if is_on else DEFAULT_EMERGENCY_WINTER_MSG_OFF
+        elif is_on:
             tpl = get_conf(self.entry, CONF_EMERGENCY_MSG_ON, DEFAULT_EMERGENCY_MSG_ON) if config_mode == CONFIG_MODE_FULL else DEFAULT_EMERGENCY_MSG_ON
         else:
             tpl = get_conf(self.entry, CONF_EMERGENCY_MSG_OFF, DEFAULT_EMERGENCY_MSG_OFF) if config_mode == CONFIG_MODE_FULL else DEFAULT_EMERGENCY_MSG_OFF
@@ -3533,7 +3612,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not self._is_window_open():
             return
         await self._async_turn_off_climate()
-        await self._async_notify_window_closed_off()
+        await self._async_simple_notify_window_shutoff()
         self.async_write_ha_state()
 
     async def _async_shutoff_timer_expired(self, now: datetime | None = None) -> None:
@@ -3544,7 +3623,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         d'inverno), non una decisione automatica del termostato."""
         self._shutoff_timer_cancel = None
         self._shutoff_timer_until = None
-        await self._async_simple_notify_ac_off(self.current_temperature or 0, self.target_temperature or 0)
+        await self._async_simple_notify_ac_off_timer(self.current_temperature or 0, self._manual_shutoff_timer_minutes())
         await self._async_turn_off_climate()
         self.async_write_ha_state()
 

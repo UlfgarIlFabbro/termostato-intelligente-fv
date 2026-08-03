@@ -385,7 +385,11 @@
           "simple_quiet_night_notify": "▶ Silence Telegram during night hours",
           "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar",
           "fv_sensor_offline_notify_tts": "Voice alert for FV sensor offline",
-          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline"
+          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline",
+          "simple_notify_tts_manual_on": "Google Home — Manual accension",
+          "simple_notify_tel_manual_on": "Telegram — Manual accension",
+          "simple_notify_tts_manual_off": "Google Home — Manual shutoff",
+          "simple_notify_tel_manual_off": "Telegram — Manual shutoff"
         },
         "data_description": {
           "tts_media_players": "Select Google Home or Nest speakers. Leave empty to disable voice.",
@@ -414,7 +418,11 @@
           "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours.",
           "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached.",
           "fv_sensor_offline_notify_tts": "If enabled, alerts on Google Home when the solar production sensor goes offline and when an AC unit is turned off as a result.",
-          "fv_sensor_offline_notify_telegram": "If enabled, alerts on Telegram when the solar production sensor goes offline and when an AC unit is turned off as a result."
+          "fv_sensor_offline_notify_telegram": "If enabled, alerts on Telegram when the solar production sensor goes offline and when an AC unit is turned off as a result.",
+          "simple_notify_tts_manual_on": "Announce when a manual accension is detected (remote, manufacturer app — not from the card).",
+          "simple_notify_tel_manual_on": "Send a message when a manual accension is detected.",
+          "simple_notify_tts_manual_off": "Announce when a manual shutoff is detected (remote, manufacturer app — not from the card).",
+          "simple_notify_tel_manual_off": "Send a message when a manual shutoff is detected."
         }
       },
       "protezione_potenza": {
@@ -890,7 +898,11 @@
           "simple_quiet_night_notify": "▶ Silence Telegram during night hours",
           "simple_notify_tel_ac_off_fv": "▶ Turn off due to insufficient solar",
           "fv_sensor_offline_notify_tts": "Voice alert for FV sensor offline",
-          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline"
+          "fv_sensor_offline_notify_telegram": "Telegram alert for FV sensor offline",
+          "simple_notify_tts_manual_on": "Google Home — Manual accension",
+          "simple_notify_tel_manual_on": "Telegram — Manual accension",
+          "simple_notify_tts_manual_off": "Google Home — Manual shutoff",
+          "simple_notify_tel_manual_off": "Telegram — Manual shutoff"
         },
         "data_description": {
           "tts_media_players": "Select Google Home or Nest speakers. Leave empty to disable voice.",
@@ -919,7 +931,11 @@
           "simple_quiet_night_notify": "If enabled: Telegram does not send automatic messages during night hours.",
           "simple_notify_tel_ac_off_fv": "Telegram alerts when AC turns off because solar production is insufficient. Message indicates this is an automatic FV shutdown, not due to temperature reached.",
           "fv_sensor_offline_notify_tts": "If enabled, alerts on Google Home when the solar production sensor goes offline and when an AC unit is turned off as a result.",
-          "fv_sensor_offline_notify_telegram": "If enabled, alerts on Telegram when the solar production sensor goes offline and when an AC unit is turned off as a result."
+          "fv_sensor_offline_notify_telegram": "If enabled, alerts on Telegram when the solar production sensor goes offline and when an AC unit is turned off as a result.",
+          "simple_notify_tts_manual_on": "Announce when a manual accension is detected (remote, manufacturer app — not from the card).",
+          "simple_notify_tel_manual_on": "Send a message when a manual accension is detected.",
+          "simple_notify_tts_manual_off": "Announce when a manual shutoff is detected (remote, manufacturer app — not from the card).",
+          "simple_notify_tel_manual_off": "Send a message when a manual shutoff is detected."
         }
       },
       "cambia_modalita": {
