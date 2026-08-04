@@ -466,8 +466,8 @@ class TermostatoDiagCard extends HTMLElement {
     // selezione (5 opzioni). Posizionato subito prima del power, come
     // richiesto.
     const seasonBtn = `<button data-open-season-picker="1" aria-label="Stagione: ${currentSeasonMeta.label} — tocca per cambiare" title="Stagione: ${currentSeasonMeta.label}"
-      style="width:28px;height:28px;border-radius:50%;border:1px solid var(--divider-color, #ccc);background:var(--card-background-color, #fff);color:var(--primary-text-color);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
-      <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:15px;"></ha-icon>
+      style="width:38px;height:38px;border-radius:50%;border:none;background:${seasonMode === "off" ? "#d9302e" : "#2e9c4f"};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-sizing:border-box;flex-shrink:0;">
+      <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:20px;"></ha-icon>
     </button>`;
 
     // Pulsante accensione/spegnimento — ingrandito, stessa dimensione
@@ -807,7 +807,7 @@ class TermostatoDiagCard extends HTMLElement {
     this.innerHTML = `
       <ha-card style="overflow:hidden;background:transparent;--ha-card-background:transparent;border-radius:20px;">
         <div style="${cardStyle}">
-          <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:min(70%, 220px);position:absolute;top:50%;left:53%;transform:translate(-50%, -50%);opacity:0.3;pointer-events:none;z-index:0;color:${colors ? colors.border : "var(--secondary-text-color)"};"></ha-icon>
+          <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:min(70%, 220px);position:absolute;top:50%;left:55%;transform:translate(-50%, -50%);opacity:0.3;pointer-events:none;z-index:0;color:${colors ? colors.border : "var(--secondary-text-color)"};"></ha-icon>
           <div style="position:relative;z-index:1;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">${title}</div>

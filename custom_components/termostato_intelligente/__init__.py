@@ -15,6 +15,10 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN,
     CONF_SEASON_MODE,
+    CONF_SIMPLE_TARGET_DAY,
+    CONF_SIMPLE_TARGET_NIGHT,
+    CONF_FV_PRIORITY,
+    CONFIG_WRITE_DEBOUNCE_SECONDS,
     SEASON_SUMMER,
     SEASON_WINTER,
     SEASON_AUTO,
@@ -134,7 +138,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v090b11"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v090b13"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -252,15 +256,40 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 found.append(climate_entity)
         return found
 
+    def _schedule_config_write(climate_entity, field_key: str, conf_key: str, new_value: float) -> None:
+        """Schedula la scrittura del nuovo valore in configurazione dopo un
+        breve debounce — click ripetuti ravvicinati cancellano e
+        rischedulano, producendo un solo ricaricamento finale invece di uno
+        per ogni click."""
+        cancel = climate_entity._config_write_debounce_cancel.get(field_key)
+        if cancel is not None:
+            cancel()
+
+        async def _write_to_config(_now):
+            climate_entity._config_write_debounce_cancel.pop(field_key, None)
+            entry = climate_entity.entry
+            new_options = dict(entry.options)
+            new_options[conf_key] = new_value
+            hass.config_entries.async_update_entry(entry, options=new_options)
+            # async_update_entry attiva _async_update_listener, che ricarica
+            # l'entry — la nuova istanza leggerà il valore direttamente
+            # dalla configurazione, nessun pending/override da ripristinare.
+
+        climate_entity._config_write_debounce_cancel[field_key] = async_call_later(
+            hass, CONFIG_WRITE_DEBOUNCE_SECONDS, _write_to_config
+        )
+
     async def _handle_adjust_target(call) -> None:
         delta = float(call.data.get("delta", 0))
         for climate_entity in _find_climate_entities(call):
             current = climate_entity._simple_current_target()
             new_value = round(current + delta, 1)
             if climate_entity._simple_is_night():
-                climate_entity._runtime_target_night_override = new_value
+                climate_entity._pending_target_night_display = new_value
+                _schedule_config_write(climate_entity, "target_night", CONF_SIMPLE_TARGET_NIGHT, new_value)
             else:
-                climate_entity._runtime_target_day_override = new_value
+                climate_entity._pending_target_day_display = new_value
+                _schedule_config_write(climate_entity, "target_day", CONF_SIMPLE_TARGET_DAY, new_value)
             climate_entity.async_write_ha_state()
 
     async def _handle_adjust_priority(call) -> None:
@@ -268,7 +297,8 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         for climate_entity in _find_climate_entities(call):
             current = climate_entity._effective_priority()
             new_value = max(1, round(current + delta))
-            climate_entity._runtime_priority_override = new_value
+            climate_entity._pending_priority_display = new_value
+            _schedule_config_write(climate_entity, "priority", CONF_FV_PRIORITY, new_value)
             climate_entity.async_write_ha_state()
 
     async def _handle_set_shutoff_timer(call) -> None:

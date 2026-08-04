@@ -173,6 +173,8 @@ DEFAULT_EMERGENCY_WINTER_MSG_OFF = "Fine emergenza freddo, il riscaldamento {{ n
 # Minuti prima della notte per spegnere e disattivare emergenza
 EMERGENCY_PRE_NIGHT_MIN = 5
 BOOT_GRACE_PERIOD_SECONDS = 60  # periodo dopo il riavvio in cui non rileviamo accensioni manuali (l'integrazione del climatizzatore reale può attraversare stati transitori mentre si riconnette)
+STATE_CHANGE_DEBOUNCE_SECONDS = 15  # conferma temporale prima di considerare vera una transizione spento<->acceso del clima reale — protegge da glitch di integrazioni cloud (es. ConnectLife/Hisense)
+CONFIG_WRITE_DEBOUNCE_SECONDS = 1.5  # attesa dopo l'ultima regolazione dalla card (priorità/target) prima di scrivere in configurazione — click ripetuti ravvicinati producono un solo ricaricamento, non uno per click
 
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"

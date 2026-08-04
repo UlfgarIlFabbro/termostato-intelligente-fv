@@ -247,6 +247,7 @@ from .const import (
     DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
     CONF_SEASON_MODE,
     BOOT_GRACE_PERIOD_SECONDS,
+    STATE_CHANGE_DEBOUNCE_SECONDS,
     CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON,
     CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON,
     CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF,
@@ -443,13 +444,21 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._runtime_shutoff_timer_enabled: bool | None = None  # override dalla card — None = usa il default (attivo se i minuti configurati sono > 0)
         self._runtime_shutoff_timer_minutes: float | None = None  # override dalla card per i minuti — None = usa il valore configurato
         self._timer_override_touched: bool = False  # True SOLO se l'utente ha davvero premuto il pulsante/le frecce almeno una volta — evita di confondere un vecchio default mai toccato con un override intenzionale al ripristino dopo riavvio
+        self._state_change_debounce_cancel = None  # funzione per annullare la conferma pendente di una transizione spento<->acceso del clima reale
+        self._state_change_debounce_original_old: State | None = None  # stato di riferimento da PRIMA dell'intero episodio di instabilità (non aggiornato ad ogni evento intermedio)
         self._presence_since: datetime | None = None
         self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
         self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
         self._last_sent_fan: str | None = None  # ultima velocità ventola che ABBIAMO inviato noi — stesso principio del setpoint, evita comandi/beep ripetuti
-        self._runtime_target_day_override: float | None = None  # target giorno regolato dalla card — ha precedenza sulla configurazione, persistito ai riavvii
-        self._runtime_target_night_override: float | None = None  # target notte regolato dalla card
-        self._runtime_priority_override: float | None = None  # priorità FV regolata dalla card
+        # Priorità e target giorno/notte: card e configurazione sono UNA
+        # SOLA fonte di verità (niente più override separati). Il valore
+        # "pending" serve SOLO per il feedback istantaneo della card nella
+        # breve finestra di debounce, prima che la scrittura in
+        # configurazione (con successivo reload) la renda definitiva.
+        self._pending_priority_display: float | None = None
+        self._pending_target_day_display: float | None = None
+        self._pending_target_night_display: float | None = None
+        self._config_write_debounce_cancel: dict[str, Any] = {}
         self._external_sensor_fallback_active: bool = False  # True se stiamo usando la sonda interna perché quella esterna è bloccata
         self._external_sensor_last_value: float | None = None  # ultimo valore letto dalla sonda esterna mentre era considerata viva — usato come controllo extra di ripristino
         self._pending_probe_notification: str | None = None  # evento fallback/ripristino sonda da notificare al prossimo ciclo asincrono ("triggered" o "recovered")
@@ -579,6 +588,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "timer_manuale_minuti_configurati": self._manual_shutoff_timer_minutes(),
             "timer_override_toccato": self._timer_override_touched,
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
+            "acceso_da_fv": self._fv_auto_on,
+            "auto_ultima_direzione": getattr(self, "_auto_last_hvac_direction", None),
+            "auto_ultima_direzione_da": self._auto_last_hvac_direction_at.isoformat() if getattr(self, "_auto_last_hvac_direction_at", None) else None,
             "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
             "modalita_notturna_attiva": self._is_night_mode_active(),
             "target_effettivo": (
@@ -639,8 +651,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "modalita_configurazione": self._get_config_mode(),
             "modalita_stagionale": self._get_season_mode(),
             "fv_priorita": self._effective_priority(),
-            "target_giorno_override": self._runtime_target_day_override,
-            "target_notte_override": self._runtime_target_night_override,
             "protezione_potenza_attiva": self._power_limit_off,
             "protezione_potenza_da": self._power_limit_off_at.isoformat() if self._power_limit_off_at else None,
             "emergenza_caldo_attiva": self._switch_state(SWITCH_KEY_EMERGENCY, False),
@@ -679,6 +689,62 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._attr_name,
                 )
 
+        # Ripristina il flag "acceso dal FV" dopo un reload/riavvio — senza
+        # questo, un clima realmente acceso dal FV perderebbe silenziosamente
+        # lo spegnimento automatico per surplus insufficiente dopo un
+        # reload (es. causato dalla regolazione di priorità/target dalla
+        # card), restando acceso "orfano" a tempo indeterminato.
+        if last_state and last_state.attributes.get("acceso_da_fv"):
+            real_state = self.hass.states.get(self._climate_entity)
+            if real_state and real_state.state not in ("off", "unknown", "unavailable"):
+                self._fv_auto_on = True
+                _LOGGER.info(
+                    "%s: ripristinato flag 'acceso dal FV' dopo reload/riavvio",
+                    self._attr_name,
+                )
+
+        # Ripristina il timer manuale (scaldotto) con il tempo RIMANENTE
+        # ricalcolato — senza questo, un reload (es. causato dalla
+        # regolazione di priorità/target dalla card) durante un conto alla
+        # rovescia attivo lo farebbe perdere, disallineando la card dallo
+        # stato reale (il vecchio timer orfano scatterebbe comunque, ma
+        # la card non lo mostrerebbe più).
+        if last_state and last_state.attributes.get("timer_spegnimento_fino_a"):
+            try:
+                saved_until = dt_util.parse_datetime(last_state.attributes["timer_spegnimento_fino_a"])
+            except (TypeError, ValueError):
+                saved_until = None
+            if saved_until is not None:
+                remaining = saved_until - dt_util.utcnow()
+                real_state = self.hass.states.get(self._climate_entity)
+                is_on = real_state and real_state.state not in ("off", "unknown", "unavailable")
+                if remaining > timedelta(seconds=0) and is_on:
+                    self._shutoff_timer_until = saved_until
+                    self._shutoff_timer_cancel = async_call_later(
+                        self.hass, remaining, self._async_shutoff_timer_expired
+                    )
+                    _LOGGER.info(
+                        "%s: ripristinato timer di spegnimento manuale dopo reload/riavvio (%.0f minuti rimanenti)",
+                        self._attr_name, remaining.total_seconds() / 60,
+                    )
+                elif remaining <= timedelta(seconds=0) and is_on:
+                    # Il timer sarebbe già scaduto nel frattempo (reload
+                    # durato più a lungo del previsto) — spegniamo subito.
+                    _LOGGER.info("%s: timer di spegnimento manuale scaduto durante il reload — spengo ora", self._attr_name)
+                    self.hass.async_create_task(self._async_shutoff_timer_expired())
+
+        # Ripristina il cooldown tra cambi di direzione in modo Auto — senza
+        # questo, un reload durante le 20 ore di raffreddamento lo
+        # azzererebbe, permettendo un cambio di direzione immediato e
+        # vanificando la protezione contro i cicli ravvicinati nelle mezze
+        # stagioni.
+        if last_state and last_state.attributes.get("auto_ultima_direzione") and last_state.attributes.get("auto_ultima_direzione_da"):
+            try:
+                self._auto_last_hvac_direction = last_state.attributes["auto_ultima_direzione"]
+                self._auto_last_hvac_direction_at = dt_util.parse_datetime(last_state.attributes["auto_ultima_direzione_da"])
+            except (TypeError, ValueError):
+                pass
+
         # Ripristina il timestamp di accensione manuale dopo un riavvio —
         # senza questo, un riavvio durante il periodo di immunità (spegni
         # anche se acceso manualmente + ritardo) fa perdere l'informazione
@@ -696,23 +762,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 except Exception as exc:
                     _LOGGER.warning("%s: errore ripristino acceso_manualmente_da: %s", self._attr_name, exc)
 
-        # Ripristina gli override di target e priorità regolati dalla card
-        # dopo un riavvio — altrimenti tornerebbero silenziosamente al
-        # valore configurato nel wizard, perdendo una regolazione che
-        # l'utente aveva fatto apposta dall'interfaccia.
+        # Priorità e target giorno/notte non hanno più bisogno di essere
+        # ripristinati qui — sono sempre letti direttamente dalla
+        # configurazione (vedi _effective_priority/_simple_current_target),
+        # niente più override separati da sincronizzare dopo un riavvio.
         if last_state:
-            try:
-                if last_state.attributes.get("target_giorno_override") is not None:
-                    self._runtime_target_day_override = float(last_state.attributes["target_giorno_override"])
-                if last_state.attributes.get("target_notte_override") is not None:
-                    self._runtime_target_night_override = float(last_state.attributes["target_notte_override"])
-                if last_state.attributes.get("fv_priorita") is not None:
-                    configured_default = float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
-                    saved_priority = float(last_state.attributes["fv_priorita"])
-                    if saved_priority != configured_default:
-                        self._runtime_priority_override = saved_priority
-            except (TypeError, ValueError) as exc:
-                _LOGGER.warning("%s: errore ripristino override target/priorità: %s", self._attr_name, exc)
             try:
                 # Ripristiniamo gli override SOLO se l'utente ha DAVVERO
                 # interagito col timer almeno una volta (flag esplicito
@@ -796,151 +850,203 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 self._presence_since = None
         elif entity_id == self._climate_entity:
-            if new_state and new_state.state == "off" and (old_state is None or old_state.state != "off"):
-                # Spegnimento reale — VERA transizione da uno stato acceso a
-                # off (non una ripubblicazione ridondante dello stesso "off",
-                # es. un heartbeat periodico del dispositivo Gree). Senza
-                # questo controllo, un Gree che ripubblica "off" mentre resta
-                # spento azzererebbe continuamente _power_limit_low_since,
-                # impedendo per sempre al timer di riaccensione di accumulare
-                # i minuti consecutivi configurati.
-                self._cancel_dry_timer("off_state_change")
-                self._fv_surplus_buffer = []
-                self._fv_low_since = None
-                self._fv_turnon_confirmed_since = None
-                self._manual_accension_since = None
-                self._last_sent_setpoint = None
-                self._last_sent_setpoint_at = None
-                self._last_sent_fan = None
-                self._night_below_since = None
-                self._night_auto_on = False
-                self._fv_auto_on = False
-                self._simple_night_auto_on = False
-                self._simple_shutoff_since = None
-                self._power_limit_high_since = None
-                self._power_limit_low_since = None
-                # Se lo spegnimento NON è avvenuto entro la finestra di
-                # tolleranza di un nostro _async_turn_off_climate() recente,
-                # E non è il primo evento generato al boot/riavvio (old_state
-                # is None), E rappresenta una VERA transizione da uno stato
-                # acceso a "off" (non un secondo evento "off"→"off", es. per
-                # un aggiornamento di attributi durante la risincronizzazione
-                # dopo un riavvio, che non è un nuovo spegnimento), allora è
-                # uno spegnimento manuale (telecomando, app Gree, altra
-                # automazione) — registriamo il timestamp per l'eventuale
-                # blocco riaccensione temporizzato.
-                is_programmatic = (
-                    self._programmatic_off_until is not None
-                    and dt_util.utcnow() <= self._programmatic_off_until
-                )
-                is_initial_boot_event = old_state is None
-                is_real_transition_to_off = old_state is not None and old_state.state != "off"
-                if not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
-                    # Notifica lo spegnimento manuale rilevato (ora
-                    # selezionabile), indipendentemente dal fatto che il
-                    # blocco riaccensione sia configurato — l'utente vuole
-                    # sapere che si è spento, anche se non vuole bloccarne
-                    # la riaccensione.
-                    _LOGGER.info("%s: spegnimento manuale rilevato (telecomando/app esterna)", self._attr_name)
-                    await self._async_simple_notify_manual_off()
-                    if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
-                        self._manual_off_since = dt_util.utcnow()
+            is_off_transition = new_state and new_state.state == "off" and (old_state is None or old_state.state != "off")
+            is_on_transition = (
+                new_state and new_state.state not in ("off", "unknown", "unavailable")
+                and old_state is not None and old_state.state == "off"
+            )
+            if is_off_transition or is_on_transition:
+                # Conferma temporale prima di trattare come vera una
+                # transizione spento<->acceso: alcune integrazioni cloud
+                # (es. ConnectLife/Hisense) possono riportare transizioni
+                # spurie in pochi secondi per instabilità di connessione —
+                # senza questa conferma, verrebbero scambiate per vere
+                # accensioni/spegnimenti manuali, con notifiche false e
+                # persino spegnimenti reali indesiderati (timer avviato su
+                # una falsa accensione). Se durante la finestra arrivano
+                # PIÙ eventi ravvicinati (es. off poi di nuovo cool), NON
+                # aggiorniamo lo stato "originale" di riferimento — resta
+                # quello del PRIMO evento della sequenza, così alla fine
+                # confrontiamo lo stato REALMENTE stabile con quello da
+                # PRIMA che iniziasse l'intero episodio di instabilità,
+                # non con l'ultimo passo intermedio (che potrebbe essere
+                # esso stesso uno stato spurio).
+                if self._state_change_debounce_cancel is not None:
+                    self._state_change_debounce_cancel()
+                    self._state_change_debounce_cancel = None
+                else:
+                    self._state_change_debounce_original_old = old_state
+                captured_original_old = self._state_change_debounce_original_old
+
+                async def _confirm_and_process(_now):
+                    self._state_change_debounce_cancel = None
+                    current = self.hass.states.get(self._climate_entity)
+                    reference_old_state = captured_original_old.state if captured_original_old is not None else None
+                    if current is None or current.state == reference_old_state:
                         _LOGGER.info(
-                            "%s: spegnimento manuale rilevato — blocco riaccensione attivo",
-                            self._attr_name,
+                            "%s: episodio di instabilità concluso — stato tornato a '%s' (quello di partenza), nessuna vera transizione",
+                            self._attr_name, reference_old_state,
                         )
-                elif is_initial_boot_event:
-                    _LOGGER.debug(
-                        "%s: climatizzatore già spento al riavvio — non considerato spegnimento manuale",
-                        self._attr_name,
-                    )
-                elif not is_real_transition_to_off:
-                    _LOGGER.debug(
-                        "%s: evento off→off senza vera transizione (probabile risincronizzazione) — ignorato",
-                        self._attr_name,
-                    )
-            elif new_state and new_state.state in ("unknown", "unavailable"):
-                # Blip transitorio — NON toccare il timer DRY, prosegue normalmente
-                _LOGGER.debug(
-                    "%s: climatizzatore temporaneamente %s — timer DRY preservato",
-                    self._attr_name, new_state.state,
+                        return
+                    await self._async_process_climate_state_change(current, captured_original_old)
+                    self.async_write_ha_state()
+
+                self._state_change_debounce_cancel = async_call_later(
+                    self.hass, STATE_CHANGE_DEBOUNCE_SECONDS, _confirm_and_process
                 )
-            elif new_state and new_state.state not in ("off", "unknown", "unavailable"):
-                # Qualsiasi stato "acceso" (cool, dry, auto, fan_only, heat...)
-                # rimuove il blocco riaccensione manuale — non solo dry/cool,
-                # per coprire anche accensioni da telecomando fisico o app Gree
-                # che potrebbero finire in una modalità diversa dalle due usate
-                # normalmente da questa integrazione.
-                if self._manual_off_since is not None:
-                    self._manual_off_since = None
-                    _LOGGER.info("%s: climatizzatore riacceso — blocco riaccensione manuale rimosso", self._attr_name)
-                # Rileva un'accensione MANUALE: vera transizione da "off" ad
-                # acceso (non solo un cambio dry->cool o simili), e non
-                # attribuibile alla logica FV o notturna di questa stessa
-                # integrazione (che impostano i rispettivi flag PRIMA di
-                # chiamare il servizio, quindi sono già True quando arriva
-                # questo evento se sono stati loro ad accendere).
-                seconds_since_boot = (dt_util.utcnow() - getattr(self, "_added_at", dt_util.utcnow())).total_seconds()
-                is_boot_grace_period = seconds_since_boot < BOOT_GRACE_PERIOD_SECONDS
-                if old_state is not None and old_state.state == "off" and is_boot_grace_period:
-                    _LOGGER.info(
-                        "%s: transizione off->acceso ignorata — entro il periodo di grazia post-riavvio (%.0fs), probabile riconnessione dell'integrazione reale",
-                        self._attr_name, seconds_since_boot,
-                    )
-                elif old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
-                    self._manual_accension_since = dt_util.utcnow()
-                    _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
-                    temp_for_notify = self._simple_read_temp()
-                    target_for_notify = self._simple_current_target() if self._get_season_mode() != SEASON_WINTER else self._winter_current_target()
-                    if temp_for_notify is not None:
-                        await self._async_simple_notify_manual_on(temp_for_notify, target_for_notify)
-                    # Timer di spegnimento automatico dopo accensione
-                    # manuale — se l'utente l'ha attivato dalla card (o è
-                    # configurato di default), programma lo spegnimento a
-                    # prescindere da tutto il resto (FV, notte, finestra),
-                    # proprio come vuole chi usa il clima manualmente (es.
-                    # uno scaldotto) e vuole solo una sicurezza a tempo.
-                    if self._manual_shutoff_timer_enabled() and self._get_season_mode() != SEASON_OFF:
-                        timer_minutes = self._manual_shutoff_timer_minutes()
-                        if timer_minutes > 0:
-                            if self._shutoff_timer_cancel is not None:
-                                self._shutoff_timer_cancel()
-                            self._shutoff_timer_until = dt_util.utcnow() + timedelta(minutes=timer_minutes)
-                            self._shutoff_timer_cancel = async_call_later(
-                                self.hass, timedelta(minutes=timer_minutes), self._async_shutoff_timer_expired
-                            )
-                            _LOGGER.info("%s: timer di spegnimento automatico avviato (%s minuti)", self._attr_name, timer_minutes)
-                    # Se la finestra è GIÀ aperta in questo momento (non è
-                    # lei a essere appena cambiata, quindi il suo stesso
-                    # listener non scatterebbe mai per questo caso),
-                    # applichiamo la stessa gestione che scatterebbe se si
-                    # fosse appena aperta: snapshot + spegnimento ritardato,
-                    # stessa notifica — invece di lasciare il clima acceso
-                    # senza nessun controllo finché la finestra non cambia
-                    # stato per conto suo.
-                    if (self._is_window_open()
-                            and self._switch_state(SWITCH_KEY_MASTER, True)
-                            and bool(get_conf(self.entry, CONF_WINDOW_DETECTION_ENABLED, DEFAULT_WINDOW_DETECTION_ENABLED))):
-                        mode = self._get_config_mode()
-                        if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
-                            _LOGGER.info("%s: accensione manuale con finestra già aperta — avvio gestione come apertura finestra", self._attr_name)
-                            await self._async_simple_notify_window(True, SIMPLE_WINDOW_DELAY_MIN, ac_was_on=True)
-                            await self._async_window_opened_simple()
-                        else:
-                            _LOGGER.info("%s: accensione manuale con finestra già aperta — avvio gestione come apertura finestra", self._attr_name)
-                            await self._async_window_opened()
-                if new_state.state == "dry":
-                    if self._simple_dry_end is None:
-                        # Tornato in DRY senza timer attivo (es. set manuale da UI/altra
-                        # automazione/telecomando) — riarma subito, alla transizione
-                        _LOGGER.warning("%s: [DRY-TRACE] rilevato DRY via state_change senza timer attivo — riavvio", self._attr_name)
-                        self._schedule_dry_timer("dry_rilevato_su_state_change")
-                    else:
-                        _LOGGER.warning(
-                            "%s: [DRY-TRACE] state_change a DRY ma timer già attivo (dry_end=%s) — nessuna azione",
-                            self._attr_name, self._simple_dry_end.isoformat(),
-                        )
+                return
+            await self._async_process_climate_state_change(new_state, old_state)
         self.async_write_ha_state()
+
+    async def _async_process_climate_state_change(self, new_state: State, old_state: State | None) -> None:
+        """Elabora una transizione di stato del climatizzatore reale GIÀ
+        CONFERMATA come stabile (vedi _async_on_state_change per il
+        debounce che precede questa chiamata sulle transizioni critiche
+        spento<->acceso)."""
+        if new_state and new_state.state == "off" and (old_state is None or old_state.state != "off"):
+            # Spegnimento reale — VERA transizione da uno stato acceso a
+            # off (non una ripubblicazione ridondante dello stesso "off",
+            # es. un heartbeat periodico del dispositivo Gree). Senza
+            # questo controllo, un Gree che ripubblica "off" mentre resta
+            # spento azzererebbe continuamente _power_limit_low_since,
+            # impedendo per sempre al timer di riaccensione di accumulare
+            # i minuti consecutivi configurati.
+            self._cancel_dry_timer("off_state_change")
+            self._fv_surplus_buffer = []
+            self._fv_low_since = None
+            self._fv_turnon_confirmed_since = None
+            self._manual_accension_since = None
+            self._last_sent_setpoint = None
+            self._last_sent_setpoint_at = None
+            self._last_sent_fan = None
+            self._night_below_since = None
+            self._night_auto_on = False
+            self._fv_auto_on = False
+            self._simple_night_auto_on = False
+            self._simple_shutoff_since = None
+            self._power_limit_high_since = None
+            self._power_limit_low_since = None
+            # Se lo spegnimento NON è avvenuto entro la finestra di
+            # tolleranza di un nostro _async_turn_off_climate() recente,
+            # E non è il primo evento generato al boot/riavvio (old_state
+            # is None), E rappresenta una VERA transizione da uno stato
+            # acceso a "off" (non un secondo evento "off"→"off", es. per
+            # un aggiornamento di attributi durante la risincronizzazione
+            # dopo un riavvio, che non è un nuovo spegnimento), allora è
+            # uno spegnimento manuale (telecomando, app Gree, altra
+            # automazione) — registriamo il timestamp per l'eventuale
+            # blocco riaccensione temporizzato.
+            is_programmatic = (
+                self._programmatic_off_until is not None
+                and dt_util.utcnow() <= self._programmatic_off_until
+            )
+            is_initial_boot_event = old_state is None
+            is_real_transition_to_off = old_state is not None and old_state.state != "off"
+            if not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
+                # Notifica lo spegnimento manuale rilevato (ora
+                # selezionabile), indipendentemente dal fatto che il
+                # blocco riaccensione sia configurato — l'utente vuole
+                # sapere che si è spento, anche se non vuole bloccarne
+                # la riaccensione.
+                _LOGGER.info("%s: spegnimento manuale rilevato (telecomando/app esterna)", self._attr_name)
+                await self._async_simple_notify_manual_off()
+                if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
+                    self._manual_off_since = dt_util.utcnow()
+                    _LOGGER.info(
+                        "%s: spegnimento manuale rilevato — blocco riaccensione attivo",
+                        self._attr_name,
+                    )
+            elif is_initial_boot_event:
+                _LOGGER.debug(
+                    "%s: climatizzatore già spento al riavvio — non considerato spegnimento manuale",
+                    self._attr_name,
+                )
+            elif not is_real_transition_to_off:
+                _LOGGER.debug(
+                    "%s: evento off→off senza vera transizione (probabile risincronizzazione) — ignorato",
+                    self._attr_name,
+                )
+        elif new_state and new_state.state in ("unknown", "unavailable"):
+            # Blip transitorio — NON toccare il timer DRY, prosegue normalmente
+            _LOGGER.debug(
+                "%s: climatizzatore temporaneamente %s — timer DRY preservato",
+                self._attr_name, new_state.state,
+            )
+        elif new_state and new_state.state not in ("off", "unknown", "unavailable"):
+            # Qualsiasi stato "acceso" (cool, dry, auto, fan_only, heat...)
+            # rimuove il blocco riaccensione manuale — non solo dry/cool,
+            # per coprire anche accensioni da telecomando fisico o app Gree
+            # che potrebbero finire in una modalità diversa dalle due usate
+            # normalmente da questa integrazione.
+            if self._manual_off_since is not None:
+                self._manual_off_since = None
+                _LOGGER.info("%s: climatizzatore riacceso — blocco riaccensione manuale rimosso", self._attr_name)
+            # Rileva un'accensione MANUALE: vera transizione da "off" ad
+            # acceso (non solo un cambio dry->cool o simili), e non
+            # attribuibile alla logica FV o notturna di questa stessa
+            # integrazione (che impostano i rispettivi flag PRIMA di
+            # chiamare il servizio, quindi sono già True quando arriva
+            # questo evento se sono stati loro ad accendere).
+            seconds_since_boot = (dt_util.utcnow() - getattr(self, "_added_at", dt_util.utcnow())).total_seconds()
+            is_boot_grace_period = seconds_since_boot < BOOT_GRACE_PERIOD_SECONDS
+            if old_state is not None and old_state.state == "off" and is_boot_grace_period:
+                _LOGGER.info(
+                    "%s: transizione off->acceso ignorata — entro il periodo di grazia post-riavvio (%.0fs), probabile riconnessione dell'integrazione reale",
+                    self._attr_name, seconds_since_boot,
+                )
+            elif old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
+                self._manual_accension_since = dt_util.utcnow()
+                _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
+                temp_for_notify = self._simple_read_temp()
+                target_for_notify = self._simple_current_target() if self._get_season_mode() != SEASON_WINTER else self._winter_current_target()
+                if temp_for_notify is not None:
+                    await self._async_simple_notify_manual_on(temp_for_notify, target_for_notify)
+                # Timer di spegnimento automatico dopo accensione
+                # manuale — se l'utente l'ha attivato dalla card (o è
+                # configurato di default), programma lo spegnimento a
+                # prescindere da tutto il resto (FV, notte, finestra),
+                # proprio come vuole chi usa il clima manualmente (es.
+                # uno scaldotto) e vuole solo una sicurezza a tempo.
+                if self._manual_shutoff_timer_enabled() and self._get_season_mode() != SEASON_OFF:
+                    timer_minutes = self._manual_shutoff_timer_minutes()
+                    if timer_minutes > 0:
+                        if self._shutoff_timer_cancel is not None:
+                            self._shutoff_timer_cancel()
+                        self._shutoff_timer_until = dt_util.utcnow() + timedelta(minutes=timer_minutes)
+                        self._shutoff_timer_cancel = async_call_later(
+                            self.hass, timedelta(minutes=timer_minutes), self._async_shutoff_timer_expired
+                        )
+                        _LOGGER.info("%s: timer di spegnimento automatico avviato (%s minuti)", self._attr_name, timer_minutes)
+                # Se la finestra è GIÀ aperta in questo momento (non è
+                # lei a essere appena cambiata, quindi il suo stesso
+                # listener non scatterebbe mai per questo caso),
+                # applichiamo la stessa gestione che scatterebbe se si
+                # fosse appena aperta: snapshot + spegnimento ritardato,
+                # stessa notifica — invece di lasciare il clima acceso
+                # senza nessun controllo finché la finestra non cambia
+                # stato per conto suo.
+                if (self._is_window_open()
+                        and self._switch_state(SWITCH_KEY_MASTER, True)
+                        and bool(get_conf(self.entry, CONF_WINDOW_DETECTION_ENABLED, DEFAULT_WINDOW_DETECTION_ENABLED))):
+                    mode = self._get_config_mode()
+                    if mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV):
+                        _LOGGER.info("%s: accensione manuale con finestra già aperta — avvio gestione come apertura finestra", self._attr_name)
+                        await self._async_simple_notify_window(True, SIMPLE_WINDOW_DELAY_MIN, ac_was_on=True)
+                        await self._async_window_opened_simple()
+                    else:
+                        _LOGGER.info("%s: accensione manuale con finestra già aperta — avvio gestione come apertura finestra", self._attr_name)
+                        await self._async_window_opened()
+            if new_state.state == "dry":
+                if self._simple_dry_end is None:
+                    # Tornato in DRY senza timer attivo (es. set manuale da UI/altra
+                    # automazione/telecomando) — riarma subito, alla transizione
+                    _LOGGER.warning("%s: [DRY-TRACE] rilevato DRY via state_change senza timer attivo — riavvio", self._attr_name)
+                    self._schedule_dry_timer("dry_rilevato_su_state_change")
+                else:
+                    _LOGGER.warning(
+                        "%s: [DRY-TRACE] state_change a DRY ma timer già attivo (dry_end=%s) — nessuna azione",
+                        self._attr_name, self._simple_dry_end.isoformat(),
+                    )
 
     async def async_will_remove_from_hass(self) -> None:
         if self._window_cancel_timer is not None:
@@ -949,6 +1055,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if self._dry_cancel_timer is not None:
             self._dry_cancel_timer()
             self._dry_cancel_timer = None
+        if self._state_change_debounce_cancel is not None:
+            self._state_change_debounce_cancel()
+            self._state_change_debounce_cancel = None
+        for cancel in self._config_write_debounce_cancel.values():
+            if cancel is not None:
+                cancel()
+        self._config_write_debounce_cancel.clear()
+        if self._shutoff_timer_cancel is not None:
+            self._shutoff_timer_cancel()
+            self._shutoff_timer_cancel = None
+            # NON azzero self._shutoff_timer_until — resta nello stato
+            # salvato (già esposto come attributo), così la PROSSIMA
+            # istanza (creata da un reload) può leggerlo e ricalcolare i
+            # minuti rimanenti, rischedulando il timer invece di perderlo.
         data = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id, {})
         if data.get("climate") is self:
             data.pop("climate", None)
@@ -1544,18 +1664,22 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         return night_end_dt <= now_local <= cutoff_dt
 
     def _effective_priority(self) -> float:
-        """Priorità FV effettiva: quella regolata dalla card se presente, altrimenti quella configurata."""
-        if self._runtime_priority_override is not None:
-            return self._runtime_priority_override
+        """Priorità FV effettiva: il valore 'pending' (durante la breve
+        finestra di debounce dopo una regolazione dalla card, prima che la
+        scrittura in configurazione sia definitiva) se presente, altrimenti
+        quello configurato — un'unica fonte di verità, niente più override
+        separati da tenere sincronizzati."""
+        if self._pending_priority_display is not None:
+            return self._pending_priority_display
         return float(get_conf(self.entry, CONF_FV_PRIORITY, DEFAULT_FV_PRIORITY))
 
     def _simple_current_target(self) -> float:
         if self._simple_is_night():
-            if self._runtime_target_night_override is not None:
-                return self._runtime_target_night_override
+            if self._pending_target_night_display is not None:
+                return self._pending_target_night_display
             return float(get_conf(self.entry, CONF_SIMPLE_TARGET_NIGHT, DEFAULT_SIMPLE_TARGET_NIGHT))
-        if self._runtime_target_day_override is not None:
-            return self._runtime_target_day_override
+        if self._pending_target_day_display is not None:
+            return self._pending_target_day_display
         return float(get_conf(self.entry, CONF_SIMPLE_TARGET_DAY, DEFAULT_SIMPLE_TARGET_DAY))
 
     def _simple_is_quiet_night(self) -> bool:
@@ -3494,7 +3618,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         quando l'evento arriva, facendo scattare erroneamente il rilevamento
         di spegnimento "manuale".
         """
-        self._programmatic_off_until = dt_util.utcnow() + timedelta(seconds=5)
+        self._programmatic_off_until = dt_util.utcnow() + timedelta(seconds=STATE_CHANGE_DEBOUNCE_SECONDS + 10)
         await self.hass.services.async_call(
             "climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True
         )
