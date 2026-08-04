@@ -172,6 +172,7 @@ DEFAULT_EMERGENCY_WINTER_MSG_OFF = "Fine emergenza freddo, il riscaldamento {{ n
 
 # Minuti prima della notte per spegnere e disattivare emergenza
 EMERGENCY_PRE_NIGHT_MIN = 5
+BOOT_GRACE_PERIOD_SECONDS = 60  # periodo dopo il riavvio in cui non rileviamo accensioni manuali (l'integrazione del climatizzatore reale può attraversare stati transitori mentre si riconnette)
 
 # --- Switch ausiliari ---
 SWITCH_KEY_MASTER = "switch_master"

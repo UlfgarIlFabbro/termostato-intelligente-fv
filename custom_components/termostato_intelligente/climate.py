@@ -246,6 +246,7 @@ from .const import (
     CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
     CONF_SEASON_MODE,
+    BOOT_GRACE_PERIOD_SECONDS,
     CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON,
     CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON,
     CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF,
@@ -652,6 +653,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
+        # Timestamp di avvio — usato per un breve periodo di grazia subito
+        # dopo il riavvio, durante il quale NON rileviamo accensioni
+        # manuali: l'integrazione del climatizzatore reale (Gree e simili)
+        # può attraversare transizioni transitorie (es. off -> cool) mentre
+        # si riconnette, che altrimenti verrebbero scambiate per una vera
+        # accensione manuale fatta dall'utente — esattamente il bug
+        # osservato: climi accesi dal FV prima del riavvio, rilevati come
+        # "accesi manualmente" subito dopo.
+        self._added_at = dt_util.utcnow()
+
         last_state = await self.async_get_last_state()
 
         # Ripristina il flag "acceso automaticamente di notte" dopo un
@@ -661,7 +672,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # di notte, quindi "FV insufficiente" sarebbe sempre vero).
         if last_state and last_state.attributes.get("accensione_notturna_automatica"):
             real_state = self.hass.states.get(self._climate_entity)
-            if real_state and real_state.state in ("cool", "dry") and self._simple_is_night():
+            if real_state and real_state.state not in ("off", "unknown", "unavailable") and self._simple_is_night():
                 self._simple_night_auto_on = True
                 _LOGGER.info(
                     "%s: riavvio durante la notte — ripristinato flag accensione notturna automatica",
@@ -675,7 +686,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # la protezione residua a cui l'utente ha diritto.
         if last_state and last_state.attributes.get("acceso_manualmente_da"):
             real_state = self.hass.states.get(self._climate_entity)
-            if real_state and real_state.state in ("cool", "dry"):
+            if real_state and real_state.state not in ("off", "unknown", "unavailable"):
                 try:
                     self._manual_accension_since = dt_util.parse_datetime(last_state.attributes["acceso_manualmente_da"])
                     _LOGGER.info(
@@ -869,7 +880,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 # integrazione (che impostano i rispettivi flag PRIMA di
                 # chiamare il servizio, quindi sono già True quando arriva
                 # questo evento se sono stati loro ad accendere).
-                if old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
+                seconds_since_boot = (dt_util.utcnow() - getattr(self, "_added_at", dt_util.utcnow())).total_seconds()
+                is_boot_grace_period = seconds_since_boot < BOOT_GRACE_PERIOD_SECONDS
+                if old_state is not None and old_state.state == "off" and is_boot_grace_period:
+                    _LOGGER.info(
+                        "%s: transizione off->acceso ignorata — entro il periodo di grazia post-riavvio (%.0fs), probabile riconnessione dell'integrazione reale",
+                        self._attr_name, seconds_since_boot,
+                    )
+                elif old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
                     self._manual_accension_since = dt_util.utcnow()
                     _LOGGER.info("%s: accensione manuale rilevata — immunità spegnimento FV per il periodo configurato", self._attr_name)
                     temp_for_notify = self._simple_read_temp()
@@ -1086,9 +1104,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             event = self._pending_probe_notification
             self._pending_probe_notification = None
             if event == "triggered":
-                await self._async_simple_notify(f"📡 {self._attr_name}: sonda esterna bloccata, passo alla sonda interna del climatizzatore.")
+                await self._async_simple_notify(f"📡 {self._get_display_name()}: sonda esterna bloccata, passo alla sonda interna del climatizzatore.")
             elif event == "recovered":
-                await self._async_simple_notify(f"📡 {self._attr_name}: sonda esterna ripristinata, torno a usarla.")
+                await self._async_simple_notify(f"📡 {self._get_display_name()}: sonda esterna ripristinata, torno a usarla.")
         temp = self._simple_read_temp()
         if temp is None:
             return
@@ -1309,7 +1327,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._fv_surplus_buffer = []
         self._fv_low_since = None
         own_msg = (
-            f"⚠️ {self._attr_name}: climatizzatore spento — sensore produzione fotovoltaica "
+            f"⚠️ {self._get_display_name()}: climatizzatore spento — sensore produzione fotovoltaica "
             f"offline da oltre {shutoff_min:.0f} minuti."
         )
         if notify_tts:
@@ -2497,21 +2515,21 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         surplus = round(fv - consumo) if fv and consumo else 0
         if ac_type == "fv":
             tpl = DEFAULT_SIMPLE_MSG_AC_ON_FV
-            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1),
+            vars = {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1),
                     "fv": round(fv), "surplus": surplus, "soc": round(soc, 1)}
         elif ac_type == "notturna":
             tpl = DEFAULT_SIMPLE_MSG_AC_ON_NIGHT
-            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+            vars = {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1)}
         elif ac_type == "emergenza":
             tpl = DEFAULT_SIMPLE_MSG_AC_ON_EMERGENCY
-            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+            vars = {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1)}
         elif ac_type == "fv_winter":
             tpl = DEFAULT_SIMPLE_MSG_AC_ON_WINTER_FLOOR
-            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1),
+            vars = {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1),
                     "fv": round(fv), "surplus": surplus, "batteria": round(soc, 1)}
         else:
             tpl = DEFAULT_SIMPLE_MSG_AC_ON
-            vars = {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)}
+            vars = {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1)}
         msg = await self._async_render(tpl, vars)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_ON, DEFAULT_SIMPLE_NOTIFY_TTS_AC_ON)):
             await self._async_simple_speak(msg)
@@ -2523,7 +2541,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if use_internal is None:
             use_internal = self._should_use_internal_probe()  # fallback per i chiamanti che non lo specificano ancora
         probe_label = "interna" if use_internal else "esterna"
-        msg = await self._async_render(tpl, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1), "sonda": probe_label})
+        msg = await self._async_render(tpl, {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1), "sonda": probe_label})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
@@ -2537,7 +2555,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if use_internal is None:
             use_internal = self._should_use_internal_probe()
         probe_label = "interna" if use_internal else "esterna"
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_OFF_TIMER, {"name": self._attr_name, "temp": round(temp, 1), "minuti": round(minuti), "sonda": probe_label})
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_AC_OFF_TIMER, {"name": self._get_display_name(), "temp": round(temp, 1), "minuti": round(minuti), "sonda": probe_label})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_AC_OFF)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_AC_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_AC_OFF)):
@@ -2553,7 +2571,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if use_internal is None:
             use_internal = self._should_use_internal_probe()
         probe_label = "interna" if use_internal else "esterna"
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_MANUAL_ON, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1), "sonda": probe_label})
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_MANUAL_ON, {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1), "sonda": probe_label})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_ON)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_ON)):
@@ -2566,7 +2584,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_OFF)) and \
            not bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF)):
             return
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_MANUAL_OFF, {"name": self._attr_name})
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_MANUAL_OFF, {"name": self._get_display_name()})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TTS_MANUAL_OFF)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF)):
@@ -2577,7 +2595,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         fan_label = fan_labels.get(fan, fan) if fan else None
         msg = await self._async_render(
             DEFAULT_SIMPLE_MSG_TEMP_CHANGE,
-            {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1), "fan": fan_label},
+            {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1), "fan": fan_label},
         )
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE, DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE)):
             await self._async_simple_speak(msg)
@@ -2585,14 +2603,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self._async_simple_notify(msg)
 
     async def _async_simple_notify_night_start(self, target: float) -> None:
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_NIGHT_START, {"name": self._attr_name, "target": round(target, 1)})
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_NIGHT_START, {"name": self._get_display_name(), "target": round(target, 1)})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_NIGHT_START, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_START)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_NIGHT_START, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_START)):
             await self._async_simple_notify(msg, bypass_quiet=True)
 
     async def _async_simple_notify_night_end(self) -> None:
-        msg = await self._async_render(DEFAULT_SIMPLE_MSG_NIGHT_END, {"name": self._attr_name})
+        msg = await self._async_render(DEFAULT_SIMPLE_MSG_NIGHT_END, {"name": self._get_display_name()})
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_NIGHT_END, DEFAULT_SIMPLE_NOTIFY_TTS_NIGHT_END)):
             await self._async_simple_speak(msg)
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_NIGHT_END, DEFAULT_SIMPLE_NOTIFY_TEL_NIGHT_END)):
@@ -2815,7 +2833,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         else:
             tpl = get_conf(self.entry, CONF_EMERGENCY_MSG_OFF, DEFAULT_EMERGENCY_MSG_OFF) if config_mode == CONFIG_MODE_FULL else DEFAULT_EMERGENCY_MSG_OFF
 
-        msg = await self._async_render(tpl, {"name": self._attr_name, "temp": round(temp, 1), "target": round(target, 1)})
+        msg = await self._async_render(tpl, {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1)})
 
         if notify_tts:
             await self._async_simple_speak(msg)
@@ -2954,7 +2972,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 tpl = DEFAULT_POWER_LIMIT_MSG_OFF
 
-        message = await self._async_render(tpl, {"name": self._attr_name, "consumo": round(consumo)})
+        message = await self._async_render(tpl, {"name": self._get_display_name(), "consumo": round(consumo)})
 
         if notify_tts:
             await self._async_speak(message, bypass_quiet=True)
@@ -3398,7 +3416,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         mode = self._get_config_mode()
         is_simple = mode in (CONFIG_MODE_SIMPLE, CONFIG_MODE_SIMPLE_FV)
         real_state = self.hass.states.get(self._climate_entity)
-        ac_was_on = bool(real_state and real_state.state in ("cool", "dry"))
+        ac_was_on = bool(real_state and real_state.state not in ("off", "unknown", "unavailable"))
 
         if self._is_real_transition(old_state, new_state, "off", "on"):
             if self._window_cancel_timer is not None:
@@ -3678,7 +3696,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 if not bool(get_conf(self.entry, CONF_DOOR_ALERT_ENABLED, DEFAULT_DOOR_ALERT_ENABLED)):
                     return
-                message = await self._async_render(DEFAULT_DOOR_ALERT_OPEN_MESSAGE, {"name": self._attr_name})
+                message = await self._async_render(DEFAULT_DOOR_ALERT_OPEN_MESSAGE, {"name": self._get_display_name()})
                 if bool(get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)):
                     await self._async_speak(message, bypass_quiet=False)
                 if bool(get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)):
@@ -3690,7 +3708,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 if not bool(get_conf(self.entry, CONF_DOOR_ALERT_ENABLED, DEFAULT_DOOR_ALERT_ENABLED)):
                     return
-                message = await self._async_render(DEFAULT_DOOR_ALERT_CLOSED_MESSAGE, {"name": self._attr_name})
+                message = await self._async_render(DEFAULT_DOOR_ALERT_CLOSED_MESSAGE, {"name": self._get_display_name()})
                 if bool(get_conf(self.entry, CONF_DOOR_ALERT_TTS, DEFAULT_DOOR_ALERT_TTS)):
                     await self._async_speak(message, bypass_quiet=False)
                 if bool(get_conf(self.entry, CONF_DOOR_ALERT_NOTIFY, DEFAULT_DOOR_ALERT_NOTIFY)):
@@ -3721,7 +3739,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         else:
             stato = "acceso" if is_on else "spento"
             tpl = f"{{{{ name }}}}: climatizzatore {stato} automaticamente"
-        variables = {"name": self._attr_name, **(extra or {})}
+        variables = {"name": self._get_display_name(), **(extra or {})}
         message = await self._async_render(tpl, variables)
         if power_tts:
             await self._async_speak(message, bypass_quiet=False)
@@ -3738,7 +3756,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         notify_enabled = bool(get_conf(self.entry, CONF_NOTIFY_NIGHT_END_NOTIFY, DEFAULT_NOTIFY_NIGHT_END_NOTIFY))
         if not tts_enabled and not notify_enabled:
             return
-        message = await self._async_render(DEFAULT_POWER_OFF_NIGHT_END_MESSAGE, {"name": self._attr_name})
+        message = await self._async_render(DEFAULT_POWER_OFF_NIGHT_END_MESSAGE, {"name": self._get_display_name()})
         if tts_enabled:
             await self._async_speak(message, bypass_quiet=True)  # fine notte = di giorno, non serve bypass_quiet
         if notify_enabled:
@@ -3791,7 +3809,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self.hass.services.async_call("telegram_bot", "send_message", {"target": ids, "message": message}, blocking=True)
 
     async def _async_notify_window_open_tts(self, delay_min: int) -> None:
-        variables = {"delay": delay_min, "name": self._attr_name, "target": self._target_temperature}
+        variables = {"delay": delay_min, "name": self._get_display_name(), "target": self._target_temperature}
         tts_tpl = get_conf(self.entry, CONF_TTS_MESSAGE_OPEN, DEFAULT_TTS_MESSAGE_OPEN)
         tts_msg = await self._async_render(tts_tpl, variables)
         await self._async_speak(tts_msg, bypass_quiet=False)
@@ -3799,14 +3817,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self._async_send_notification(notify_msg, bypass_quiet=False)
 
     async def _async_notify_window_closed(self) -> None:
-        variables = {"name": self._attr_name}
+        variables = {"name": self._get_display_name()}
         tts_msg = await self._async_render(DEFAULT_TTS_MESSAGE_CLOSED, variables)
         await self._async_speak(tts_msg, bypass_quiet=False)
         notify_msg = await self._async_render(DEFAULT_NOTIFY_MESSAGE_CLOSED, variables)
         await self._async_send_notification(notify_msg, bypass_quiet=False)
 
     async def _async_notify_window_closed_off(self) -> None:
-        variables = {"name": self._attr_name, "target": self._target_temperature}
+        variables = {"name": self._get_display_name(), "target": self._target_temperature}
         tts_msg = await self._async_render(
             "Attenzione: il climatizzatore della {{ name }} è stato spento "
             "perché la finestra è rimasta aperta troppo a lungo.",
@@ -3835,7 +3853,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._last_temp_notify = now
         message_tpl = get_conf(self.entry, CONF_NOTIFY_TEMP_CHANGE_MESSAGE, DEFAULT_NOTIFY_TEMP_CHANGE_MESSAGE)
         message = await self._async_render(message_tpl, {
-            "name": self._attr_name,
+            "name": self._get_display_name(),
             "old_temp": old_temp,
             "new_temp": new_temp,
             "fan_mode": fan_mode,

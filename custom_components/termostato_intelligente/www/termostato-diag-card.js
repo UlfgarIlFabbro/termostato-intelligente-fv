@@ -205,7 +205,7 @@ class TermostatoDiagCard extends HTMLElement {
     // per il pulsante compatto che per lo sfondo grande e il popup.
     const seasonMode = stateObj.attributes.modalita_stagionale || "estate";
     const seasonMeta = {
-      estate: { icon: "mdi:weather-sunny", label: "Estate" },
+      estate: { icon: "mdi:white-balance-sunny", label: "Estate" },
       inverno: { icon: "mdi:image-filter-hdr", label: "Inverno" },
       auto: { icon: "mdi:autorenew", label: "Auto" },
       manuale: { icon: "mdi:hand-back-right-outline", label: "Manuale" },
@@ -807,7 +807,7 @@ class TermostatoDiagCard extends HTMLElement {
     this.innerHTML = `
       <ha-card style="overflow:hidden;background:transparent;--ha-card-background:transparent;border-radius:20px;">
         <div style="${cardStyle}">
-          <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:min(70%, 220px);position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);opacity:0.3;pointer-events:none;z-index:0;color:${colors ? colors.border : "var(--secondary-text-color)"};"></ha-icon>
+          <ha-icon icon="${currentSeasonMeta.icon}" style="--mdc-icon-size:min(70%, 220px);position:absolute;top:50%;left:53%;transform:translate(-50%, -50%);opacity:0.3;pointer-events:none;z-index:0;color:${colors ? colors.border : "var(--secondary-text-color)"};"></ha-icon>
           <div style="position:relative;z-index:1;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">${title}</div>
