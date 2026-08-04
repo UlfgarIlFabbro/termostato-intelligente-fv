@@ -942,7 +942,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
             is_initial_boot_event = old_state is None
             is_real_transition_to_off = old_state is not None and old_state.state != "off"
-            if not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
+            seconds_since_boot_off = (dt_util.utcnow() - getattr(self, "_added_at", dt_util.utcnow())).total_seconds()
+            is_boot_grace_period_off = seconds_since_boot_off < BOOT_GRACE_PERIOD_SECONDS
+            if is_boot_grace_period_off and is_real_transition_to_off and not is_programmatic:
+                _LOGGER.info(
+                    "%s: spegnimento off ignorato — entro il periodo di grazia post-riavvio (%.0fs), probabile instabilità dell'integrazione reale",
+                    self._attr_name, seconds_since_boot_off,
+                )
+            elif not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
                 # Notifica lo spegnimento manuale rilevato (ora
                 # selezionabile), indipendentemente dal fatto che il
                 # blocco riaccensione sia configurato — l'utente vuole
