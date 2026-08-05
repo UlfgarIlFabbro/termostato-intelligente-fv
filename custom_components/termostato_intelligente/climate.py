@@ -1808,6 +1808,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
           temp < target          → ventola bassa, setpoint = internal per 15 min → spegne
         """
         turn_on_offset = float(get_conf(self.entry, CONF_SIMPLE_TURN_ON_OFFSET, DEFAULT_SIMPLE_TURN_ON_OFFSET_INT))
+        # NOTA: turn_on_offset NON viene arrotondato esplicitamente come
+        # shutoff_margin — è INTENZIONALE. Dato che la sonda interna legge
+        # solo interi, la condizione "temp >= target + turn_on_offset" (con
+        # turn_on_offset decimale) scatta solo al primo intero che la
+        # supera per davvero — garantendo SEMPRE almeno 1°C di isteresi tra
+        # accensione e spegnimento. Se venisse arrotondato esplicitamente
+        # come il margine di spegnimento, con margini piccoli (es. 0.4 e
+        # 0.2, entrambi arrotondano a 0) le due soglie coinciderebbero,
+        # azzerando l'isteresi e rischiando cicli di accensione/spegnimento
+        # rapidi — verificato e scartato dopo un tentativo di "correzione"
+        # che introduceva esattamente questo rischio.
         shutoff_margin_raw = float(get_conf(self.entry, CONF_SIMPLE_SHUTOFF_MARGIN, DEFAULT_SIMPLE_SHUTOFF_MARGIN))
         shutoff_margin_int = self._round_setpoint(shutoff_margin_raw)  # la sonda interna legge solo interi: arrotondiamo con la stessa regola già usata per i setpoint (≤0.5 → 0, >0.5 → 1)
         now = dt_util.utcnow()
@@ -1879,14 +1890,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         internal_int = int(internal_temp)
 
         if temp >= target + 3:
-            new_setpoint = internal_int - 3
+            new_setpoint = internal_int - 4
             fan = "high"
         elif temp >= target + 2:
-            new_setpoint = internal_int - 2
+            new_setpoint = internal_int - 3
             fan = "medium"
         elif temp >= target + 1:
-            new_setpoint = internal_int - 1
-            fan = "low" if is_night else "medium"
+            new_setpoint = internal_int - 2
+            fan = "medium"
         else:
             # Sotto target+1: fascia unica fino al punto di spegnimento
             # (target - margine) — stessa spinta costante, senza il vecchio
@@ -2003,16 +2014,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         if temp >= target + 3.1:
-            new_setpoint = internal_temp - 3.0
+            new_setpoint = internal_temp - 4.0
             fan = "high"
         elif temp >= target + 1.7:
+            new_setpoint = internal_temp - 3.0
+            fan = "medium"
+        elif temp >= target + 0.4:
             new_setpoint = internal_temp - 2.0
             fan = "medium"
-        elif temp >= target + 0.7:
-            new_setpoint = internal_temp - 1.0
-            fan = "low" if is_night else "medium"
         else:
-            # Sotto target+0.7, fino al punto di spegnimento (target -
+            # Sotto target+0.4, fino al punto di spegnimento (target -
             # margine): fascia unica con spinta costante — non c'è più il
             # vecchio salto a "setpoint = interna" quando si raggiungeva
             # esattamente il target, che rallentava proprio nell'ultimo
