@@ -2159,6 +2159,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 continue  # sibling con FV disattivato — non si accenderà mai da FV, non gli cedo il turno
             if sibling._simple_is_in_limbo() or sibling._is_manual_off_block_active():
                 continue
+            if sibling._power_limit_off:
+                continue  # spenta per limite potenza — non aggirare quella protezione riaccendendola qui
             sib_temp = sibling._simple_read_temp()
             if sib_temp is None:
                 continue
@@ -2192,7 +2194,39 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                         continue  # il sibling non ha raggiunto la SUA soglia batteria — non è pronto
             sib_priority = sibling._effective_priority()
             if sib_priority < my_priority:
-                _LOGGER.debug("%s: [semplificato FV] cedo il turno a %s (priorità più alta)", self._attr_name, sibling._attr_name)
+                # Invece di limitarci a cedere il turno e aspettare (il che
+                # farebbe restare ENTRAMBE spente finché anche la sorella
+                # non completa il SUO timer di conferma personale, anche se
+                # le SUE condizioni sono già dimostrate stabili ADESSO),
+                # la accendiamo direttamente noi stessi in questo ciclo —
+                # simmetrico a quanto già facciamo per lo spegnimento.
+                # Ricontrolliamo lo stato reale subito prima di agire, per
+                # ridurre (non eliminare del tutto, l'asincronia lo rende
+                # intrinsecamente possibile) il rischio di una doppia
+                # accensione se il suo stesso ciclo la accende in parallelo.
+                sib_state_recheck = self.hass.states.get(sibling._climate_entity)
+                if sib_state_recheck is None or sib_state_recheck.state not in ("off", "unknown", "unavailable"):
+                    continue  # si è già accesa nel frattempo (dal suo ciclo, o da un'altra cessione) — non rifare nulla
+                _LOGGER.info(
+                    "%s: [semplificato FV] accendo %s al posto mio (priorità %s < %s, sue condizioni già soddisfatte)",
+                    self._attr_name, sibling._attr_name, sib_priority, my_priority,
+                )
+                sib_dry_enabled = bool(get_conf(sibling.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+                sibling._fv_auto_on = True
+                if sib_dry_enabled:
+                    await sibling._async_safe_climate_call("set_hvac_mode", {"entity_id": sibling._climate_entity, "hvac_mode": "dry"})
+                    sibling._schedule_dry_timer("accensione_fv_turn_on_simple_ceduta")
+                else:
+                    await sibling._async_safe_climate_call("turn_on", {"entity_id": sibling._climate_entity})
+                    sibling._cancel_dry_timer("accensione_fv_cool_no_dry_ceduta")
+                coord["last_fv_turn_on"] = dt_util.utcnow()
+                sibling._fv_turnon_confirmed_since = None
+                sibling._simple_night_auto_on = False
+                sib_soc_val = sibling._read_float(sibling._battery_sensor) or 0 if sibling._battery_sensor else 0
+                sib_fv_val = sibling._read_float(sibling._fv_sensor) or 0 if sibling._fv_sensor else 0
+                sib_consumo_val = sibling._read_float(sibling._consumption_sensor) or 0 if sibling._consumption_sensor else 0
+                await sibling._async_simple_notify_ac_on(sib_temp, sib_target, ac_type="fv", fv=sib_fv_val, consumo=sib_consumo_val, soc=sib_soc_val)
+                sibling.async_write_ha_state()
                 return
 
         # Accensione — sempre DRY prima (se abilitato)
@@ -2308,6 +2342,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 continue
             if sibling._simple_is_in_limbo() or sibling._is_manual_off_block_active():
                 continue
+            if sibling._power_limit_off:
+                continue  # spenta per limite potenza — non aggirare quella protezione riaccendendola qui
             sib_temp = sibling._simple_read_temp()
             if sib_temp is None:
                 continue
@@ -2332,7 +2368,23 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                         continue
             sib_priority = sibling._effective_priority()
             if sib_priority < my_priority:
-                _LOGGER.debug("%s: [inverno FV] cedo il turno a %s (priorità più alta)", self._attr_name, sibling._attr_name)
+                sib_state_recheck = self.hass.states.get(sibling._climate_entity)
+                if sib_state_recheck is None or sib_state_recheck.state not in ("off", "unknown", "unavailable"):
+                    continue  # si è già accesa nel frattempo — non rifare nulla
+                _LOGGER.info(
+                    "%s: [inverno FV] accendo %s al posto mio (priorità %s < %s, sue condizioni già soddisfatte)",
+                    self._attr_name, sibling._attr_name, sib_priority, my_priority,
+                )
+                sibling._fv_auto_on = True
+                await sibling._async_safe_climate_call("set_hvac_mode", {"entity_id": sibling._climate_entity, "hvac_mode": "heat"})
+                coord["last_fv_turn_on"] = dt_util.utcnow()
+                sibling._fv_turnon_confirmed_since = None
+                sibling._simple_night_auto_on = False
+                sib_soc_val = sibling._read_float(sibling._battery_sensor) or 0 if sibling._battery_sensor else 0
+                sib_fv_val_notify = sibling._read_float(sibling._fv_sensor) or 0 if sibling._fv_sensor else 0
+                sib_consumo_val_notify = sibling._read_float(sibling._consumption_sensor) or 0 if sibling._consumption_sensor else 0
+                await sibling._async_simple_notify_ac_on(sib_temp, sib_target, ac_type="fv_winter", fv=sib_fv_val_notify, consumo=sib_consumo_val_notify, soc=sib_soc_val)
+                sibling.async_write_ha_state()
                 return
 
         # Accensione — solo riscaldamento, niente equivalente del DRY
@@ -2370,12 +2422,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint})
 
     async def _async_handle_winter_shutoff_simple(self, temp: float, target: float) -> None:
-        """Spegnimento invernale — più semplice di quello estivo (niente
-        casi legati al tramonto, come concordato): spegne se acceso dal FV
-        e (temperatura ha raggiunto il target OPPURE il surplus non è più
-        sufficiente). Il calo di batteria non serve come controllo separato
-        — è già coperto dal controllo surplus, dato che la batteria smette
-        di caricarsi/si scarica solo quando il FV non basta più."""
+        """Spegnimento invernale — ora equivalente all'estate: buffer di 4
+        campioni consecutivi prima di spegnere per surplus insufficiente
+        (non più il primo ciclo), e coordinamento di priorità (spegne la
+        sorella con priorità più bassa se la SUA soglia è già raggiunta dal
+        surplus attuale). Il caso "target raggiunto" resta invariato, senza
+        bisogno di conferma né coordinamento — è un evento diverso."""
         if not self._fv_auto_on:
             return  # non è stato acceso da noi per FV — non tocchiamo nulla
         current_state = self.hass.states.get(self._climate_entity)
@@ -2396,12 +2448,73 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         consumo = self._read_float(self._consumption_sensor)
         if fv is None or consumo is None:
             return
-        margin = float(get_conf(self.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
-        if not (fv > consumo + margin):
-            _LOGGER.info("%s: [inverno FV] spegnimento — surplus insufficiente", self._attr_name)
-            await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
-            await self._async_turn_off_climate()
-            self._fv_auto_on = False
+
+        surplus = fv - consumo
+        threshold = float(get_conf(self.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
+        delay_min = FV_SHUTOFF_SAMPLES_FIXED
+
+        if surplus < threshold:
+            if self._fv_low_since is None:
+                self._fv_low_since = dt_util.utcnow()
+        else:
+            self._fv_low_since = None
+
+        self._fv_surplus_buffer.append(surplus)
+        if len(self._fv_surplus_buffer) > delay_min:
+            self._fv_surplus_buffer.pop(0)
+
+        should_shutoff = (
+            len(self._fv_surplus_buffer) >= delay_min
+            and all(s < threshold for s in self._fv_surplus_buffer)
+        )
+        if not should_shutoff:
+            return
+
+        # Stesso coordinamento di priorità già applicato all'estate: prima
+        # di spegnere ME STESSO, verifico se una sorella con priorità PIÙ
+        # BASSA ha la SUA soglia già raggiunta dal surplus attuale — se sì,
+        # spengo LEI al posto mio.
+        target_to_shutoff = self
+        target_temp = temp
+        target_target = target
+        my_priority = self._effective_priority()
+        best_candidate = None
+        best_priority = my_priority
+        for entry_data in self.hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            sibling = entry_data.get("climate")
+            if sibling is None or sibling is self:
+                continue
+            if not sibling._fv_auto_on:
+                continue
+            sib_real_state = self.hass.states.get(sibling._climate_entity)
+            if sib_real_state is None or sib_real_state.state in ("off", "unknown", "unavailable"):
+                continue
+            sib_threshold = float(get_conf(sibling.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
+            if sib_threshold > surplus:
+                continue
+            sib_priority = sibling._effective_priority()
+            if sib_priority > best_priority:
+                best_priority = sib_priority
+                best_candidate = sibling
+        if best_candidate is not None:
+            _LOGGER.debug(
+                "%s: [inverno FV] spengo %s al posto mio (priorità %s > %s, soglia sua già raggiunta dal surplus attuale %.0fW)",
+                self._attr_name, best_candidate._attr_name, best_priority, my_priority, surplus,
+            )
+            target_to_shutoff = best_candidate
+            sib_temp_val = target_to_shutoff._simple_read_temp()
+            target_temp = sib_temp_val if sib_temp_val is not None else temp
+            target_target = target_to_shutoff._winter_current_target()
+
+        _LOGGER.info("%s: [inverno FV] spegnimento — surplus insufficiente", target_to_shutoff._attr_name)
+        await target_to_shutoff._async_simple_notify_ac_off(target_temp, target_target, fv_shutoff=True)
+        await target_to_shutoff._async_turn_off_climate()
+        target_to_shutoff._fv_auto_on = False
+        target_to_shutoff._fv_surplus_buffer = []
+        target_to_shutoff._fv_low_since = None
+        target_to_shutoff.async_write_ha_state()
 
     # ------------------------------------------------------------------
     # Notifiche modo semplificato
@@ -2530,6 +2643,81 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if (now - self._fv_turnon_confirmed_since) < timedelta(minutes=turn_on_total_minutes):
                 return  # non ancora confermato abbastanza a lungo
 
+            # Stesso principio già applicato all'accensione principale:
+            # prima di accendere ME STESSO, verifico le sorelle con
+            # priorità PIÙ ALTA (numero più basso) le cui condizioni
+            # ISTANTANEE sono già soddisfatte — se sì, accendo LEI al
+            # posto mio, senza farla aspettare il suo timer personale.
+            my_priority = self._effective_priority()
+            for entry_data in self.hass.data.get(DOMAIN, {}).values():
+                if not isinstance(entry_data, dict):
+                    continue
+                sibling = entry_data.get("climate")
+                if sibling is None or sibling is self:
+                    continue
+                if sibling._get_config_mode() != CONFIG_MODE_SIMPLE_FV:
+                    continue
+                sib_real_state = self.hass.states.get(sibling._climate_entity)
+                if sib_real_state is None or sib_real_state.state not in ("off", "unknown", "unavailable"):
+                    continue
+                if not sibling._switch_state(SWITCH_KEY_MASTER, True):
+                    continue
+                if not sibling._switch_state(SWITCH_KEY_FV, True):
+                    continue
+                if sibling._simple_is_in_limbo() or sibling._is_manual_off_block_active():
+                    continue
+                if sibling._power_limit_off:
+                    continue
+                sib_temp = sibling._simple_read_temp()
+                if sib_temp is None:
+                    continue
+                sib_target = sibling._simple_current_target()
+                sib_use_internal = not bool(sibling._temp_sensor)
+                sib_offset = float(get_conf(sibling.entry, CONF_SIMPLE_TURN_ON_OFFSET,
+                    DEFAULT_SIMPLE_TURN_ON_OFFSET_INT if sib_use_internal else DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT))
+                if sib_temp < sib_target + sib_offset:
+                    continue
+                if sibling._fv_sensor and sibling._consumption_sensor:
+                    sib_fv = sibling._read_float(sibling._fv_sensor)
+                    sib_consumo = sibling._read_float(sibling._consumption_sensor)
+                    if sib_fv is None or sib_consumo is None:
+                        continue
+                    sib_margin = float(get_conf(sibling.entry, CONF_FV_MARGIN_W, DEFAULT_FV_MARGIN_W))
+                    if not (sib_fv > sib_consumo + sib_margin):
+                        continue
+                    if sibling._battery_sensor:
+                        sib_soc = sibling._read_float(sibling._battery_sensor)
+                        sib_soc_min = float(get_conf(sibling.entry, CONF_SOC_MIN, DEFAULT_SOC_MIN))
+                        if sib_soc is None or sib_soc < sib_soc_min:
+                            continue
+                sib_priority = sibling._effective_priority()
+                if sib_priority < my_priority:
+                    sib_state_recheck = self.hass.states.get(sibling._climate_entity)
+                    if sib_state_recheck is None or sib_state_recheck.state not in ("off", "unknown", "unavailable"):
+                        continue
+                    _LOGGER.info(
+                        "%s: [semplificato FV] accendo %s al posto mio (riaccensione fuori finestra, priorità %s < %s)",
+                        self._attr_name, sibling._attr_name, sib_priority, my_priority,
+                    )
+                    sib_dry_enabled = bool(get_conf(sibling.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
+                    sibling._fv_auto_on = True
+                    if sib_dry_enabled:
+                        await sibling._async_safe_climate_call("set_hvac_mode", {"entity_id": sibling._climate_entity, "hvac_mode": "dry"})
+                        sibling._schedule_dry_timer("riaccensione_fv_dopo_calo_ceduta")
+                    else:
+                        await sibling._async_safe_climate_call("turn_on", {"entity_id": sibling._climate_entity})
+                        sibling._cancel_dry_timer("riaccensione_fv_cool_no_dry_ceduta")
+                    sibling._fv_surplus_buffer = []
+                    sibling._fv_low_since = None
+                    sibling._manual_accension_since = None
+                    sibling._fv_turnon_confirmed_since = None
+                    sib_soc_val = sibling._read_float(sibling._battery_sensor) or 0 if sibling._battery_sensor else 0
+                    sib_fv_val = sibling._read_float(sibling._fv_sensor) or 0 if sibling._fv_sensor else 0
+                    sib_consumo_val = sibling._read_float(sibling._consumption_sensor) or 0 if sibling._consumption_sensor else 0
+                    await sibling._async_simple_notify_ac_on(sib_temp, sib_target, ac_type="fv", fv=sib_fv_val, consumo=sib_consumo_val, soc=sib_soc_val)
+                    sibling.async_write_ha_state()
+                    return
+
             dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
             self._fv_auto_on = True
             if dry_enabled:
@@ -2548,7 +2736,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             fv2 = self._read_float(self._fv_sensor) or 0
             consumo2 = self._read_float(self._consumption_sensor) or 0
             await self._async_simple_notify_ac_on(temp, target, ac_type="fv", fv=fv2, consumo=consumo2, soc=soc_val2)
-            return
             return
 
         if not is_on:
@@ -2627,6 +2814,48 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if not should_shutoff:
             return
 
+        # Prima di spegnere ME STESSO, verifico le sorelle con priorità PIÙ
+        # BASSA (numero più alto): se la SOGLIA CONFIGURATA di una di loro
+        # è già raggiunta/superata dal surplus ATTUALE (indipendentemente
+        # dal fatto che il SUO buffer di conferma sia già pieno), spengo
+        # LEI al posto mio — la meno prioritaria va sempre spenta per
+        # prima, indipendentemente dai tempi di conferma individuali.
+        target_to_shutoff = self
+        target_temp = temp
+        target_target = target
+        my_priority = self._effective_priority()
+        best_candidate = None
+        best_priority = my_priority
+        for entry_data in self.hass.data.get(DOMAIN, {}).values():
+            if not isinstance(entry_data, dict):
+                continue
+            sibling = entry_data.get("climate")
+            if sibling is None or sibling is self:
+                continue
+            if not sibling._fv_auto_on:
+                continue  # non è stata accesa dal FV, non è nella stessa "gara" di spegnimento
+            sib_real_state = self.hass.states.get(sibling._climate_entity)
+            if sib_real_state is None or sib_real_state.state in ("off", "unknown", "unavailable"):
+                continue  # già spenta, non è più un candidato
+            sib_threshold = float(get_conf(sibling.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
+            if sib_threshold > surplus:
+                continue  # la sua soglia configurata non è ancora raggiunta dal surplus attuale
+            sib_priority = sibling._effective_priority()
+            if sib_priority > best_priority:
+                best_priority = sib_priority
+                best_candidate = sibling
+        if best_candidate is not None:
+            _LOGGER.debug(
+                "%s: [semplificato FV] spengo %s al posto mio (priorità %s > %s, soglia sua %.0fW già raggiunta dal surplus attuale %.0fW)",
+                self._attr_name, best_candidate._attr_name, best_priority, my_priority,
+                float(get_conf(best_candidate.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD)), surplus,
+            )
+            target_to_shutoff = best_candidate
+            sib_temp = target_to_shutoff._simple_read_temp()
+            target_temp = sib_temp if sib_temp is not None else temp
+            is_winter_sib = target_to_shutoff._get_season_mode() == SEASON_WINTER
+            target_target = target_to_shutoff._winter_current_target() if is_winter_sib else target_to_shutoff._simple_current_target()
+
         # Coordinamento cascata
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
         stagger_min = float(get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN))
@@ -2634,15 +2863,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if last_off is not None and (now - last_off) < timedelta(minutes=stagger_min):
             return
 
-        _LOGGER.info("%s: [semplificato FV] spegnimento per FV (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
-        await self._async_turn_off_climate()
+        _LOGGER.info("%s: [semplificato FV] spegnimento per FV (fv=%.0fW, consumo=%.0fW)", target_to_shutoff._attr_name, fv, consumo)
+        await target_to_shutoff._async_turn_off_climate()
         coord["last_fv_shutoff"] = now
-        self._fv_surplus_buffer = []
-        self._fv_low_since = None
-        self._manual_accension_since = None
-        self._own_fv_shutoff_at = now  # per impedire una riaccensione troppo rapida della STESSA istanza
+        target_to_shutoff._fv_surplus_buffer = []
+        target_to_shutoff._fv_low_since = None
+        target_to_shutoff._manual_accension_since = None
+        target_to_shutoff._own_fv_shutoff_at = now  # per impedire una riaccensione troppo rapida della STESSA istanza
         # NON resettiamo _fv_auto_on così la riaccensione sa che era il FV ad averlo acceso
-        await self._async_simple_notify_ac_off(temp, target, fv_shutoff=True)
+        await target_to_shutoff._async_simple_notify_ac_off(target_temp, target_target, fv_shutoff=True)
+        target_to_shutoff.async_write_ha_state()
 
 
     async def _async_simple_notify_ac_on(
