@@ -242,11 +242,15 @@ from .const import (
     DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS,
     CONF_SIMPLE_TURN_ON_OFFSET,
     CONF_SIMPLE_SHUTOFF_MARGIN,
+    CONF_SIMPLE_ECO_DAY_ENABLED,
+    CONF_SIMPLE_ECO_NIGHT_ENABLED,
+    DEFAULT_SIMPLE_ECO_DAY_ENABLED,
+    DEFAULT_SIMPLE_ECO_NIGHT_ENABLED,
     CONF_MANUAL_SHUTOFF_TIMER_MIN,
     CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
     DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED,
     CONF_SEASON_MODE,
-    BOOT_GRACE_PERIOD_SECONDS,
+    INSTABILITY_GRACE_PERIOD_SECONDS,
     STATE_CHANGE_DEBOUNCE_SECONDS,
     CONF_SIMPLE_NOTIFY_TTS_MANUAL_ON,
     CONF_SIMPLE_NOTIFY_TEL_MANUAL_ON,
@@ -446,6 +450,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._timer_override_touched: bool = False  # True SOLO se l'utente ha davvero premuto il pulsante/le frecce almeno una volta — evita di confondere un vecchio default mai toccato con un override intenzionale al ripristino dopo riavvio
         self._state_change_debounce_cancel = None  # funzione per annullare la conferma pendente di una transizione spento<->acceso del clima reale
         self._state_change_debounce_original_old: State | None = None  # stato di riferimento da PRIMA dell'intero episodio di instabilità (non aggiornato ad ogni evento intermedio)
+        self._last_real_unavailable_at: datetime | None = None  # ultima volta che l'entità reale è stata vista unavailable/unknown — usato per estendere la protezione contro rilevamenti falsi oltre il semplice tempo fisso dal riavvio, adattandosi a QUALSIASI durata di instabilità (non solo al boot)
+        self._eco_mode_active: bool = False  # True se siamo nella fascia "Eco" (tra target-scarto e target+scarto) invece che spenti o in raffreddamento attivo
         self._presence_since: datetime | None = None
         self._last_sent_setpoint: float | None = None  # ultimo setpoint che ABBIAMO inviato noi (modo semplice) — evita notifiche/comandi ripetuti per instabilità di lettura dal climatizzatore reale
         self._last_sent_setpoint_at: datetime | None = None  # quando lo abbiamo inviato (diagnostica)
@@ -671,7 +677,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # accensione manuale fatta dall'utente — esattamente il bug
         # osservato: climi accesi dal FV prima del riavvio, rilevati come
         # "accesi manualmente" subito dopo.
-        self._added_at = dt_util.utcnow()
+        # Trattiamo il momento in cui l'entità viene aggiunta (avvio o
+        # reload) come un istante di "instabilità presunta" — usa LO STESSO
+        # meccanismo della verifica unavailable/unknown, invece di un
+        # secondo sistema a tempo fisso separato: quasi ogni integrazione
+        # reale passa per uno stato instabile durante la propria
+        # riconnessione, quindi questo singolo meccanismo copre già il
+        # caso del riavvio senza bisogno di un timer dedicato aggiuntivo.
+        self._last_real_unavailable_at = dt_util.utcnow()
 
         last_state = await self.async_get_last_state()
 
@@ -850,6 +863,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             else:
                 self._presence_since = None
         elif entity_id == self._climate_entity:
+            if new_state is not None and new_state.state in ("unavailable", "unknown"):
+                # Registriamo SEMPRE quando l'entità reale è vista instabile,
+                # indipendentemente da cos'altro sta succedendo — questo
+                # timestamp estende la protezione contro falsi rilevamenti
+                # ben oltre il semplice tempo fisso dal riavvio, adattandosi
+                # a QUALSIASI durata di instabilità (anche ore dopo il boot,
+                # se l'integrazione cloud ha un'interruzione temporanea).
+                self._last_real_unavailable_at = dt_util.utcnow()
             is_off_transition = new_state and new_state.state == "off" and (old_state is None or old_state.state != "off")
             is_on_transition = (
                 new_state and new_state.state not in ("off", "unknown", "unavailable")
@@ -942,12 +963,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
             is_initial_boot_event = old_state is None
             is_real_transition_to_off = old_state is not None and old_state.state != "off"
-            seconds_since_boot_off = (dt_util.utcnow() - getattr(self, "_added_at", dt_util.utcnow())).total_seconds()
-            is_boot_grace_period_off = seconds_since_boot_off < BOOT_GRACE_PERIOD_SECONDS
-            if is_boot_grace_period_off and is_real_transition_to_off and not is_programmatic:
+            is_recently_unstable_off = (
+                self._last_real_unavailable_at is not None
+                and (dt_util.utcnow() - self._last_real_unavailable_at).total_seconds() < INSTABILITY_GRACE_PERIOD_SECONDS
+            )
+            if is_recently_unstable_off and is_real_transition_to_off and not is_programmatic:
                 _LOGGER.info(
-                    "%s: spegnimento off ignorato — entro il periodo di grazia post-riavvio (%.0fs), probabile instabilità dell'integrazione reale",
-                    self._attr_name, seconds_since_boot_off,
+                    "%s: spegnimento off ignorato — entità vista instabile di recente, probabile riconnessione dell'integrazione reale",
+                    self._attr_name,
                 )
             elif not is_programmatic and not is_initial_boot_event and is_real_transition_to_off:
                 # Notifica lo spegnimento manuale rilevato (ora
@@ -994,12 +1017,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             # integrazione (che impostano i rispettivi flag PRIMA di
             # chiamare il servizio, quindi sono già True quando arriva
             # questo evento se sono stati loro ad accendere).
-            seconds_since_boot = (dt_util.utcnow() - getattr(self, "_added_at", dt_util.utcnow())).total_seconds()
-            is_boot_grace_period = seconds_since_boot < BOOT_GRACE_PERIOD_SECONDS
-            if old_state is not None and old_state.state == "off" and is_boot_grace_period:
+            is_recently_unstable = (
+                self._last_real_unavailable_at is not None
+                and (dt_util.utcnow() - self._last_real_unavailable_at).total_seconds() < INSTABILITY_GRACE_PERIOD_SECONDS
+            )
+            if old_state is not None and old_state.state == "off" and is_recently_unstable:
                 _LOGGER.info(
-                    "%s: transizione off->acceso ignorata — entro il periodo di grazia post-riavvio (%.0fs), probabile riconnessione dell'integrazione reale",
-                    self._attr_name, seconds_since_boot,
+                    "%s: transizione off->acceso ignorata — entità vista instabile di recente, probabile riconnessione dell'integrazione reale",
+                    self._attr_name,
                 )
             elif old_state is not None and old_state.state == "off" and not self._fv_auto_on and not self._simple_night_auto_on:
                 self._manual_accension_since = dt_util.utcnow()
@@ -1825,12 +1850,42 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         current_mode = real_state.state if real_state else "off"
         is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
+        # --- Gestione modalità Eco attiva (invece di spento) ---
+        if self._eco_mode_active:
+            if not is_on:
+                self._eco_mode_active = False
+                return
+            if temp >= target + shutoff_margin_int:
+                _LOGGER.info("%s: [semplificato] uscita da Eco, temperatura risalita (int, temp=%.0f >= target+margine=%.0f)", self._attr_name, temp, target + shutoff_margin_int)
+                await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"})
+                self._eco_mode_active = False
+                self._last_sent_setpoint = None
+                self._last_sent_fan = None
+                return
+            if internal_temp is not None:
+                eco_setpoint = self._round_setpoint(internal_temp)
+                current_sp = real_state.attributes.get("temperature") if real_state else None
+                if current_sp != eco_setpoint:
+                    await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": eco_setpoint})
+            return
+
         # --- Spegnimento per target raggiunto ---
         if is_on:
             if temp <= target - shutoff_margin_int:
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_INT_SHUTOFF_MIN):
+                    eco_enabled = bool(get_conf(
+                        self.entry,
+                        CONF_SIMPLE_ECO_NIGHT_ENABLED if is_night else CONF_SIMPLE_ECO_DAY_ENABLED,
+                        DEFAULT_SIMPLE_ECO_NIGHT_ENABLED if is_night else DEFAULT_SIMPLE_ECO_DAY_ENABLED,
+                    ))
+                    if eco_enabled:
+                        _LOGGER.info("%s: [semplificato] ingresso in Eco invece di spegnere (int, temp=%.0f <= target-margine=%.0f)", self._attr_name, temp, target - shutoff_margin_int)
+                        await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "eco"})
+                        self._eco_mode_active = True
+                        self._simple_shutoff_since = None
+                        return
                     _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f <= target-margine=%.0f)", self._attr_name, temp, target - shutoff_margin_int)
                     await self._async_turn_off_climate()
                     self._simple_shutoff_since = None
@@ -1934,12 +1989,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         fan_needs_update = reference_fan != fan
 
         if setpoint_needs_update:
-            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint})
-            self._last_sent_setpoint = new_setpoint
-            self._last_sent_setpoint_at = dt_util.utcnow()
+            if await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint}):
+                self._last_sent_setpoint = new_setpoint
+                self._last_sent_setpoint_at = dt_util.utcnow()
+            # Se il comando fallisce, NON aggiorniamo la memoria — così il
+            # prossimo ciclo riprova automaticamente, invece di credere
+            # (erroneamente) che il valore sia già stato applicato al
+            # dispositivo reale e smettere di correggerlo per sempre.
         if fan_needs_update:
-            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan})
-            self._last_sent_fan = fan
+            if await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}):
+                self._last_sent_fan = fan
         if setpoint_needs_update or fan_needs_update:
             await self._async_simple_notify_temp_change(temp, target, fan)
 
@@ -1966,12 +2025,48 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         current_mode = real_state.state if real_state else "off"
         is_on = (self.hvac_mode == HVACMode.COOL or current_mode == "dry") and not self._is_unmanaged_real_mode()
 
+        # --- Gestione modalità Eco attiva (invece di spento) ---
+        if self._eco_mode_active:
+            if not is_on:
+                self._eco_mode_active = False  # spento da altrove (manuale, timer, ecc.) — usciamo da Eco
+                return
+            if temp >= target + shutoff_margin:
+                # Risalito abbastanza — usciamo da Eco e ripartiamo come una
+                # vera accensione, ricalcolando la fascia corretta (non
+                # lasciamo residui della modalità Eco).
+                _LOGGER.info("%s: [semplificato] uscita da Eco, temperatura risalita (temp=%.1f >= target+margine=%.1f)", self._attr_name, temp, target + shutoff_margin)
+                await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"})
+                self._eco_mode_active = False
+                self._last_sent_setpoint = None  # forza il ricalcolo della fascia al prossimo ciclo, senza cache residua
+                self._last_sent_fan = None
+                return
+            # Restiamo in Eco — seguiamo la sonda interna del clima stesso,
+            # senza nessuna spinta (né aggressiva né passiva), ricalcolato
+            # ad ogni ciclo.
+            if internal_temp is not None:
+                eco_setpoint = round(internal_temp, 1)
+                current_sp = real_state.attributes.get("temperature") if real_state else None
+                if current_sp != eco_setpoint:
+                    await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": eco_setpoint})
+            return
+
         # --- Spegnimento per target raggiunto ---
         if is_on:
             if temp <= target - shutoff_margin:
                 if self._simple_shutoff_since is None:
                     self._simple_shutoff_since = now
                 elif (now - self._simple_shutoff_since) >= timedelta(minutes=SIMPLE_EXT_SHUTOFF_MIN):
+                    eco_enabled = bool(get_conf(
+                        self.entry,
+                        CONF_SIMPLE_ECO_NIGHT_ENABLED if is_night else CONF_SIMPLE_ECO_DAY_ENABLED,
+                        DEFAULT_SIMPLE_ECO_NIGHT_ENABLED if is_night else DEFAULT_SIMPLE_ECO_DAY_ENABLED,
+                    ))
+                    if eco_enabled:
+                        _LOGGER.info("%s: [semplificato] ingresso in Eco invece di spegnere (temp=%.1f <= target-margine=%.1f)", self._attr_name, temp, target - shutoff_margin)
+                        await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "eco"})
+                        self._eco_mode_active = True
+                        self._simple_shutoff_since = None
+                        return
                     _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f <= target-margine=%.1f)", self._attr_name, temp, target - shutoff_margin)
                     await self._async_turn_off_climate()
                     self._simple_shutoff_since = None
@@ -2050,12 +2145,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         fan_needs_update = reference_fan != fan
 
         if setpoint_needs_update:
-            await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint_r})
-            self._last_sent_setpoint = new_setpoint_r
-            self._last_sent_setpoint_at = dt_util.utcnow()
+            if await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint_r}):
+                self._last_sent_setpoint = new_setpoint_r
+                self._last_sent_setpoint_at = dt_util.utcnow()
         if fan_needs_update:
-            await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan})
-            self._last_sent_fan = fan
+            if await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}):
+                self._last_sent_fan = fan
         if setpoint_needs_update or fan_needs_update:
             await self._async_simple_notify_temp_change(temp, target, fan)
 
@@ -2402,9 +2497,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self, temp: float, target: float, use_internal: bool
     ) -> None:
         """Regolazione termica invernale per un clima già acceso in HEAT
-        (es. durante l'emergenza riscaldamento). Setpoint graduale semplice
-        (specchiato dell'estate: +1° invece di -1°), spegnimento quando il
-        target è raggiunto con margine."""
+        (es. durante l'emergenza riscaldamento). Fasce ventola/setpoint
+        speculari all'estate (spinta verso l'ALTO invece che verso il
+        basso), spegnimento quando il target è raggiunto con margine."""
         real_state = self.hass.states.get(self._climate_entity)
         if real_state is None or real_state.state != "heat":
             return
@@ -2418,8 +2513,53 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         internal_temp = self._read_float(self._climate_entity, attr="current_temperature")
         if internal_temp is None:
             internal_temp = temp
-        new_setpoint = self._round_setpoint(internal_temp + 1) if use_internal else round(internal_temp + 1, 1)
-        await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint})
+
+        # Fasce speculari all'estate: più siamo LONTANI (sotto) dal target,
+        # più la spinta è aggressiva e la ventola alta.
+        if use_internal:
+            internal_int = int(internal_temp)
+            if temp <= target - 3:
+                new_setpoint = internal_int + 4
+                fan = "high"
+            elif temp <= target - 2:
+                new_setpoint = internal_int + 3
+                fan = "medium"
+            elif temp <= target - 1:
+                new_setpoint = internal_int + 2
+                fan = "medium"
+            else:
+                new_setpoint = internal_int + 1
+                fan = "low"
+            new_setpoint = self._round_setpoint(new_setpoint)
+        else:
+            if temp <= target - 3.1:
+                new_setpoint = internal_temp + 4.0
+                fan = "high"
+            elif temp <= target - 1.7:
+                new_setpoint = internal_temp + 3.0
+                fan = "medium"
+            elif temp <= target - 0.4:
+                new_setpoint = internal_temp + 2.0
+                fan = "medium"
+            else:
+                new_setpoint = internal_temp + 1.0
+                fan = "low"
+            new_setpoint = round(new_setpoint, 1)
+
+        current_sp = real_state.attributes.get("temperature")
+        current_fan = real_state.attributes.get("fan_mode")
+        reference_sp = self._last_sent_setpoint if self._last_sent_setpoint is not None else current_sp
+        setpoint_needs_update = reference_sp != new_setpoint
+        reference_fan = self._last_sent_fan if self._last_sent_fan is not None else current_fan
+        fan_needs_update = reference_fan != fan
+
+        if setpoint_needs_update:
+            if await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": new_setpoint}):
+                self._last_sent_setpoint = new_setpoint
+                self._last_sent_setpoint_at = dt_util.utcnow()
+        if fan_needs_update:
+            if await self._async_safe_climate_call("set_fan_mode", {"entity_id": self._climate_entity, "fan_mode": fan}):
+                self._last_sent_fan = fan
 
     async def _async_handle_winter_shutoff_simple(self, temp: float, target: float) -> None:
         """Spegnimento invernale — ora equivalente all'estate: buffer di 4

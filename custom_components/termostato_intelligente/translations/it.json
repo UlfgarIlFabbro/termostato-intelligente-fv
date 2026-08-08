@@ -284,7 +284,9 @@
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)",
           "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
           "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?",
-          "season_mode": "Modalità stagionale"
+          "season_mode": "Modalità stagionale",
+          "simple_eco_day_enabled": "Modalità Eco invece di spegnere (giorno)",
+          "simple_eco_night_enabled": "Modalità Eco invece di spegnere (notte)"
         },
         "data_description": {
           "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
@@ -300,7 +302,9 @@
           "simple_dry_max_min": "Quanto tempo al massimo il climatizzatore rimane in deumidificazione prima di passare al raffreddamento. Se durante questo tempo la stanza si raffredda abbastanza, si spegne senza passare al raffreddamento. Se invece la temperatura rimane alta o sale, dopo questo tempo passa automaticamente a raffreddare. Esempio: 30 minuti → dà al deumidificatore mezz'ora per abbassare l'umidità, poi se non basta raffredda. Valori più bassi (10-15 min) = meno deumidificazione, passa prima a raffreddare. Valori più alti (45-60 min) = più deumidificazione, utile nelle mattine con molta afa.",
           "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
           "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato.",
-          "season_mode": "Estate: gestisce solo il raffrescamento (comportamento di sempre). Inverno: gestisce solo il riscaldamento. Auto: gestisce entrambe, passando dall'una all'altra in base alla temperatura, con un tempo minimo tra un cambio e l'altro per evitare cicli ravvicinati in mezza stagione. Manuale: nessuna automazione — resta attivo solo il timer di spegnimento e le protezioni di sicurezza (es. finestra aperta) — il master switch viene disattivato automaticamente. Off: tutto spento, incluso il timer — zero interferenze, gestione completamente manuale col telecomando originale."
+          "season_mode": "Estate: gestisce solo il raffrescamento (comportamento di sempre). Inverno: gestisce solo il riscaldamento. Auto: gestisce entrambe, passando dall'una all'altra in base alla temperatura, con un tempo minimo tra un cambio e l'altro per evitare cicli ravvicinati in mezza stagione. Manuale: nessuna automazione — resta attivo solo il timer di spegnimento e le protezioni di sicurezza (es. finestra aperta) — il master switch viene disattivato automaticamente. Off: tutto spento, incluso il timer — zero interferenze, gestione completamente manuale col telecomando originale.",
+          "simple_eco_day_enabled": "Invece di spegnere il climatizzatore quando la temperatura scende sotto il target meno il margine, lo mette in modalità Eco e segue passivamente la lettura della sua sonda interna, senza spingere ulteriormente. Resta in Eco finché la temperatura della stanza non risale sopra il target più il margine, poi riparte normalmente ricalcolando la fascia corretta. Si applica solo di giorno — vedi il campo separato per la notte. Richiede che il climatizzatore supporti un preset \"eco\" (verificabile tra gli attributi dell'entità in Home Assistant).",
+          "simple_eco_night_enabled": "Stesso comportamento del campo \"Modalità Eco invece di spegnere (giorno)\", ma applicato durante la fascia notturna."
         }
       },
       "energia_simple": {
@@ -797,7 +801,9 @@
           "simple_dry_max_min": "Tempo massimo in deumidificazione prima di passare al raffreddamento (min)",
           "manual_shutoff_timer_min": "Timer spegnimento dopo accensione manuale (minuti)",
           "manual_shutoff_timer_enabled": "Attivare lo spegnimento automatico se acceso manualmente?",
-          "season_mode": "Modalità stagionale"
+          "season_mode": "Modalità stagionale",
+          "simple_eco_day_enabled": "Modalità Eco invece di spegnere (giorno)",
+          "simple_eco_night_enabled": "Modalità Eco invece di spegnere (notte)"
         },
         "data_description": {
           "simple_target_day": "La temperatura che vuoi mantenere nella stanza durante il giorno. Esempio: 25°C → con sonda esterna il clima parte sopra 26.5°C, con sonda interna sopra 27°C.",
@@ -813,7 +819,9 @@
           "simple_dry_max_min": "Quanto tempo al massimo il climatizzatore rimane in deumidificazione prima di passare al raffreddamento. Se durante questo tempo la stanza si raffredda abbastanza, si spegne senza passare al raffreddamento. Se invece la temperatura rimane alta o sale, dopo questo tempo passa automaticamente a raffreddare. Esempio: 30 minuti → dà al deumidificatore mezz'ora per abbassare l'umidità, poi se non basta raffredda. Valori più bassi (10-15 min) = meno deumidificazione, passa prima a raffreddare. Valori più alti (45-60 min) = più deumidificazione, utile nelle mattine con molta afa.",
           "manual_shutoff_timer_min": "Se attivato dalla card, dopo un'accensione manuale il climatizzatore si spegne automaticamente dopo questi minuti, indipendentemente dal master switch — utile per un uso completamente manuale (es. uno scaldotto). Imposta 0 per non offrire mai questa funzione nella card.",
           "manual_shutoff_timer_enabled": "Se attivo, il timer di spegnimento (impostato qui sotto) parte automaticamente ad ogni accensione manuale, senza bisogno di attivarlo ogni volta dalla card — puoi comunque attivarlo/disattivarlo in qualsiasi momento dalla card. Vale sempre, anche se il master switch dell'automazione è disattivato.",
-          "season_mode": "Estate: gestisce solo il raffrescamento (comportamento di sempre). Inverno: gestisce solo il riscaldamento. Auto: gestisce entrambe, passando dall'una all'altra in base alla temperatura, con un tempo minimo tra un cambio e l'altro per evitare cicli ravvicinati in mezza stagione. Manuale: nessuna automazione — resta attivo solo il timer di spegnimento e le protezioni di sicurezza (es. finestra aperta) — il master switch viene disattivato automaticamente. Off: tutto spento, incluso il timer — zero interferenze, gestione completamente manuale col telecomando originale."
+          "season_mode": "Estate: gestisce solo il raffrescamento (comportamento di sempre). Inverno: gestisce solo il riscaldamento. Auto: gestisce entrambe, passando dall'una all'altra in base alla temperatura, con un tempo minimo tra un cambio e l'altro per evitare cicli ravvicinati in mezza stagione. Manuale: nessuna automazione — resta attivo solo il timer di spegnimento e le protezioni di sicurezza (es. finestra aperta) — il master switch viene disattivato automaticamente. Off: tutto spento, incluso il timer — zero interferenze, gestione completamente manuale col telecomando originale.",
+          "simple_eco_day_enabled": "Invece di spegnere il climatizzatore quando la temperatura scende sotto il target meno il margine, lo mette in modalità Eco e segue passivamente la lettura della sua sonda interna, senza spingere ulteriormente. Resta in Eco finché la temperatura della stanza non risale sopra il target più il margine, poi riparte normalmente ricalcolando la fascia corretta. Si applica solo di giorno — vedi il campo separato per la notte. Richiede che il climatizzatore supporti un preset \"eco\" (verificabile tra gli attributi dell'entità in Home Assistant).",
+          "simple_eco_night_enabled": "Stesso comportamento del campo \"Modalità Eco invece di spegnere (giorno)\", ma applicato durante la fascia notturna."
         }
       },
       "energia_simple": {

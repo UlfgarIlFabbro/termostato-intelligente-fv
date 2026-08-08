@@ -284,7 +284,9 @@
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)",
           "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
           "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?",
-          "season_mode": "Seasonal mode"
+          "season_mode": "Seasonal mode",
+          "simple_eco_day_enabled": "Eco mode instead of shutoff (day)",
+          "simple_eco_night_enabled": "Eco mode instead of shutoff (night)"
         },
         "data_description": {
           "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
@@ -300,7 +302,9 @@
           "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings.",
           "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
           "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled.",
-          "season_mode": "Summer: cooling only (existing behavior). Winter: heating only. Auto: manages both, switching based on temperature, with a minimum time between switches to avoid rapid cycling in mid-season. Manual: no automation — only the shutoff timer and safety protections (e.g. open window) stay active — the master switch is automatically disabled. Off: everything off, including the timer — zero interference, fully manual control via the original remote."
+          "season_mode": "Summer: cooling only (existing behavior). Winter: heating only. Auto: manages both, switching based on temperature, with a minimum time between switches to avoid rapid cycling in mid-season. Manual: no automation — only the shutoff timer and safety protections (e.g. open window) stay active — the master switch is automatically disabled. Off: everything off, including the timer — zero interference, fully manual control via the original remote.",
+          "simple_eco_day_enabled": "Instead of turning off the air conditioner when the temperature drops below target minus the margin, switches it to Eco mode and passively follows its own internal sensor reading, without pushing further. Stays in Eco until the room temperature rises back above target plus the margin, then resumes normally recalculating the correct band. Applies only during the day — see the separate field for night. Requires the air conditioner to support an \"eco\" preset (check the entity's attributes in Home Assistant).",
+          "simple_eco_night_enabled": "Same behavior as \"Eco mode instead of shutoff (day)\", but applied during the night period."
         }
       },
       "energia_simple": {
@@ -797,7 +801,9 @@
           "simple_dry_max_min": "Maximum time in dehumidification before switching to cooling (min)",
           "manual_shutoff_timer_min": "Shutoff timer after manual accension (minutes)",
           "manual_shutoff_timer_enabled": "Enable automatic shutoff if turned on manually?",
-          "season_mode": "Seasonal mode"
+          "season_mode": "Seasonal mode",
+          "simple_eco_day_enabled": "Eco mode instead of shutoff (day)",
+          "simple_eco_night_enabled": "Eco mode instead of shutoff (night)"
         },
         "data_description": {
           "simple_target_day": "The temperature you want to maintain during the day. Example: 25°C → with external sensor AC starts above 26.5°C, with internal sensor above 27°C.",
@@ -813,7 +819,9 @@
           "simple_dry_max_min": "How long the AC stays in dehumidification mode before switching to cooling. If during this time the room cools down enough, it turns off without switching to cooling. If the temperature stays high or rises, after this time it automatically switches to cooling. Example: 30 minutes → gives the dehumidifier half an hour to lower humidity, then cools if needed. Lower values (10-15 min) = less dehumidification. Higher values (45-60 min) = more dehumidification, useful in very humid mornings.",
           "manual_shutoff_timer_min": "If enabled from the card, after a manual accension the AC turns off automatically after this many minutes, regardless of the master switch — useful for fully manual use (e.g. a portable heater). Set to 0 to never offer this feature in the card.",
           "manual_shutoff_timer_enabled": "If enabled, the shutoff timer (set below) starts automatically on every manual accension, without needing to activate it each time from the card — you can still enable/disable it anytime from the card. Always applies, even if the automation master switch is disabled.",
-          "season_mode": "Summer: cooling only (existing behavior). Winter: heating only. Auto: manages both, switching based on temperature, with a minimum time between switches to avoid rapid cycling in mid-season. Manual: no automation — only the shutoff timer and safety protections (e.g. open window) stay active — the master switch is automatically disabled. Off: everything off, including the timer — zero interference, fully manual control via the original remote."
+          "season_mode": "Summer: cooling only (existing behavior). Winter: heating only. Auto: manages both, switching based on temperature, with a minimum time between switches to avoid rapid cycling in mid-season. Manual: no automation — only the shutoff timer and safety protections (e.g. open window) stay active — the master switch is automatically disabled. Off: everything off, including the timer — zero interference, fully manual control via the original remote.",
+          "simple_eco_day_enabled": "Instead of turning off the air conditioner when the temperature drops below target minus the margin, switches it to Eco mode and passively follows its own internal sensor reading, without pushing further. Stays in Eco until the room temperature rises back above target plus the margin, then resumes normally recalculating the correct band. Applies only during the day — see the separate field for night. Requires the air conditioner to support an \"eco\" preset (check the entity's attributes in Home Assistant).",
+          "simple_eco_night_enabled": "Same behavior as \"Eco mode instead of shutoff (day)\", but applied during the night period."
         }
       },
       "energia_simple": {

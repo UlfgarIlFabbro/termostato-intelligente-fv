@@ -172,7 +172,7 @@ DEFAULT_EMERGENCY_WINTER_MSG_OFF = "Fine emergenza freddo, il riscaldamento {{ n
 
 # Minuti prima della notte per spegnere e disattivare emergenza
 EMERGENCY_PRE_NIGHT_MIN = 5
-BOOT_GRACE_PERIOD_SECONDS = 600  # periodo dopo il riavvio in cui non rileviamo accensioni/spegnimenti manuali (alcune integrazioni cloud, es. ConnectLife/Hisense, possono restare instabili per diversi minuti mentre si riconnettono)
+INSTABILITY_GRACE_PERIOD_SECONDS = 1200  # periodo dopo l'ULTIMA volta che l'entità reale è stata vista unavailable/unknown (incluso il momento in cui l'entità viene aggiunta a Home Assistant, trattato come istante di instabilità presunta) in cui non rileviamo accensioni/spegnimenti manuali — copre sia il riavvio sia qualsiasi interruzione successiva, un solo meccanismo invece di un timer fisso separato
 STATE_CHANGE_DEBOUNCE_SECONDS = 15  # conferma temporale prima di considerare vera una transizione spento<->acceso del clima reale — protegge da glitch di integrazioni cloud (es. ConnectLife/Hisense)
 CONFIG_WRITE_DEBOUNCE_SECONDS = 1.5  # attesa dopo l'ultima regolazione dalla card (priorità/target) prima di scrivere in configurazione — click ripetuti ravvicinati producono un solo ricaricamento, non uno per click
 
@@ -406,7 +406,7 @@ SIMPLE_EXT_SLOW_OFFSET = 0.3       # rallenta quando stanza ≤ target + 0.3
 SIMPLE_EXT_SHUTOFF_OFFSET = -0.3   # spegne se sotto target - 0.3 per 15 min
 SIMPLE_EXT_SETPOINT_HOT = 2.0      # sonda interna - 2 in caldo forte/estremo
 SIMPLE_EXT_SETPOINT_MILD = 1.0     # sonda interna - 1 in caldo lieve
-SIMPLE_EXT_SHUTOFF_MIN = 15        # minuti sotto soglia prima di spegnere
+SIMPLE_EXT_SHUTOFF_MIN = 5        # minuti sotto soglia prima di spegnere
 
 # Con sonda interna (intera)
 # La soglia di accensione è configurabile (CONF_SIMPLE_TURN_ON_OFFSET, default 1.0)
@@ -416,7 +416,7 @@ SIMPLE_INT_AT_TARGET = 0           # rallenta quando stanza ≤ target
 SIMPLE_INT_SHUTOFF_OFFSET = -1     # spegne se sotto target - 1 per 15 min
 SIMPLE_INT_SETPOINT_HOT = 2        # sonda interna - 2 in caldo forte/estremo
 SIMPLE_INT_SETPOINT_MILD = 1       # sonda interna - 1 in caldo lieve
-SIMPLE_INT_SHUTOFF_MIN = 15        # minuti sotto soglia prima di spegnere
+SIMPLE_INT_SHUTOFF_MIN = 5        # minuti sotto soglia prima di spegnere
 
 # --- Modo semplificato — deumidificatore ---
 CONF_SIMPLE_NO_AUTO_ON_NIGHT = "simple_no_auto_on_night"  # blocca accensione automatica di notte
@@ -424,6 +424,8 @@ CONF_SIMPLE_NO_REON_MANUAL_OFF = "simple_no_reon_manual_off"  # non riaccendere 
 CONF_SIMPLE_NO_REON_MANUAL_OFF_HOURS = "simple_no_reon_manual_off_hours"  # ore di blocco riaccensione
 CONF_SIMPLE_TURN_ON_OFFSET = "simple_turn_on_offset"  # soglia accensione configurabile
 CONF_SIMPLE_SHUTOFF_MARGIN = "simple_shutoff_margin"  # margine sotto il target prima di spegnere
+CONF_SIMPLE_ECO_DAY_ENABLED = "simple_eco_day_enabled"  # invece di spegnere di giorno al raggiungimento del target-margine, entra in modalità Eco seguendo la sonda interna fino a target+margine
+CONF_SIMPLE_ECO_NIGHT_ENABLED = "simple_eco_night_enabled"  # stesso, ma per la notte
 CONF_MANUAL_SHUTOFF_TIMER_MIN = "manual_shutoff_timer_min"  # minuti dopo cui spegnere automaticamente un'accensione manuale, se il timer è attivo dalla card (0 = funzione mai configurata)
 CONF_MANUAL_SHUTOFF_TIMER_ENABLED = "manual_shutoff_timer_enabled"  # se True, il timer parte da solo ad ogni accensione manuale — vale sempre, anche a master switch disattivato
 CONF_SIMPLE_EXTERNAL_SENSOR_STALE_MIN = "simple_external_sensor_stale_min"  # dopo quanti minuti senza aggiornamenti considerare bloccata la sonda esterna
@@ -436,6 +438,8 @@ DEFAULT_SIMPLE_NO_REON_MANUAL_OFF_HOURS = 2
 DEFAULT_SIMPLE_TURN_ON_OFFSET_EXT = 0.8  # sonda esterna: accende da target + 0.8°C
 DEFAULT_SIMPLE_TURN_ON_OFFSET_INT = 1.0  # sonda interna: accende da target + 1°C
 DEFAULT_SIMPLE_SHUTOFF_MARGIN = 0.2  # °C sotto il target prima di spegnere (arrotondato a 0/1 per la sonda interna)
+DEFAULT_SIMPLE_ECO_DAY_ENABLED = False
+DEFAULT_SIMPLE_ECO_NIGHT_ENABLED = False
 DEFAULT_MANUAL_SHUTOFF_TIMER_MIN = 0  # 0 = timer non configurato/disattivato di default
 DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED = True  # se configuri dei minuti, di default vuoi che il timer parta da solo
 DEFAULT_SIMPLE_DRY_ENABLED = False
