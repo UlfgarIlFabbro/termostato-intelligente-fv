@@ -1857,11 +1857,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 return
             if temp >= target + shutoff_margin_int:
                 _LOGGER.info("%s: [semplificato] uscita da Eco, temperatura risalita (int, temp=%.0f >= target+margine=%.0f)", self._attr_name, temp, target + shutoff_margin_int)
-                await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"})
-                self._eco_mode_active = False
-                self._last_sent_setpoint = None
-                self._last_sent_fan = None
-                return
+                if await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"}):
+                    self._eco_mode_active = False
+                    self._last_sent_setpoint = None
+                    self._last_sent_fan = None
+                    return
             if internal_temp is not None:
                 eco_setpoint = self._round_setpoint(internal_temp)
                 current_sp = real_state.attributes.get("temperature") if real_state else None
@@ -1882,10 +1882,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     ))
                     if eco_enabled:
                         _LOGGER.info("%s: [semplificato] ingresso in Eco invece di spegnere (int, temp=%.0f <= target-margine=%.0f)", self._attr_name, temp, target - shutoff_margin_int)
-                        await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "eco"})
-                        self._eco_mode_active = True
-                        self._simple_shutoff_since = None
-                        return
+                        if await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "eco"}):
+                            self._eco_mode_active = True
+                            self._simple_shutoff_since = None
+                            return
                     _LOGGER.info("%s: [semplificato] spegnimento target (int, temp=%.0f <= target-margine=%.0f)", self._attr_name, temp, target - shutoff_margin_int)
                     await self._async_turn_off_climate()
                     self._simple_shutoff_since = None
@@ -2035,11 +2035,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 # vera accensione, ricalcolando la fascia corretta (non
                 # lasciamo residui della modalità Eco).
                 _LOGGER.info("%s: [semplificato] uscita da Eco, temperatura risalita (temp=%.1f >= target+margine=%.1f)", self._attr_name, temp, target + shutoff_margin)
-                await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"})
-                self._eco_mode_active = False
-                self._last_sent_setpoint = None  # forza il ricalcolo della fascia al prossimo ciclo, senza cache residua
-                self._last_sent_fan = None
-                return
+                if await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"}):
+                    self._eco_mode_active = False
+                    self._last_sent_setpoint = None  # forza il ricalcolo della fascia al prossimo ciclo, senza cache residua
+                    self._last_sent_fan = None
+                    return
             # Restiamo in Eco — seguiamo la sonda interna del clima stesso,
             # senza nessuna spinta (né aggressiva né passiva), ricalcolato
             # ad ogni ciclo.
@@ -2063,10 +2063,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     ))
                     if eco_enabled:
                         _LOGGER.info("%s: [semplificato] ingresso in Eco invece di spegnere (temp=%.1f <= target-margine=%.1f)", self._attr_name, temp, target - shutoff_margin)
-                        await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "eco"})
-                        self._eco_mode_active = True
-                        self._simple_shutoff_since = None
-                        return
+                        if await self._async_safe_climate_call("set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "eco"}):
+                            self._eco_mode_active = True
+                            self._simple_shutoff_since = None
+                            return
                     _LOGGER.info("%s: [semplificato] spegnimento target (ext, temp=%.1f <= target-margine=%.1f)", self._attr_name, temp, target - shutoff_margin)
                     await self._async_turn_off_climate()
                     self._simple_shutoff_since = None
@@ -2966,6 +2966,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         my_priority = self._effective_priority()
         best_candidate = None
         best_priority = my_priority
+        _LOGGER.info("%s: [semplificato FV] valuto le sorelle per il coordinamento spegnimento (mia priorità=%s, surplus attuale=%.0fW)", self._attr_name, my_priority, surplus)
         for entry_data in self.hass.data.get(DOMAIN, {}).values():
             if not isinstance(entry_data, dict):
                 continue
@@ -2973,19 +2974,25 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if sibling is None or sibling is self:
                 continue
             if not sibling._fv_auto_on:
+                _LOGGER.info("%s: [semplificato FV]   %s scartata: non risulta accesa dal FV (_fv_auto_on=False)", self._attr_name, sibling._attr_name)
                 continue  # non è stata accesa dal FV, non è nella stessa "gara" di spegnimento
             sib_real_state = self.hass.states.get(sibling._climate_entity)
             if sib_real_state is None or sib_real_state.state in ("off", "unknown", "unavailable"):
+                _LOGGER.info("%s: [semplificato FV]   %s scartata: stato reale = %s", self._attr_name, sibling._attr_name, sib_real_state.state if sib_real_state else "None")
                 continue  # già spenta, non è più un candidato
             sib_threshold = float(get_conf(sibling.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
             if sib_threshold > surplus:
+                _LOGGER.info("%s: [semplificato FV]   %s scartata: sua soglia %.0fW > surplus attuale %.0fW", self._attr_name, sibling._attr_name, sib_threshold, surplus)
                 continue  # la sua soglia configurata non è ancora raggiunta dal surplus attuale
             sib_priority = sibling._effective_priority()
             if sib_priority > best_priority:
+                _LOGGER.info("%s: [semplificato FV]   %s ACCETTATA come candidata (priorità %s > %s finora migliore, soglia %.0fW <= surplus %.0fW)", self._attr_name, sibling._attr_name, sib_priority, best_priority, sib_threshold, surplus)
                 best_priority = sib_priority
                 best_candidate = sibling
+            else:
+                _LOGGER.info("%s: [semplificato FV]   %s scartata: priorità %s non più bassa della migliore finora (%s)", self._attr_name, sibling._attr_name, sib_priority, best_priority)
         if best_candidate is not None:
-            _LOGGER.debug(
+            _LOGGER.info(
                 "%s: [semplificato FV] spengo %s al posto mio (priorità %s > %s, soglia sua %.0fW già raggiunta dal surplus attuale %.0fW)",
                 self._attr_name, best_candidate._attr_name, best_priority, my_priority,
                 float(get_conf(best_candidate.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD)), surplus,
