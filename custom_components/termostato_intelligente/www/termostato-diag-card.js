@@ -301,13 +301,22 @@ class TermostatoDiagCard extends HTMLElement {
 
     // Swing — lettura diretta dal climatizzatore reale. Icona barrata
     // quando lo swing è spento/assente, verde quando è attivo qualsiasi
-    // valore diverso da "off". Calcolato qui, prima del blocco badge,
-    // perché va inserito nella stessa riga (a destra).
+    // valore diverso da quello di "spento". Calcolato qui, prima del
+    // blocco badge, perché va inserito nella stessa riga (a destra).
+    //
+    // IMPORTANTE: non tutti i dispositivi usano "off" per rappresentare
+    // "swing spento" — molti Gree/Hisense usano "default" o non hanno
+    // affatto un valore di "spento" esplicito. Aggiungere "off"
+    // artificialmente alla lista, quando il dispositivo reale non lo
+    // supporta, genera un errore se l'utente lo seleziona (il comando
+    // verrebbe rifiutato dal dispositivo). Usiamo SOLO i valori
+    // realmente supportati, mai valori inventati.
     const swingModesRaw = (realClimateState && Array.isArray(realClimateState.attributes.swing_modes)) ? realClimateState.attributes.swing_modes : [];
-    const swingModes = swingModesRaw.includes("off") ? swingModesRaw : ["off", ...swingModesRaw];
-    const currentSwing = (realClimateState && realClimateState.attributes.swing_mode) || "off";
-    const swingActive = currentSwing !== "off";
-    const swingLabels = { off: "spento", vertical: "verticale", horizontal: "orizzontale", both: "entrambi", on: "attivo" };
+    const swingModes = swingModesRaw;
+    const swingOffValue = swingModesRaw.includes("off") ? "off" : (swingModesRaw.includes("default") ? "default" : null);
+    const currentSwing = (realClimateState && realClimateState.attributes.swing_mode) || swingOffValue || "";
+    const swingActive = swingOffValue !== null ? currentSwing !== swingOffValue : swingModesRaw.length > 0;
+    const swingLabels = { off: "spento", default: "spento", vertical: "verticale", horizontal: "orizzontale", both: "entrambi", on: "attivo" };
     const swingLabel = (s) => swingLabels[s] || s;
 
     const priorityIconHtml = (isSimpleFvMode && fvPriorita !== undefined && showPriorityWidget) ? `

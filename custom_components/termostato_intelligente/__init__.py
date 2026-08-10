@@ -19,6 +19,8 @@ from .const import (
     CONF_SIMPLE_TARGET_NIGHT,
     CONF_FV_PRIORITY,
     CONFIG_WRITE_DEBOUNCE_SECONDS,
+    CONF_MANUAL_SHUTOFF_TIMER_ENABLED,
+    CONF_MANUAL_SHUTOFF_TIMER_MIN,
     SEASON_SUMMER,
     SEASON_WINTER,
     SEASON_AUTO,
@@ -138,7 +140,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v090b13"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v090b32"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
@@ -321,8 +323,8 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     async def _handle_toggle_manual_shutoff_timer(call) -> None:
         enabled = bool(call.data.get("enabled", True))
         for climate_entity in _find_climate_entities(call):
-            climate_entity._runtime_shutoff_timer_enabled = enabled
-            climate_entity._timer_override_touched = True
+            climate_entity._pending_timer_enabled_display = enabled
+            _schedule_config_write(climate_entity, "timer_enabled", CONF_MANUAL_SHUTOFF_TIMER_ENABLED, enabled)
             climate_entity.async_write_ha_state()
 
     async def _handle_adjust_manual_shutoff_timer_minutes(call) -> None:
@@ -330,8 +332,8 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         for climate_entity in _find_climate_entities(call):
             current = climate_entity._manual_shutoff_timer_minutes()
             new_value = max(5, round(current + delta))
-            climate_entity._runtime_shutoff_timer_minutes = new_value
-            climate_entity._timer_override_touched = True
+            climate_entity._pending_timer_minutes_display = new_value
+            _schedule_config_write(climate_entity, "timer_minutes", CONF_MANUAL_SHUTOFF_TIMER_MIN, new_value)
             # Se il timer è GIÀ in conto alla rovescia (accensione manuale
             # avvenuta prima di questa regolazione), il nuovo valore deve
             # valere subito anche per quel conteggio in corso — altrimenti

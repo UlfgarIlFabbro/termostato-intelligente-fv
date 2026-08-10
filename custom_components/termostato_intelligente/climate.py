@@ -445,9 +445,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._window_cancel_timer = None
         self._shutoff_timer_cancel = None  # funzione per annullare il timer di spegnimento manuale (card), se attivo
         self._shutoff_timer_until: datetime | None = None  # quando scatterà lo spegnimento, per mostrarlo alla card
-        self._runtime_shutoff_timer_enabled: bool | None = None  # override dalla card — None = usa il default (attivo se i minuti configurati sono > 0)
-        self._runtime_shutoff_timer_minutes: float | None = None  # override dalla card per i minuti — None = usa il valore configurato
-        self._timer_override_touched: bool = False  # True SOLO se l'utente ha davvero premuto il pulsante/le frecce almeno una volta — evita di confondere un vecchio default mai toccato con un override intenzionale al ripristino dopo riavvio
+        # Timer manuale: card e configurazione sono UNA SOLA fonte di
+        # verità (stesso principio già applicato a priorità e target) —
+        # niente più override permanente che ignora la configurazione.
+        self._pending_timer_enabled_display: bool | None = None
+        self._pending_timer_minutes_display: float | None = None
         self._state_change_debounce_cancel = None  # funzione per annullare la conferma pendente di una transizione spento<->acceso del clima reale
         self._state_change_debounce_original_old: State | None = None  # stato di riferimento da PRIMA dell'intero episodio di instabilità (non aggiornato ad ogni evento intermedio)
         self._last_real_unavailable_at: datetime | None = None  # ultima volta che l'entità reale è stata vista unavailable/unknown — usato per estendere la protezione contro rilevamenti falsi oltre il semplice tempo fisso dal riavvio, adattandosi a QUALSIASI durata di instabilità (non solo al boot)
@@ -592,7 +594,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "timer_spegnimento_fino_a": self._shutoff_timer_until.isoformat() if self._shutoff_timer_until else None,
             "timer_manuale_attivo": self._manual_shutoff_timer_enabled(),
             "timer_manuale_minuti_configurati": self._manual_shutoff_timer_minutes(),
-            "timer_override_toccato": self._timer_override_touched,
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
             "acceso_da_fv": self._fv_auto_on,
             "auto_ultima_direzione": getattr(self, "_auto_last_hvac_direction", None),
@@ -779,25 +780,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # ripristinati qui — sono sempre letti direttamente dalla
         # configurazione (vedi _effective_priority/_simple_current_target),
         # niente più override separati da sincronizzare dopo un riavvio.
+        # Stesso principio applicato ora al timer manuale (minuti/attivo) —
+        # niente più ripristino di override, il valore vero è sempre e solo
+        # quello in configurazione.
         if last_state:
-            try:
-                # Ripristiniamo gli override SOLO se l'utente ha DAVVERO
-                # interagito col timer almeno una volta (flag esplicito
-                # salvato apposta) — un confronto tra valore salvato e
-                # nuovo default configurato NON è affidabile: un vecchio
-                # default mai toccato può risultare "diverso" dal nuovo
-                # default per il solo fatto che la configurazione è
-                # cambiata, non perché l'utente abbia mai premuto nulla.
-                if last_state.attributes.get("timer_override_toccato"):
-                    self._timer_override_touched = True
-                    saved_timer_enabled = last_state.attributes.get("timer_manuale_attivo")
-                    if saved_timer_enabled is not None:
-                        self._runtime_shutoff_timer_enabled = bool(saved_timer_enabled)
-                    saved_timer_minutes = last_state.attributes.get("timer_manuale_minuti_configurati")
-                    if saved_timer_minutes is not None:
-                        self._runtime_shutoff_timer_minutes = float(saved_timer_minutes)
-            except (TypeError, ValueError) as exc:
-                _LOGGER.warning("%s: errore ripristino stato timer manuale: %s", self._attr_name, exc)
             try:
                 saved_history = last_state.attributes.get("storico_notifiche")
                 if isinstance(saved_history, list):
@@ -1852,8 +1838,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         # --- Gestione modalità Eco attiva (invece di spento) ---
         if self._eco_mode_active:
-            if not is_on:
-                self._eco_mode_active = False
+            real_preset = real_state.attributes.get("preset_mode") if real_state else None
+            really_off = current_mode in ("off", "unknown", "unavailable") and real_preset != "eco"
+            if really_off:
+                self._eco_mode_active = False  # spento davvero da altrove (manuale, timer, ecc.) — usciamo da Eco
                 return
             if temp >= target + shutoff_margin_int:
                 _LOGGER.info("%s: [semplificato] uscita da Eco, temperatura risalita (int, temp=%.0f >= target+margine=%.0f)", self._attr_name, temp, target + shutoff_margin_int)
@@ -1867,6 +1855,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 current_sp = real_state.attributes.get("temperature") if real_state else None
                 if current_sp != eco_setpoint:
                     await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": eco_setpoint})
+                    await self._async_simple_notify_temp_change(temp, target, eco=True)
             return
 
         # --- Spegnimento per target raggiunto ---
@@ -2027,8 +2016,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         # --- Gestione modalità Eco attiva (invece di spento) ---
         if self._eco_mode_active:
-            if not is_on:
-                self._eco_mode_active = False  # spento da altrove (manuale, timer, ecc.) — usciamo da Eco
+            real_preset = real_state.attributes.get("preset_mode") if real_state else None
+            really_off = current_mode in ("off", "unknown", "unavailable") and real_preset != "eco"
+            if really_off:
+                self._eco_mode_active = False  # spento davvero da altrove (manuale, timer, ecc.) — usciamo da Eco
                 return
             if temp >= target + shutoff_margin:
                 # Risalito abbastanza — usciamo da Eco e ripartiamo come una
@@ -2042,12 +2033,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     return
             # Restiamo in Eco — seguiamo la sonda interna del clima stesso,
             # senza nessuna spinta (né aggressiva né passiva), ricalcolato
-            # ad ogni ciclo.
+            # ad ogni ciclo. Notifichiamo solo quando il setpoint cambia
+            # davvero (stesso principio anti-spam della regolazione
+            # normale) — altrimenti la stanza resterebbe "silenziosa" per
+            # tutta la permanenza in Eco, senza nessun segnale che il
+            # sistema sta ancora seguendo la temperatura.
             if internal_temp is not None:
                 eco_setpoint = round(internal_temp, 1)
                 current_sp = real_state.attributes.get("temperature") if real_state else None
                 if current_sp != eco_setpoint:
                     await self._async_safe_climate_call("set_temperature", {"entity_id": self._climate_entity, "temperature": eco_setpoint})
+                    await self._async_simple_notify_temp_change(temp, target, eco=True)
             return
 
         # --- Spegnimento per target raggiunto ---
@@ -2224,12 +2220,14 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if (now_confirm - self._fv_turnon_confirmed_since) < timedelta(minutes=turn_on_total_minutes):
             return  # non ancora confermato abbastanza a lungo
 
-        # Check stagger e priorità
+        # Priorità PRIMA dello stagger: la ricerca tra le sorelle deve
+        # sempre poter avvenire, anche se lo stagger bloccherebbe LA MIA
+        # accensione — altrimenti, con più stanze pronte contemporaneamente
+        # (il caso più comune), vince semplicemente chi completa per prima
+        # il PROPRIO timer di conferma personale, un fattore indipendente
+        # dalla priorità configurata — vanificando il coordinamento.
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
         stagger_min = float(get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN))
-        last_on = coord.get("last_fv_turn_on")
-        if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
-            return
 
         # Priorità: se un'altra istanza (sorella) ha priorità più alta (numero
         # più basso) ed è ANCH'ESSA pronta ad accendersi in questo momento
@@ -2324,6 +2322,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 sibling.async_write_ha_state()
                 return
 
+        # Nessuna sorella con priorità più alta pronta — verifico lo stagger
+        # solo ora, per LA MIA accensione (non per la ricerca appena fatta).
+        last_on = coord.get("last_fv_turn_on")
+        if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
+            return
+
         # Accensione — sempre DRY prima (se abilitato)
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
         now = dt_util.utcnow()
@@ -2410,9 +2414,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
         coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
         stagger_min = float(get_conf(self.entry, CONF_FV_STAGGER_MIN, DEFAULT_FV_STAGGER_MIN))
-        last_on = coord.get("last_fv_turn_on")
-        if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
-            return
 
         # Priorità — solo tra sorelle anch'esse in modalità Inverno o Auto,
         # stessa logica già corretta per l'estate (verifica anche le
@@ -2481,6 +2482,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 await sibling._async_simple_notify_ac_on(sib_temp, sib_target, ac_type="fv_winter", fv=sib_fv_val_notify, consumo=sib_consumo_val_notify, soc=sib_soc_val)
                 sibling.async_write_ha_state()
                 return
+
+        # Nessuna sorella con priorità più alta pronta — verifico lo stagger
+        # solo ora, per LA MIA accensione.
+        last_on = coord.get("last_fv_turn_on")
+        if last_on is not None and (dt_util.utcnow() - last_on) < timedelta(minutes=stagger_min):
+            return
 
         # Accensione — solo riscaldamento, niente equivalente del DRY
         now = dt_util.utcnow()
@@ -2632,7 +2639,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             if sib_real_state is None or sib_real_state.state in ("off", "unknown", "unavailable"):
                 continue
             sib_threshold = float(get_conf(sibling.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
-            if sib_threshold > surplus:
+            if surplus >= sib_threshold:
                 continue
             sib_priority = sibling._effective_priority()
             if sib_priority > best_priority:
@@ -2981,12 +2988,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 _LOGGER.info("%s: [semplificato FV]   %s scartata: stato reale = %s", self._attr_name, sibling._attr_name, sib_real_state.state if sib_real_state else "None")
                 continue  # già spenta, non è più un candidato
             sib_threshold = float(get_conf(sibling.entry, CONF_FV_SHUTOFF_THRESHOLD, DEFAULT_FV_SHUTOFF_THRESHOLD))
-            if sib_threshold > surplus:
-                _LOGGER.info("%s: [semplificato FV]   %s scartata: sua soglia %.0fW > surplus attuale %.0fW", self._attr_name, sibling._attr_name, sib_threshold, surplus)
+            if surplus >= sib_threshold:
+                _LOGGER.info("%s: [semplificato FV]   %s scartata: surplus attuale %.0fW ancora sufficiente per la sua soglia %.0fW", self._attr_name, sibling._attr_name, surplus, sib_threshold)
                 continue  # la sua soglia configurata non è ancora raggiunta dal surplus attuale
             sib_priority = sibling._effective_priority()
             if sib_priority > best_priority:
-                _LOGGER.info("%s: [semplificato FV]   %s ACCETTATA come candidata (priorità %s > %s finora migliore, soglia %.0fW <= surplus %.0fW)", self._attr_name, sibling._attr_name, sib_priority, best_priority, sib_threshold, surplus)
+                _LOGGER.info("%s: [semplificato FV]   %s ACCETTATA come candidata (priorità %s > %s finora migliore, surplus attuale %.0fW < sua soglia %.0fW)", self._attr_name, sibling._attr_name, sib_priority, best_priority, surplus, sib_threshold)
                 best_priority = sib_priority
                 best_candidate = sibling
             else:
@@ -3011,6 +3018,29 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             return
 
         _LOGGER.info("%s: [semplificato FV] spegnimento per FV (fv=%.0fW, consumo=%.0fW)", target_to_shutoff._attr_name, fv, consumo)
+
+        # Stessa opzione Eco della regolazione termica generale — prima
+        # NON veniva mai controllata qui, quindi una stanza accesa dal FV
+        # (con _fv_auto_on rimasto True) veniva SEMPRE spenta secco da
+        # QUESTA funzione (es. di notte, surplus sempre insufficiente),
+        # senza mai passare per Eco, anche con l'opzione attivata.
+        target_is_night = target_to_shutoff._simple_is_night()
+        target_eco_enabled = bool(get_conf(
+            target_to_shutoff.entry,
+            CONF_SIMPLE_ECO_NIGHT_ENABLED if target_is_night else CONF_SIMPLE_ECO_DAY_ENABLED,
+            DEFAULT_SIMPLE_ECO_NIGHT_ENABLED if target_is_night else DEFAULT_SIMPLE_ECO_DAY_ENABLED,
+        ))
+        if target_eco_enabled:
+            if await target_to_shutoff._async_safe_climate_call("set_preset_mode", {"entity_id": target_to_shutoff._climate_entity, "preset_mode": "eco"}):
+                _LOGGER.info("%s: [semplificato FV] ingresso in Eco invece di spegnere per FV insufficiente", target_to_shutoff._attr_name)
+                target_to_shutoff._eco_mode_active = True
+                coord["last_fv_shutoff"] = now
+                target_to_shutoff._fv_surplus_buffer = []
+                target_to_shutoff._fv_low_since = None
+                target_to_shutoff._manual_accension_since = None
+                target_to_shutoff.async_write_ha_state()
+                return
+
         await target_to_shutoff._async_turn_off_climate()
         coord["last_fv_shutoff"] = now
         target_to_shutoff._fv_surplus_buffer = []
@@ -3109,12 +3139,12 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TEL_MANUAL_OFF, DEFAULT_SIMPLE_NOTIFY_TEL_MANUAL_OFF)):
             await self._async_simple_notify(msg)
 
-    async def _async_simple_notify_temp_change(self, temp: float, target: float, fan: str | None = None) -> None:
+    async def _async_simple_notify_temp_change(self, temp: float, target: float, fan: str | None = None, eco: bool = False) -> None:
         fan_labels = {"low": "bassa", "medium": "media", "high": "alta", "auto": "automatica"}
         fan_label = fan_labels.get(fan, fan) if fan else None
         msg = await self._async_render(
             DEFAULT_SIMPLE_MSG_TEMP_CHANGE,
-            {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1), "fan": fan_label},
+            {"name": self._get_display_name(), "temp": round(temp, 1), "target": round(target, 1), "fan": fan_label, "eco": eco},
         )
         if bool(get_conf(self.entry, CONF_SIMPLE_NOTIFY_TTS_TEMP_CHANGE, DEFAULT_SIMPLE_NOTIFY_TTS_TEMP_CHANGE)):
             await self._async_simple_speak(msg)
@@ -3591,20 +3621,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         return getattr(switch, "entity_id", None) if switch is not None else None
 
     def _manual_shutoff_timer_minutes(self) -> float:
-        """Minuti effettivi del timer manuale — override dalla card se
-        presente, altrimenti il valore configurato nelle opzioni."""
-        if self._runtime_shutoff_timer_minutes is not None:
-            return self._runtime_shutoff_timer_minutes
+        """Minuti effettivi del timer manuale — il valore 'pending' (breve
+        finestra di debounce dopo una regolazione dalla card) se presente,
+        altrimenti quello configurato — un'unica fonte di verità."""
+        if self._pending_timer_minutes_display is not None:
+            return self._pending_timer_minutes_display
         return float(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_MIN, DEFAULT_MANUAL_SHUTOFF_TIMER_MIN))
 
     def _manual_shutoff_timer_enabled(self) -> bool:
         """True se il timer di spegnimento automatico dopo accensione
-        manuale è attivo — l'utente lo attiva/disattiva dalla card
-        (override runtime); se non l'ha mai toccato, il valore di default
-        viene dal campo di configurazione dedicato (0 minuti disattiva
-        comunque tutto, a prescindere da questo campo)."""
-        if self._runtime_shutoff_timer_enabled is not None:
-            return self._runtime_shutoff_timer_enabled
+        manuale è attivo — il valore 'pending' se presente, altrimenti
+        quello configurato (0 minuti disattiva comunque tutto)."""
+        if self._pending_timer_enabled_display is not None:
+            return self._pending_timer_enabled_display
         if self._manual_shutoff_timer_minutes() <= 0:
             return False
         return bool(get_conf(self.entry, CONF_MANUAL_SHUTOFF_TIMER_ENABLED, DEFAULT_MANUAL_SHUTOFF_TIMER_ENABLED))
