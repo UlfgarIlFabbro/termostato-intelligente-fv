@@ -887,6 +887,22 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
                 async def _confirm_and_process(_now):
                     self._state_change_debounce_cancel = None
+                    # Prima di fidarci del dato (potenzialmente vecchio/
+                    # cachato), forziamo un aggiornamento FRESCO dal cloud —
+                    # molto più affidabile che sperare che il prossimo
+                    # polling automatico dell'integrazione capiti proprio
+                    # entro questa finestra. Un glitch cloud che riporta
+                    # "off" senza mai passare per unavailable/unknown viene
+                    # così smascherato in pochi secondi, non minuti.
+                    try:
+                        await self.hass.services.async_call(
+                            "homeassistant", "update_entity",
+                            {"entity_id": self._climate_entity},
+                            blocking=True,
+                        )
+                        await asyncio.sleep(2)
+                    except Exception as exc:
+                        _LOGGER.debug("%s: aggiornamento forzato fallito, procedo con il dato disponibile: %s", self._attr_name, exc)
                     current = self.hass.states.get(self._climate_entity)
                     reference_old_state = captured_original_old.state if captured_original_old is not None else None
                     if current is None or current.state == reference_old_state:
@@ -4042,7 +4058,18 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         quando l'evento arriva, facendo scattare erroneamente il rilevamento
         di spegnimento "manuale".
         """
-        self._programmatic_off_until = dt_util.utcnow() + timedelta(seconds=STATE_CHANGE_DEBOUNCE_SECONDS + 10)
+        self._programmatic_off_until = dt_util.utcnow() + timedelta(seconds=STATE_CHANGE_DEBOUNCE_SECONDS + 30)
+        if self._eco_mode_active:
+            # Se il clima è in Eco (preset_mode=eco) e stiamo per spegnerlo
+            # per QUALSIASI motivo (timer, fine notte/giorno, target, FV,
+            # limite potenza...), puliamo prima il preset — altrimenti una
+            # riaccensione manuale successiva (es. comando vocale) partirebbe
+            # ancora in modalità eco, dato che il dispositivo mantiene il
+            # preset anche da spento fino a un comando esplicito che lo cambi.
+            await self.hass.services.async_call(
+                "climate", "set_preset_mode", {"entity_id": self._climate_entity, "preset_mode": "none"}, blocking=True
+            )
+            self._eco_mode_active = False
         await self.hass.services.async_call(
             "climate", "turn_off", {"entity_id": self._climate_entity}, blocking=True
         )
