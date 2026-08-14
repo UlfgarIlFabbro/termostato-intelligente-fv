@@ -2322,13 +2322,19 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 )
                 sib_dry_enabled = bool(get_conf(sibling.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
                 sibling._fv_auto_on = True
+                # Prenotazione IMMEDIATA (prima dell'await bloccante) —
+                # altrimenti più stanze che raggiungono il proprio timer di
+                # conferma quasi in contemporanea vedrebbero tutte lo
+                # stagger ancora "libero" e si accenderebbero insieme,
+                # ignorando lo scaglionamento (stesso bug già corretto per
+                # lo spegnimento).
+                coord["last_fv_turn_on"] = dt_util.utcnow()
                 if sib_dry_enabled:
                     await sibling._async_safe_climate_call("set_hvac_mode", {"entity_id": sibling._climate_entity, "hvac_mode": "dry"})
                     sibling._schedule_dry_timer("accensione_fv_turn_on_simple_ceduta")
                 else:
                     await sibling._async_safe_climate_call("turn_on", {"entity_id": sibling._climate_entity})
                     sibling._cancel_dry_timer("accensione_fv_cool_no_dry_ceduta")
-                coord["last_fv_turn_on"] = dt_util.utcnow()
                 sibling._fv_turnon_confirmed_since = None
                 sibling._simple_night_auto_on = False
                 sib_soc_val = sibling._read_float(sibling._battery_sensor) or 0 if sibling._battery_sensor else 0
@@ -2348,6 +2354,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
         now = dt_util.utcnow()
         self._fv_auto_on = True
+        coord["last_fv_turn_on"] = now
         if dry_enabled:
             _LOGGER.info("%s: [semplificato FV] accensione DRY (fv=%.0fW, consumo=%.0fW)", self._attr_name, fv, consumo)
             await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
@@ -2357,7 +2364,6 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
             self._cancel_dry_timer("accensione_fv_cool_no_dry")
 
-        coord["last_fv_turn_on"] = now
         self._fv_turnon_confirmed_since = None
         self._simple_night_auto_on = False
         soc_val = self._read_float(self._battery_sensor) or 0
@@ -2488,8 +2494,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._attr_name, sibling._attr_name, sib_priority, my_priority,
                 )
                 sibling._fv_auto_on = True
-                await sibling._async_safe_climate_call("set_hvac_mode", {"entity_id": sibling._climate_entity, "hvac_mode": "heat"})
                 coord["last_fv_turn_on"] = dt_util.utcnow()
+                await sibling._async_safe_climate_call("set_hvac_mode", {"entity_id": sibling._climate_entity, "hvac_mode": "heat"})
                 sibling._fv_turnon_confirmed_since = None
                 sibling._simple_night_auto_on = False
                 sib_soc_val = sibling._read_float(sibling._battery_sensor) or 0 if sibling._battery_sensor else 0
@@ -2508,9 +2514,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         # Accensione — solo riscaldamento, niente equivalente del DRY
         now = dt_util.utcnow()
         self._fv_auto_on = True
+        coord["last_fv_turn_on"] = now
         _LOGGER.info("%s: [inverno FV] accensione HEAT (fv=%.0fW, consumo=%.0fW, temp in discesa)", self._attr_name, fv, consumo)
         await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "heat"})
-        coord["last_fv_turn_on"] = now
         self._fv_turnon_confirmed_since = None
         self._simple_night_auto_on = False
         soc_val = self._read_float(self._battery_sensor) or 0
