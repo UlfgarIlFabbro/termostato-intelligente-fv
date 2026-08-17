@@ -445,6 +445,7 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         self._window_cancel_timer = None
         self._shutoff_timer_cancel = None  # funzione per annullare il timer di spegnimento manuale (card), se attivo
         self._shutoff_timer_until: datetime | None = None  # quando scatterà lo spegnimento, per mostrarlo alla card
+        self._shutoff_timer_remaining_seconds_paused: float | None = None  # secondi rimanenti quando il timer è stato messo in pausa (spegnimento per limite potenza), None se non in pausa
         # Timer manuale: card e configurazione sono UNA SOLA fonte di
         # verità (stesso principio già applicato a priorità e target) —
         # niente più override permanente che ignora la configurazione.
@@ -982,6 +983,16 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 # la riaccensione.
                 _LOGGER.info("%s: spegnimento manuale rilevato (telecomando/app esterna)", self._attr_name)
                 await self._async_simple_notify_manual_off()
+                # Lo spegnimento è una scelta esplicita dell'utente proprio
+                # ora — il timer (attivo o eventualmente in pausa per un
+                # precedente spegnimento da limite potenza) non ha più
+                # senso: azzeriamo tutto, non deve riprendere né scadere
+                # più avanti su una sessione che l'utente ha già chiuso.
+                if self._shutoff_timer_cancel is not None:
+                    self._shutoff_timer_cancel()
+                    self._shutoff_timer_cancel = None
+                self._shutoff_timer_until = None
+                self._shutoff_timer_remaining_seconds_paused = None
                 if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
                     self._manual_off_since = dt_util.utcnow()
                     _LOGGER.info(
@@ -3457,6 +3468,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     self._power_limit_off_at = now
                     self._power_limit_high_since = None
                     self._power_limit_low_since = None
+                    # Pausa del timer manuale (se attivo): il tempo trascorso
+                    # spento per limite potenza non deve contare contro la
+                    # durata configurata — memorizziamo i secondi rimanenti
+                    # e cancelliamo il countdown, per riprenderlo dallo
+                    # stesso punto quando (e se) il consumo rientra.
+                    if self._shutoff_timer_cancel is not None and self._shutoff_timer_until is not None:
+                        remaining = (self._shutoff_timer_until - now).total_seconds()
+                        if remaining > 0:
+                            self._shutoff_timer_remaining_seconds_paused = remaining
+                        self._shutoff_timer_cancel()
+                        self._shutoff_timer_cancel = None
                     # Registra in coordinamento per cascata multi
                     coord = self.hass.data.setdefault(DOMAIN, {}).setdefault("_coordination", {})
                     pl_order = coord.setdefault("power_limit_off_order", [])
@@ -3519,10 +3541,37 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             )
             return
 
+        if self._is_manual_off_block_active():
+            # Il timer manuale era scaduto proprio mentre eravamo spenti
+            # per limite potenza (vedi _async_shutoff_timer_expired) e il
+            # blocco riaccensione è abilitato — rispettiamo la sessione
+            # manuale conclusa, non riaccendiamo qui. Il flag potenza
+            # resta comunque sbloccato sopra, quindi il ciclo FV normale
+            # può ancora operare in autonomia se le sue condizioni lo
+            # giustificano.
+            _LOGGER.info(
+                "%s: [power limit] consumo rientrato ma blocco riaccensione attivo (timer manuale scaduto) — non riaccendo",
+                self._attr_name,
+            )
+            return
+
         _LOGGER.info("%s: [power limit] riaccensione dopo calo consumo", self._attr_name)
         self._fv_auto_on = True
         await self._async_safe_climate_call("turn_on", {"entity_id": self._climate_entity})
         await self._async_power_limit_notify(is_on=True)
+
+        # Ripresa del timer manuale dallo stesso punto in cui era in pausa
+        # (vedi punto di spegnimento sopra) — la durata effettiva del
+        # conteggio corrisponde così ai minuti configurati di funzionamento
+        # reale, non al tempo di parete che include l'interruzione.
+        if self._shutoff_timer_remaining_seconds_paused is not None:
+            remaining = self._shutoff_timer_remaining_seconds_paused
+            self._shutoff_timer_remaining_seconds_paused = None
+            self._shutoff_timer_until = dt_util.utcnow() + timedelta(seconds=remaining)
+            self._shutoff_timer_cancel = async_call_later(
+                self.hass, remaining, self._async_shutoff_timer_expired
+            )
+            _LOGGER.info("%s: [power limit] timer manuale ripreso (%.0f minuti rimanenti)", self._attr_name, remaining / 60)
 
     async def _async_power_limit_notify(self, is_on: bool, consumo: float = 0) -> None:
         """Notifica spegnimento/riaccensione per protezione potenza."""
@@ -4222,6 +4271,23 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         d'inverno), non una decisione automatica del termostato."""
         self._shutoff_timer_cancel = None
         self._shutoff_timer_until = None
+        real_state = self.hass.states.get(self._climate_entity)
+        already_off = real_state is not None and real_state.state in ("off", "unknown", "unavailable")
+        if already_off:
+            # Già spento da un altro meccanismo prima che il timer
+            # scadesse — evitiamo una notifica fuorviante che attribuirebbe
+            # lo spegnimento al timer, e un comando turn_off ridondante.
+            # Caso specifico: se era spento per LIMITE POTENZA, il timer
+            # scaduto significa che la sessione manuale doveva comunque
+            # finire qui — attiviamo il blocco riaccensione (se abilitato)
+            # per impedire che il ripristino automatico del limite potenza
+            # riaccenda la stanza subito dopo, vanificando lo scopo del
+            # timer. Non tocca il caso di accensione dal FV, che resta
+            # libero di operare normalmente.
+            if self._power_limit_off and bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
+                self._manual_off_since = dt_util.utcnow()
+            self.async_write_ha_state()
+            return
         await self._async_simple_notify_ac_off_timer(self.current_temperature or 0, self._manual_shutoff_timer_minutes())
         await self._async_turn_off_climate()
         self.async_write_ha_state()
