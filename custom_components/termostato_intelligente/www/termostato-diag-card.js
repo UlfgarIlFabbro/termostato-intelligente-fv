@@ -655,49 +655,48 @@ class TermostatoDiagCard extends HTMLElement {
         if (domain === "switch") {
           const active = s.state === "on";
           const bg = active ? "#2e9c4f" : "#c0392b";
-          return `
-            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-              <button data-extra-switch="${s.entity_id}" aria-label="${friendlyName}"
-                style="width:44px;height:44px;border-radius:50%;border:none;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-                <ha-icon icon="${icon}" style="--mdc-icon-size:20px;"></ha-icon>
-              </button>
-              <span style="font-size:11px;color:var(--primary-text-color);text-align:center;max-width:60px;">${friendlyName}</span>
-            </div>`;
+          return `<button data-extra-switch="${s.entity_id}" aria-label="${friendlyName}"
+            style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
+            <span style="width:44px;height:44px;border-radius:50%;background:${bg};color:#fff;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+              <ha-icon icon="${icon}" style="--mdc-icon-size:22px;"></ha-icon>
+            </span>
+            <span style="font-size:11px;color:var(--primary-text-color);">${friendlyName}</span>
+          </button>`;
         }
         if (domain === "select") {
           const options = Array.isArray(s.attributes.options) ? s.attributes.options : [];
           const optionButtons = options.map((opt) => {
             const active = opt === s.state;
             const bg = active ? "#2e9c4f" : "#c0392b";
-            return `
-              <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                <button data-extra-select="${s.entity_id}" data-extra-select-option="${opt}" aria-label="${opt}"
-                  style="width:44px;height:44px;border-radius:50%;border:none;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-                  <ha-icon icon="mdi:menu" style="--mdc-icon-size:20px;"></ha-icon>
-                </button>
-                <span style="font-size:11px;color:var(--primary-text-color);text-align:center;max-width:60px;">${opt}</span>
-              </div>`;
+            return `<button data-extra-select="${s.entity_id}" data-extra-select-option="${opt}" aria-label="${opt}"
+              style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
+              <span style="width:44px;height:44px;border-radius:50%;background:${bg};color:#fff;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                <ha-icon icon="mdi:menu" style="--mdc-icon-size:22px;"></ha-icon>
+              </span>
+              <span style="font-size:11px;color:var(--primary-text-color);">${opt}</span>
+            </button>`;
           }).join("");
           return `
             <div style="width:100%;">
-              <div style="font-size:12px;opacity:0.6;margin-bottom:10px;">${friendlyName}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:14px;">${optionButtons}</div>
+              <div style="font-size:12px;opacity:0.6;margin-bottom:6px;text-align:center;">${friendlyName}</div>
+              <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">${optionButtons}</div>
             </div>`;
         }
         return "";
-      }).join("<div style=\"height:0.5px;background:var(--divider-color, #ccc);width:100%;margin:16px 0;\"></div>");
+      }).join("");
 
       extraFunctionsPopupModalHtml = `
         <div data-extra-functions-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
           <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
               <div style="font-size:14px;font-weight:700;">Altre funzioni</div>
               <button data-close-extra-functions="1" style="border:none;background:none;cursor:pointer;padding:4px;">
                 <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
               </button>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:14px;">
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;">
               ${rowsHtml}
+
             </div>
           </div>
         </div>`;
