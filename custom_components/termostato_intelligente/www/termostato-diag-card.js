@@ -150,11 +150,15 @@ class TermostatoDiagCard extends HTMLElement {
     if (this._seasonPickerOpen === undefined) {
       this._seasonPickerOpen = false;
     }
+    if (this._extraFunctionsPopupOpen === undefined) {
+      this._extraFunctionsPopupOpen = false;
+    }
     this._config = {
       title: "",
       color_by_state: true,
       display_style: "rows", // rows | badges
       show_attributes: [],
+      extra_entities: [],
       ...config,
     };
   }
@@ -325,13 +329,30 @@ class TermostatoDiagCard extends HTMLElement {
         ${fvPriorita}
       </button>` : "";
 
+    // "Altre funzioni" — entità extra configurate manualmente nella card
+    // stessa (non nell'integrazione), tipicamente switch/select esposti
+    // dall'integrazione ufficiale del climatizzatore reale (es. Fresh Air,
+    // Quiet, XFan, Panel Light su Gree). Ogni entità è letta dal suo stato
+    // reale corrente; il badge segnala se almeno uno switch configurato
+    // risulta acceso, per un colpo d'occhio senza aprire il popup.
+    const extraEntityIds = Array.isArray(this._config.extra_entities) ? this._config.extra_entities : [];
+    const extraEntityStates = extraEntityIds
+      .map((id) => this._hass && this._hass.states[id])
+      .filter((s) => s !== undefined && s !== null);
+    const extraFunctionsAnyOn = extraEntityStates.some((s) => s.entity_id.startsWith("switch.") && s.state === "on");
+    const extraFunctionsIconHtml = extraEntityStates.length > 0 ? `
+      <button data-open-extra-functions="1" aria-label="Altre funzioni — tocca per aprire" title="Altre funzioni"
+        style="width:28px;height:28px;border-radius:50%;border:none;background:${extraFunctionsAnyOn ? "#2e9c4f" : "var(--card-background-color, #fff)"};color:${extraFunctionsAnyOn ? "#fff" : "var(--secondary-text-color)"};border:${extraFunctionsAnyOn ? "none" : "1px solid var(--divider-color, #ccc)"};box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+        <ha-icon icon="mdi:dots-grid" style="--mdc-icon-size:15px;"></ha-icon>
+      </button>` : "";
+
     const swingIconHtml = swingModesRaw.length > 0 ? `
       <button data-open-swing-picker="1" aria-label="Swing: ${swingLabel(currentSwing)} — tocca per cambiare" title="Swing: ${swingLabel(currentSwing)}"
         style="width:28px;height:28px;border-radius:50%;border:none;background:${swingActive ? "#2e9c4f" : "var(--card-background-color, #fff)"};color:${swingActive ? "#fff" : "var(--secondary-text-color)"};border:${swingActive ? "none" : "1px solid var(--divider-color, #ccc)"};box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
         <ha-icon icon="${swingActive ? "mdi:arrow-oscillating" : "mdi:arrow-oscillating-off"}" style="--mdc-icon-size:15px;"></ha-icon>
       </button>` : "";
 
-    const prioritySwingIconsHtml = swingIconHtml + priorityIconHtml;
+    const prioritySwingIconsHtml = extraFunctionsIconHtml + swingIconHtml + priorityIconHtml;
 
     let attrsHtml = "";
     if (showAttrs.length > 0) {
@@ -625,6 +646,63 @@ class TermostatoDiagCard extends HTMLElement {
         </div>`;
     }
 
+    let extraFunctionsPopupModalHtml = "";
+    if (this._extraFunctionsPopupOpen && extraEntityStates.length > 0) {
+      const rowsHtml = extraEntityStates.map((s) => {
+        const domain = s.entity_id.split(".")[0];
+        const friendlyName = s.attributes.friendly_name || s.entity_id;
+        const icon = s.attributes.icon || "mdi:toggle-switch-outline";
+        if (domain === "switch") {
+          const active = s.state === "on";
+          const bg = active ? "#2e9c4f" : "#c0392b";
+          return `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+              <button data-extra-switch="${s.entity_id}" aria-label="${friendlyName}"
+                style="width:44px;height:44px;border-radius:50%;border:none;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+                <ha-icon icon="${icon}" style="--mdc-icon-size:20px;"></ha-icon>
+              </button>
+              <span style="font-size:11px;color:var(--primary-text-color);text-align:center;max-width:60px;">${friendlyName}</span>
+            </div>`;
+        }
+        if (domain === "select") {
+          const options = Array.isArray(s.attributes.options) ? s.attributes.options : [];
+          const optionButtons = options.map((opt) => {
+            const active = opt === s.state;
+            const bg = active ? "#2e9c4f" : "#c0392b";
+            return `
+              <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                <button data-extra-select="${s.entity_id}" data-extra-select-option="${opt}" aria-label="${opt}"
+                  style="width:44px;height:44px;border-radius:50%;border:none;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+                  <ha-icon icon="mdi:menu" style="--mdc-icon-size:20px;"></ha-icon>
+                </button>
+                <span style="font-size:11px;color:var(--primary-text-color);text-align:center;max-width:60px;">${opt}</span>
+              </div>`;
+          }).join("");
+          return `
+            <div style="width:100%;">
+              <div style="font-size:12px;opacity:0.6;margin-bottom:10px;">${friendlyName}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:14px;">${optionButtons}</div>
+            </div>`;
+        }
+        return "";
+      }).join("<div style=\"height:0.5px;background:var(--divider-color, #ccc);width:100%;margin:16px 0;\"></div>");
+
+      extraFunctionsPopupModalHtml = `
+        <div data-extra-functions-backdrop="1" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+          <div style="background:var(--card-background-color, #fff);border-radius:20px;padding:16px;max-width:320px;width:100%;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <div style="font-size:14px;font-weight:700;">Altre funzioni</div>
+              <button data-close-extra-functions="1" style="border:none;background:none;cursor:pointer;padding:4px;">
+                <ha-icon icon="mdi:close" style="--mdc-icon-size:18px;"></ha-icon>
+              </button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:14px;">
+              ${rowsHtml}
+            </div>
+          </div>
+        </div>`;
+    }
+
     let seasonPickerModalHtml = "";
     if (this._seasonPickerOpen) {
       const seasonOrder = ["estate", "inverno", "auto", "manuale", "off"];
@@ -850,6 +928,7 @@ class TermostatoDiagCard extends HTMLElement {
       ${swingPickerModalHtml}
       ${priorityPopupModalHtml}
       ${seasonPickerModalHtml}
+      ${extraFunctionsPopupModalHtml}
     `;
 
     this._attachControlListeners(stateObj);
@@ -982,6 +1061,43 @@ class TermostatoDiagCard extends HTMLElement {
         }
         this._swingPickerOpen = false;
         this._render();
+      });
+    });
+
+    const openExtraFunctionsBtn = this.querySelector("[data-open-extra-functions]");
+    if (openExtraFunctionsBtn) {
+      openExtraFunctionsBtn.addEventListener("click", () => {
+        this._extraFunctionsPopupOpen = true;
+        this._render();
+      });
+    }
+    const closeExtraFunctionsBtn = this.querySelector("[data-close-extra-functions]");
+    if (closeExtraFunctionsBtn) {
+      closeExtraFunctionsBtn.addEventListener("click", () => {
+        this._extraFunctionsPopupOpen = false;
+        this._render();
+      });
+    }
+    const extraFunctionsBackdrop = this.querySelector("[data-extra-functions-backdrop]");
+    if (extraFunctionsBackdrop) {
+      extraFunctionsBackdrop.addEventListener("click", (e) => {
+        if (e.target === extraFunctionsBackdrop) {
+          this._extraFunctionsPopupOpen = false;
+          this._render();
+        }
+      });
+    }
+    this.querySelectorAll("[data-extra-switch]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const entityId = btn.getAttribute("data-extra-switch");
+        this._callService("switch", "toggle", { entity_id: entityId });
+      });
+    });
+    this.querySelectorAll("[data-extra-select]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const entityId = btn.getAttribute("data-extra-select");
+        const option = btn.getAttribute("data-extra-select-option");
+        this._callService("select", "select_option", { entity_id: entityId, option: option });
       });
     });
 
@@ -1167,7 +1283,7 @@ class TermostatoDiagCard extends HTMLElement {
 class TermostatoDiagCardEditor extends HTMLElement {
   setConfig(config) {
     const firstTime = !this._config;
-    this._config = { title: "", color_by_state: true, display_style: "rows", show_attributes: [], ...config };
+    this._config = { title: "", color_by_state: true, display_style: "rows", show_attributes: [], extra_entities: [], ...config };
     // Ridisegniamo solo al primissimo caricamento. Le chiamate successive a
     // setConfig arrivano dall'host di Home Assistant come "conferma" dopo
     // ogni nostro _emitConfig — se ridisegnassimo sempre, un campo di testo
@@ -1230,6 +1346,38 @@ class TermostatoDiagCardEditor extends HTMLElement {
       })
       .join("");
 
+    // Entità "extra" (switch/select) disponibili per la selezione — solo
+    // quelle che appartengono allo STESSO dispositivo del climatizzatore
+    // reale collegato a questa stanza, altrimenti con un filtro solo sul
+    // dominio "switch" ne uscirebbero moltissime (luci, prese, altre
+    // stanze...). Richiede il registro entità (this._hass.entities), non
+    // sempre presente su versioni molto vecchie di Home Assistant — in
+    // quel caso la sezione resta vuota invece di rompersi.
+    const realClimateEntityId = currentEntity && this._hass.states[currentEntity]
+      ? this._hass.states[currentEntity].attributes.climatizzatore_reale
+      : null;
+    const realDeviceId = (realClimateEntityId && this._hass.entities && this._hass.entities[realClimateEntityId])
+      ? this._hass.entities[realClimateEntityId].device_id
+      : null;
+    const extraCandidateIds = realDeviceId && this._hass.entities
+      ? Object.keys(this._hass.entities).filter((eid) => {
+          const domain = eid.split(".")[0];
+          if (domain !== "switch" && domain !== "select") return false;
+          return this._hass.entities[eid].device_id === realDeviceId;
+        })
+      : [];
+    const extraEntityCheckboxes = extraCandidateIds
+      .map((eid) => {
+        const checked = (this._config.extra_entities || []).includes(eid);
+        const label = (this._hass.states[eid] && this._hass.states[eid].attributes.friendly_name) || eid;
+        return `
+          <label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:14px;cursor:pointer;">
+            <input type="checkbox" data-extra-entity-key="${eid}" ${checked ? "checked" : ""} />
+            <span>${label}</span>
+          </label>`;
+      })
+      .join("");
+
     this.innerHTML = `
       <div style="padding:8px 0;">
         <div style="margin-bottom:14px;">
@@ -1281,6 +1429,13 @@ class TermostatoDiagCardEditor extends HTMLElement {
             <input id="hide-inactive-toggle" type="checkbox" ${this._config.hide_inactive !== false ? "checked" : ""} />
             <span>Mostra solo attributi attivi/presenti (nascondi finestra chiusa, notte non attiva, DRY non in corso, ecc.)</span>
           </label>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:13px;margin-bottom:6px;color:var(--secondary-text-color);">"Altre funzioni" — interruttori/select extra del climatizzatore reale (es. Fresh Air, Quiet, XFan)</label>
+          <div style="max-height:200px;overflow-y:auto;border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:8px 12px;">
+            ${extraEntityCheckboxes || '<div style="font-size:13px;opacity:0.7;">Nessuna entità switch/select trovata su questo dispositivo</div>'}
+          </div>
         </div>
 
         <div>
@@ -1337,6 +1492,17 @@ class TermostatoDiagCardEditor extends HTMLElement {
         if (e.target.checked) current.add(key);
         else current.delete(key);
         this._config = { ...this._config, show_attributes: Array.from(current) };
+        this._emitConfig();
+      });
+    });
+
+    this.querySelectorAll("input[data-extra-entity-key]").forEach((el) => {
+      el.addEventListener("change", (e) => {
+        const key = e.target.getAttribute("data-extra-entity-key");
+        const current = new Set(this._config.extra_entities || []);
+        if (e.target.checked) current.add(key);
+        else current.delete(key);
+        this._config = { ...this._config, extra_entities: Array.from(current) };
         this._emitConfig();
       });
     });
