@@ -88,6 +88,40 @@ function formatTimestamp(value) {
   return `${date} ${time}`;
 }
 
+// Traduzione automatica per i valori grezzi (spesso in inglese, stile
+// slug tecnico) delle opzioni di entità select esposte da integrazioni
+// diverse (es. modalità "riposo" con valori come "for_old", "for_kids").
+// Il dizionario copre i termini più comuni per questo tipo di funzione;
+// per qualunque valore non riconosciuto, applichiamo comunque una pulizia
+// meccanica (via leggibile, non più uno slug grezzo) invece di lasciarlo
+// tecnico. Non è una vera traduzione universale — solo i termini elencati
+// hanno una resa in italiano, il resto resta in inglese ma leggibile.
+const OPTION_VALUE_LABELS = {
+  for_old: "Anziano", elderly: "Anziano", old: "Anziano",
+  for_kids: "Bambino", for_child: "Bambino", child: "Bambino", kids: "Bambino", baby: "Bambino",
+  for_adult: "Adulto", adult: "Adulto",
+  for_young: "Giovane", young: "Giovane",
+  standard: "Standard", normal: "Standard", default: "Standard",
+  general: "Generale",
+  custom: "Personalizzato",
+  off: "Spento", none: "Spento", disabled: "Spento",
+  on: "Attivo", enabled: "Attivo",
+  auto: "Automatico",
+  low: "Basso", medium: "Medio", high: "Alto",
+  follow: "Segue", no_follow: "Non segue",
+  quiet: "Silenzioso", silent: "Silenzioso",
+  "panel light": "Luce pannello", panel_light: "Luce pannello",
+};
+function humanizeOptionValue(raw) {
+  if (raw === null || raw === undefined) return "";
+  const key = String(raw).trim().toLowerCase();
+  if (OPTION_VALUE_LABELS[key]) return OPTION_VALUE_LABELS[key];
+  // Pulizia meccanica: "for_old_test" -> "For old test"
+  const cleaned = key.replace(/[_\-]+/g, " ").trim();
+  if (!cleaned) return String(raw);
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 function formatValue(def, value) {
   if (value === null || value === undefined || value === "") {
     if (def.type === "bool") return { text: "No", positive: false };
@@ -650,7 +684,21 @@ class TermostatoDiagCard extends HTMLElement {
     if (this._extraFunctionsPopupOpen && extraEntityStates.length > 0) {
       const rowsHtml = extraEntityStates.map((s) => {
         const domain = s.entity_id.split(".")[0];
-        const friendlyName = s.attributes.friendly_name || s.entity_id;
+        const rawName = s.attributes.friendly_name || s.entity_id;
+        // Il nome dell'entità spesso include per intero il nome del
+        // climatizzatore come prefisso (es. "Condizionatore Sala
+        // Oscillazione verticale") — lo togliamo per avere etichette
+        // corte, altrimenti i pulsanti finiscono uno per riga invece di
+        // stare affiancati come nello swing.
+        const climateDeviceName = realClimateEntity && this._hass && this._hass.states[realClimateEntity]
+          ? this._hass.states[realClimateEntity].attributes.friendly_name
+          : null;
+        let friendlyName = rawName;
+        if (climateDeviceName && rawName.toLowerCase().startsWith(climateDeviceName.toLowerCase())) {
+          friendlyName = rawName.slice(climateDeviceName.length).replace(/^[\s\-_:]+/, "");
+          if (!friendlyName) friendlyName = rawName; // non lasciare l'etichetta vuota se il nome combacia per intero
+        }
+        friendlyName = humanizeOptionValue(friendlyName);
         const icon = s.attributes.icon || "mdi:toggle-switch-outline";
         if (domain === "switch") {
           const active = s.state === "on";
@@ -668,12 +716,12 @@ class TermostatoDiagCard extends HTMLElement {
           const optionButtons = options.map((opt) => {
             const active = opt === s.state;
             const bg = active ? "#2e9c4f" : "#c0392b";
-            return `<button data-extra-select="${s.entity_id}" data-extra-select-option="${opt}" aria-label="${opt}"
+            return `<button data-extra-select="${s.entity_id}" data-extra-select-option="${opt}" aria-label="${humanizeOptionValue(opt)}"
               style="display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;cursor:pointer;padding:8px;">
               <span style="width:44px;height:44px;border-radius:50%;background:${bg};color:#fff;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                 <ha-icon icon="mdi:menu" style="--mdc-icon-size:22px;"></ha-icon>
               </span>
-              <span style="font-size:11px;color:var(--primary-text-color);">${opt}</span>
+              <span style="font-size:11px;color:var(--primary-text-color);">${humanizeOptionValue(opt)}</span>
             </button>`;
           }).join("");
           return `
@@ -1365,10 +1413,17 @@ class TermostatoDiagCardEditor extends HTMLElement {
           return this._hass.entities[eid].device_id === realDeviceId;
         })
       : [];
+    const climateDeviceNameForEditor = realClimateEntityId && this._hass.states[realClimateEntityId]
+      ? this._hass.states[realClimateEntityId].attributes.friendly_name
+      : null;
     const extraEntityCheckboxes = extraCandidateIds
       .map((eid) => {
         const checked = (this._config.extra_entities || []).includes(eid);
-        const label = (this._hass.states[eid] && this._hass.states[eid].attributes.friendly_name) || eid;
+        const rawLabel = (this._hass.states[eid] && this._hass.states[eid].attributes.friendly_name) || eid;
+        let label = rawLabel;
+        if (climateDeviceNameForEditor && rawLabel.toLowerCase().startsWith(climateDeviceNameForEditor.toLowerCase())) {
+          label = rawLabel.slice(climateDeviceNameForEditor.length).replace(/^[\s\-_:]+/, "") || rawLabel;
+        }
         return `
           <label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:14px;cursor:pointer;">
             <input type="checkbox" data-extra-entity-key="${eid}" ${checked ? "checked" : ""} />

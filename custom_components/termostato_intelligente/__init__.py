@@ -140,7 +140,7 @@ _FIELD_DEFAULTS = {
 
 
 _FRONTEND_URL_PATH = f"/{DOMAIN}_static/termostato-diag-card.js"
-_FRONTEND_VERSION_TAG = "v090b51"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
+_FRONTEND_VERSION_TAG = "v090b56"  # cambiare ad ogni release che tocca il file JS, per invalidare la cache browser
 
 
 async def _async_register_frontend_card(hass: HomeAssistant) -> None:
