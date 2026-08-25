@@ -597,6 +597,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             "timer_manuale_minuti_configurati": self._manual_shutoff_timer_minutes(),
             "accensione_fv_abilitata": self._switch_state(SWITCH_KEY_FV, True),
             "acceso_da_fv": self._fv_auto_on,
+            "modalita_eco_attiva": self._eco_mode_active,
+            "timer_manuale_in_pausa_da": self._shutoff_timer_remaining_seconds_paused is not None,
             "auto_ultima_direzione": getattr(self, "_auto_last_hvac_direction", None),
             "auto_ultima_direzione_da": self._auto_last_hvac_direction_at.isoformat() if getattr(self, "_auto_last_hvac_direction_at", None) else None,
             "raffreddamento_rapido": self._switch_state(SWITCH_KEY_QUICK, False),
@@ -776,6 +778,54 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     )
                 except Exception as exc:
                     _LOGGER.warning("%s: errore ripristino acceso_manualmente_da: %s", self._attr_name, exc)
+
+        # Ripristina lo stato Eco dopo un riavvio — senza questo, se
+        # Home Assistant si riavvia mentre una stanza è in Eco, il codice
+        # "dimentica" di esserlo mentre il dispositivo reale resta
+        # fisicamente nel preset — incoerenza tra il nostro stato interno
+        # e quello vero. Verifichiamo anche il preset reale attuale, non
+        # solo l'attributo salvato, per evitare di ripristinare Eco se nel
+        # frattempo qualcuno ha già cambiato preset manualmente.
+        if last_state and last_state.attributes.get("modalita_eco_attiva"):
+            real_state = self.hass.states.get(self._climate_entity)
+            if real_state and real_state.attributes.get("preset_mode") == "eco":
+                self._eco_mode_active = True
+                _LOGGER.info("%s: riavvio — ripristinato stato Eco (preset reale ancora 'eco')", self._attr_name)
+
+        # Ripristina il blocco riaccensione dopo uno spegnimento manuale
+        # rilevato — senza questo, un riavvio durante il periodo di blocco
+        # (es. 2 ore configurate) lo cancella del tutto, e la stanza
+        # potrebbe essere riaccesa subito dal FV appena dopo il riavvio,
+        # ignorando la volontà esplicita dell'utente di tenerla spenta.
+        # Non serve verificare lo stato reale qui: _is_manual_off_block_active()
+        # scade da sola il blocco se il tempo configurato è già passato.
+        if last_state and last_state.attributes.get("spento_manualmente_da"):
+            try:
+                self._manual_off_since = dt_util.parse_datetime(last_state.attributes["spento_manualmente_da"])
+                _LOGGER.info(
+                    "%s: riavvio — ripristinato blocco riaccensione (spento manualmente da %s)",
+                    self._attr_name, self._manual_off_since,
+                )
+            except Exception as exc:
+                _LOGGER.warning("%s: errore ripristino spento_manualmente_da: %s", self._attr_name, exc)
+
+        # Ripristina il flag "spento per limite potenza" — bassa gravità se
+        # perso (il clima resta comunque spento, letto dallo stato reale ad
+        # ogni ciclo), ma senza questo il sistema di ripristino automatico
+        # specifico per il limite potenza non riconosce di aver spento lui
+        # stesso la stanza, ritardando la ripresa fino a quando qualche
+        # altro meccanismo (FV, notte) non interviene.
+        if last_state and last_state.attributes.get("protezione_potenza_attiva"):
+            real_state = self.hass.states.get(self._climate_entity)
+            if real_state and real_state.state in ("off", "unknown", "unavailable"):
+                self._power_limit_off = True
+                power_limit_off_at_str = last_state.attributes.get("protezione_potenza_da")
+                if power_limit_off_at_str:
+                    try:
+                        self._power_limit_off_at = dt_util.parse_datetime(power_limit_off_at_str)
+                    except Exception:
+                        pass
+                _LOGGER.info("%s: riavvio — ripristinato flag limite potenza (clima ancora spento)", self._attr_name)
 
         # Priorità e target giorno/notte non hanno più bisogno di essere
         # ripristinati qui — sono sempre letti direttamente dalla
@@ -2787,6 +2837,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
         is_on = self.hvac_mode == HVACMode.COOL or (
             current_state and current_state.state == "dry"
         )
+        if not is_on and self._fv_auto_on:
+            _LOGGER.info(
+                "%s: [semplificato FV] rilevato is_on=False con _fv_auto_on=True — stato reale attuale = %s (entra nel ramo riaccensione anche se potrebbe essere già accesa)",
+                self._attr_name, current_state.state if current_state else "None",
+            )
 
         # --- Riaccensione dopo spegnimento FV ---
         # Se il clima è spento, era stato acceso dal FV, e il FV è tornato sufficiente
@@ -2875,6 +2930,8 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     sib_state_recheck = self.hass.states.get(sibling._climate_entity)
                     if sib_state_recheck is None or sib_state_recheck.state not in ("off", "unknown", "unavailable"):
                         continue
+                    if sibling._is_manual_off_block_active():
+                        continue
                     _LOGGER.info(
                         "%s: [semplificato FV] accendo %s al posto mio (riaccensione fuori finestra, priorità %s < %s)",
                         self._attr_name, sibling._attr_name, sib_priority, my_priority,
@@ -2897,6 +2954,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                     await sibling._async_simple_notify_ac_on(sib_temp, sib_target, ac_type="fv", fv=sib_fv_val, consumo=sib_consumo_val, soc=sib_soc_val)
                     sibling.async_write_ha_state()
                     return
+
+            if self._is_manual_off_block_active():
+                return
 
             dry_enabled = bool(get_conf(self.entry, CONF_SIMPLE_DRY_ENABLED, DEFAULT_SIMPLE_DRY_ENABLED))
             self._fv_auto_on = True
@@ -2930,6 +2990,24 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             self._fv_low_since = None
             self._manual_accension_since = None
             return
+
+        # Protezione SEMPRE ATTIVA, indipendente da "shutoff_manual": se il
+        # sole è genuinamente sotto l'orizzonte (notte vera, non solo
+        # "vicino al tramonto"), lo spegnimento per FV insufficiente non ha
+        # senso — di notte il FV è sempre a zero per definizione, quindi
+        # "spegni per FV insufficiente" non è una decisione basata sulla
+        # produzione, sarebbe solo uno spegnimento a orario mascherato da
+        # logica FV. L'opzione "shutoff_manual" estende lo spegnimento alle
+        # accensioni manuali fatte DI GIORNO (vicino al tramonto, prima
+        # della soglia di anticipo configurata) — non deve mai bypassare
+        # questa protezione notturna.
+        if not self._fv_auto_on:
+            sun_state = self.hass.states.get("sun.sun")
+            if sun_state is not None and sun_state.state != "above_horizon":
+                self._fv_surplus_buffer = []
+                self._fv_low_since = None
+                self._manual_accension_since = None
+                return
 
         # Caso 2/3/4: verifica se può spegnere
         shutoff_manual = bool(get_conf(self.entry, CONF_FV_SHUTOFF_MANUAL, DEFAULT_FV_SHUTOFF_MANUAL))
@@ -3064,10 +3142,10 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             DEFAULT_SIMPLE_ECO_NIGHT_ENABLED if target_is_night else DEFAULT_SIMPLE_ECO_DAY_ENABLED,
         ))
         if target_eco_enabled:
+            coord["last_fv_shutoff"] = now
             if await target_to_shutoff._async_safe_climate_call("set_preset_mode", {"entity_id": target_to_shutoff._climate_entity, "preset_mode": "eco"}):
                 _LOGGER.info("%s: [semplificato FV] ingresso in Eco invece di spegnere per FV insufficiente", target_to_shutoff._attr_name)
                 target_to_shutoff._eco_mode_active = True
-                coord["last_fv_shutoff"] = now
                 target_to_shutoff._fv_surplus_buffer = []
                 target_to_shutoff._fv_low_since = None
                 target_to_shutoff._manual_accension_since = None
@@ -3506,9 +3584,9 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                             if last_restore is None or (now - last_restore) >= timedelta(minutes=POWER_LIMIT_RESTORE_STAGGER_MIN):
                                 # Verifica che il consumo sia ancora sotto soglia
                                 if consumo <= restore_threshold:
-                                    await self._async_power_limit_restore()
                                     pl_order.pop()
                                     coord["last_power_limit_restore"] = now
+                                    await self._async_power_limit_restore()
                         return
                     else:
                         # Modalità unico: riaccende direttamente
