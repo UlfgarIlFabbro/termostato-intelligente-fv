@@ -1187,6 +1187,20 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
+            # Un OFF che arriva QUI è per definizione un comando esplicito
+            # dall'esterno (card/dashboard, servizio climate.set_hvac_mode
+            # o climate.turn_off, assistente vocale...) — i cicli periodici
+            # interni non passano MAI da questo metodo per spegnere, usano
+            # sempre _async_turn_off_climate() direttamente. Va quindi
+            # registrato come spegnimento manuale PRIMA di spegnere,
+            # esattamente come lo spegnimento rilevato da telecomando/app
+            # reale — altrimenti _async_turn_off_climate() lo marca come
+            # "programmatico" e _async_on_state_change salta la
+            # registrazione, vanificando il blocco riaccensione anche con
+            # l'opzione abilitata (bug reale osservato: spegnimento dalla
+            # card sempre bypassato, mentre da telecomando fisico
+            # funzionava).
+            self._set_manual_off_block("spegnimento_esplicito_da_ui_o_servizio")
             await self._async_turn_off_climate()
         elif hvac_mode == HVACMode.DRY:
             await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "dry"})
@@ -1196,6 +1210,29 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
             await self._async_safe_climate_call("set_hvac_mode", {"entity_id": self._climate_entity, "hvac_mode": "cool"})
             self._reset_manual_off_block("accensione_cool_manuale_da_ui")
         self.async_write_ha_state()
+
+    def _set_manual_off_block(self, reason: str = "n/d") -> None:
+        """Registra esplicitamente uno spegnimento come manuale, imponendo
+        il blocco riaccensione se l'opzione è abilitata.
+
+        Simmetrico a _reset_manual_off_block: usato quando l'utente spegne
+        direttamente dal termostato (wrapper) tramite async_set_hvac_mode,
+        senza dover dipendere dal listener di stato del climatizzatore
+        reale (che classificherebbe erroneamente questo spegnimento come
+        "programmato", dato che passa comunque da _async_turn_off_climate()
+        per l'esecuzione vera e propria).
+        """
+        if self._shutoff_timer_cancel is not None:
+            self._shutoff_timer_cancel()
+            self._shutoff_timer_cancel = None
+        self._shutoff_timer_until = None
+        self._shutoff_timer_remaining_seconds_paused = None
+        if bool(get_conf(self.entry, CONF_SIMPLE_NO_REON_MANUAL_OFF, DEFAULT_SIMPLE_NO_REON_MANUAL_OFF)):
+            self._manual_off_since = dt_util.utcnow()
+            _LOGGER.info(
+                "%s: spegnimento manuale registrato — motivo: %s — blocco riaccensione attivo",
+                self._attr_name, reason,
+            )
 
     def _reset_manual_off_block(self, reason: str = "n/d") -> None:
         """Rimuove esplicitamente il blocco riaccensione manuale.
@@ -2374,6 +2411,17 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 # ridurre (non eliminare del tutto, l'asincronia lo rende
                 # intrinsecamente possibile) il rischio di una doppia
                 # accensione se il suo stesso ciclo la accende in parallelo.
+                #
+                # Controllo dello stagger ANCHE qui — bug reale osservato:
+                # questo ramo di delega non lo controllava mai (solo il
+                # ramo "accendo me stesso" più sotto lo faceva), quindi più
+                # istanze che trovavano ciascuna una sorella pronta DIVERSA
+                # nello stesso ciclo si accendevano tutte insieme, senza
+                # mai vedersi a vicenda e senza rispettare la pausa tra
+                # un'accensione e l'altra.
+                last_on_check = coord.get("last_fv_turn_on")
+                if last_on_check is not None and (dt_util.utcnow() - last_on_check) < timedelta(minutes=stagger_min):
+                    return
                 sib_state_recheck = self.hass.states.get(sibling._climate_entity)
                 if sib_state_recheck is None or sib_state_recheck.state not in ("off", "unknown", "unavailable"):
                     continue  # si è già accesa nel frattempo (dal suo ciclo, o da un'altra cessione) — non rifare nulla
@@ -2547,6 +2595,11 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                         continue
             sib_priority = sibling._effective_priority()
             if sib_priority < my_priority:
+                # Stesso controllo dello stagger aggiunto anche qui — vedi
+                # commento nel ramo estivo equivalente.
+                last_on_check = coord.get("last_fv_turn_on")
+                if last_on_check is not None and (dt_util.utcnow() - last_on_check) < timedelta(minutes=stagger_min):
+                    return
                 sib_state_recheck = self.hass.states.get(sibling._climate_entity)
                 if sib_state_recheck is None or sib_state_recheck.state not in ("off", "unknown", "unavailable"):
                     continue  # si è già accesa nel frattempo — non rifare nulla
