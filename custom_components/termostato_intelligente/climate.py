@@ -3063,12 +3063,29 @@ class SmartFvClimate(ClimateEntity, RestoreEntity):
                 return
 
         # Caso 2/3/4: verifica se può spegnere
+        #
+        # BUGFIX: la protezione del cutoff tramonto-Xh (caso 4: "acceso
+        # manualmente dopo tramonto-Xh → non toccare") deve valere SEMPRE
+        # per le accensioni manuali quando la funzione è abilitata — prima
+        # era scritta in AND con "not shutoff_manual", quindi si
+        # disattivava proprio quando l'utente abilitava lo spegnimento
+        # automatico delle accensioni manuali (shutoff_manual=True),
+        # lasciando la stanza spegnibile per FV insufficiente anche dopo
+        # il cutoff/al tramonto — l'esatto opposto di quanto documentato.
         shutoff_manual = bool(get_conf(self.entry, CONF_FV_SHUTOFF_MANUAL, DEFAULT_FV_SHUTOFF_MANUAL))
-        if not self._fv_auto_on and not self._simple_can_control_manual() and not shutoff_manual:
-            self._fv_surplus_buffer = []
-            self._fv_low_since = None
-            self._manual_accension_since = None
-            return
+        if not self._fv_auto_on:
+            if not shutoff_manual:
+                # Funzione disattivata: non tocchiamo mai un'accensione manuale.
+                self._fv_surplus_buffer = []
+                self._fv_low_since = None
+                self._manual_accension_since = None
+                return
+            if not self._simple_can_control_manual():
+                # Funzione attiva ma siamo dopo il cutoff tramonto-Xh: protetta comunque.
+                self._fv_surplus_buffer = []
+                self._fv_low_since = None
+                self._manual_accension_since = None
+                return
 
         # Sliding window — campioni fissi a 4 (il tempo totale è regolato
         # tramite l'intervallo del ciclo dedicato, calcolato da CONF_FV_SHUTOFF_TOTAL_MINUTES)
